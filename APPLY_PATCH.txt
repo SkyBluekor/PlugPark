@@ -1,0 +1,13 @@
+PlugPark v0.2.2
+
+1) Copy this folder over D:\Projects\PlugPark and overwrite existing files.
+2) Keep your existing .env and .dev.vars files. They are not included in this package.
+3) Deploy:
+   npm run deploy
+
+4) Open:
+   https://plugpark.dtdt4865.workers.dev/api/ev-diagnostics
+   https://plugpark.dtdt4865.workers.dev/api/chargers
+   https://plugpark.dtdt4865.workers.dev/api/places
+
+The diagnostics endpoint never returns your API key.

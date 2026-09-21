@@ -1,0 +1,7 @@
+# PlugPark local Worker secrets
+# Do NOT commit .dev.vars.
+BUSAN_PARKING_API_KEY=replace_with_your_decoding_key
+EV_CHARGER_API_KEY=replace_with_your_decoding_key
+
+# Optional: parking↔charger spatial-match radius in meters
+MATCH_RADIUS_METERS=200
