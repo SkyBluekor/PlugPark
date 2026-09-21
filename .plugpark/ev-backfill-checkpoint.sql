@@ -1,0 +1,3 @@
+INSERT INTO sync_state (job_name,status,next_page,total_pages,reported_total_count,last_success_at,last_error,run_id) VALUES ('ev_info','running',11,33,32642,'2026-09-21T13:05:10.375Z',NULL,'local-2026-09-21T13-00-36-292Z-5a431396') ON CONFLICT(job_name) DO UPDATE SET status=excluded.status,next_page=excluded.next_page,total_pages=excluded.total_pages,reported_total_count=excluded.reported_total_count,last_success_at=excluded.last_success_at,last_error=NULL,run_id=excluded.run_id;
+
+INSERT INTO api_usage_daily (usage_date,api_name,request_count) VALUES ('2026-09-21','ev_info_local_backfill',1) ON CONFLICT(usage_date,api_name) DO UPDATE SET request_count=request_count+excluded.request_count;

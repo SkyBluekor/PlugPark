@@ -8,3 +8,8 @@ binding = "ASSETS"
 
 [vars]
 MATCH_RADIUS_METERS = "200"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "plugpark-db"
+database_id = "4c75a008-14a4-4ff7-9f94-c601a686f0aa"

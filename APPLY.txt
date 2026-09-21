@@ -1,26 +1,21 @@
-PlugPark v0.3.4 — EV 전체 수집 / 숫자 의미 수정
+PlugPark v0.5.3 DIRECT D1 UPLOAD
 
-핵심:
-1. `56곳` 같은 숫자는 부산 전체 충전소가 아니라
-   "EV가 매칭된 공영주차장 수"였습니다.
-2. 화면에서 이 수치와 부산 전체 EV 충전소/충전기 수를 분리합니다.
-3. 첫 1000건 quick snapshot을 전체 데이터처럼 쓰는 구조를 제거합니다.
-4. getChargerInfo에 zcode=26을 넣고 pageNo를 증가시키며 부산 데이터를 끝까지 읽습니다.
-5. 만약 API가 zcode 필터를 무시하면 전국 데이터를 페이지 단위로 읽고 zcode=26/부산 주소만 로컬 필터합니다.
-6. 상태 API는 statId + chgerId로 정보 API와 JOIN합니다.
+이번 버전은 Wrangler D1 import 경로를 backfill에서 제거합니다.
+로그에서 Network connection lost가 반복되고 마지막에는 OAuth Authentication error 10000까지 발생했기 때문입니다.
 
-새 진단:
-- /api/ev-summary
-- /api/ev-search?q=센텀
-- /api/ev-search?q=해운대
+변경:
+- Worker에 POST /api/admin/d1/ev-info-bulk-upsert 추가
+- 로컬 backfill은 EV API를 1000건씩 조회
+- 100건씩 Worker에 HTTPS POST
+- Worker가 D1에 직접 UPSERT
+- 최대 8회 자동 재시도
+- 페이지 전체 업로드 성공 후에만 remote/local checkpoint 증가
+- 기존 .plugpark/ev-backfill-state.json을 그대로 사용하므로 실패한 page 11부터 재개 가능
 
 적용:
-1. ZIP을 D:\Projects\PlugPark 에 덮어쓰기
+1. ZIP을 프로젝트 루트에 덮어쓰기
 2. npm run deploy
-3. 배포 후 아래 확인
-   https://plugpark.dtdt4865.workers.dev/api/ev-summary
-   https://plugpark.dtdt4865.workers.dev/api/ev-search?q=센텀
+3. 기존 PowerShell 환경변수 EV_CHARGER_API_KEY / PLUGPARK_INGEST_TOKEN 유지
+4. npm run ev:backfill
 
-주의:
-BUSAN_REALTIME_PARKING_API_URL 설정은 EV와 별개입니다.
-실시간 잔여 주차면을 쓰려면 해당 URL 설정은 여전히 필요합니다.
+중요: 이번 버전은 Worker endpoint가 추가되므로 deploy가 필요합니다.

@@ -1,0 +1,7 @@
+# 기존 wrangler.toml 맨 아래에 추가하세요.
+# database_id는 `npx wrangler d1 create plugpark-db` 결과의 실제 ID로 교체해야 합니다.
+
+[[d1_databases]]
+binding = "DB"
+database_name = "plugpark-db"
+database_id = "PASTE_YOUR_D1_DATABASE_ID_HERE"

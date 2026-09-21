@@ -133,3 +133,24 @@ body{overflow-x:hidden}
   .dataset-summary{gap:6px 10px}
   .dataset-summary em{width:100%;margin-left:0}
 }
+
+
+/* v0.4.2 EV collection lifecycle */
+.ev-progress{
+  margin:0 0 12px;
+  padding:10px 12px;
+  border:1px solid #dce7e2;
+  border-left:3px solid #0d7856;
+  background:#f4f8f6;
+  color:#38534a;
+  display:flex;
+  align-items:center;
+  gap:9px 14px;
+  flex-wrap:wrap;
+  font-size:11px;
+}
+.ev-progress strong{color:#173e32;font-size:12px}
+.ev-progress span{color:#587068}
+.ev-progress small{width:100%;color:#77867f}
+.ev-progress.retrying{border-left-color:#a86f13;background:#faf7ef}
+.ev-progress.retrying strong{color:#765114}

@@ -1,0 +1,21 @@
+PlugPark v0.4 API DATA LAYER REBUILD
+
+적용:
+1. ZIP의 파일을 D:\Projects\PlugPark 에 그대로 덮어쓰기
+2. 기존 .env / .dev.vars의 실제 키는 유지
+3. npm run deploy
+
+실시간 주차 API를 아직 등록하지 않았다면:
+  npx wrangler secret put BUSAN_REALTIME_PARKING_API_URL
+  → 부산시설공단 공영주차장 시설 현황 조회 서비스의 상세기능 요청주소 입력
+
+배포 확인:
+  https://plugpark.dtdt4865.workers.dev/api/health?v=40
+  https://plugpark.dtdt4865.workers.dev/api/diagnostics/parking?v=40
+  https://plugpark.dtdt4865.workers.dev/api/diagnostics/parking-realtime?v=40
+  https://plugpark.dtdt4865.workers.dev/api/diagnostics/matching?v=40
+  https://plugpark.dtdt4865.workers.dev/api/diagnostics/ev-info?v=40
+  https://plugpark.dtdt4865.workers.dev/api/ev-search?q=센텀&v=40
+
+v0.4는 사용자 요청에서 EV 전체 API를 동기 호출하지 않습니다.
+503/SERVICETIMEOUT이 발생해도 주차장 화면은 유지되며 EV 수집은 백그라운드에서 재시도됩니다.

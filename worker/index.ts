@@ -1,14 +1,116 @@
 interface Env {
   BUSAN_PARKING_API_KEY?: string;
   EV_CHARGER_API_KEY?: string;
-  // 공공데이터포털의 "부산시설공단_공영주차장 시설 현황 조회 서비스" 상세기능 요청주소.
-  // 공개 검색 화면에는 실제 요청주소가 노출되지 않으므로 환경변수로 주입합니다.
   BUSAN_REALTIME_PARKING_API_URL?: string;
+  INGEST_ADMIN_TOKEN?: string;
   MATCH_RADIUS_METERS?: string;
+  DB?: D1Database;
   ASSETS: Fetcher;
 }
 
-type AnyObject = Record<string, any>;
+type RawObject = Record<string, unknown>;
+
+type EvInfoSyncStateRow = {
+  job_name: string;
+  status: string;
+  next_page: number | null;
+  total_pages: number | null;
+  reported_total_count: number | null;
+  last_success_at: string | null;
+  last_error: string | null;
+  run_id: string | null;
+};
+
+type D1EvInfoPage = {
+  items: EvChargerInfoApiItem[];
+  rawCount: number;
+  pageNo: number;
+  numOfRows: number | null;
+  totalCount: number | null;
+  duplicateCount: number;
+};
+
+type BusanParkingApiItem = {
+  mgntNum: string;
+  pkNam: string;
+  doroAddr: string;
+  jibunAddr: string;
+  pkCnt: string;
+  xCdnt: string;
+  yCdnt: string;
+  guNm: string;
+  pkFm: string;
+  pkGubun: string;
+  svcSrtTe: string;
+  svcEndTe: string;
+  pkBascTime: string;
+  tenMin: string;
+  feeAdd: string;
+  feeInfo: string;
+  currava: string;
+  fnlDt: string;
+};
+
+type BusanRealtimeParkingApiItem = {
+  parkgcd: string;
+  parknm: string;
+  curravacnt: string;
+  parkingcnt: string;
+  maxcnt: string;
+  lastupdatetime: string;
+};
+
+type EvChargerInfoApiItem = {
+  statNm: string;
+  statId: string;
+  chgerId: string;
+  chgerType: string;
+  addr: string;
+  addrDetail: string;
+  location: string;
+  lat: string;
+  lng: string;
+  useTime: string;
+  busiId: string;
+  bnm: string;
+  busiNm: string;
+  busiCall: string;
+  stat: string;
+  statUpdDt: string;
+  lastTsdt: string;
+  lastTedt: string;
+  nowTsdt: string;
+  output: string;
+  method: string;
+  zcode: string;
+  zscode: string;
+  kind: string;
+  kindDetail: string;
+  parkingFree: string;
+  note: string;
+  limitYn: string;
+  limitDetail: string;
+  delYn: string;
+  delDetail: string;
+  trafficYn: string;
+  year: string;
+  floorNum: string;
+  floorType: string;
+  maker: string;
+};
+
+type EvChargerStatusApiItem = {
+  busiId: string;
+  statId: string;
+  chgerId: string;
+  stat: string;
+  statUpdDt: string;
+  lastTsdt: string;
+  lastTedt: string;
+  nowTsdt: string;
+};
+
+type ParkingMatchType = 'exact-name' | 'contained-name' | 'similar-name' | 'unmatched' | 'ambiguous';
 
 type ParkingBase = {
   id: string;
@@ -25,46 +127,82 @@ type ParkingBase = {
   parkingUpdatedAt: string | null;
   parkingRealtime: boolean;
   parkingSource: 'busan-city' | 'busan-facilities' | 'merged';
+  realtimeMatch: {
+    matched: boolean;
+    type: ParkingMatchType;
+    realtimeName: string | null;
+  };
 };
 
-type Charger = {
-  stationId: string;
-  chargerId: string;
-  stationName: string;
-  address: string;
-  lat: number | null;
-  lng: number | null;
-  type: string;
-  status: string;
-  output: number | null;
-  updatedAt: string | null;
-  deleted: boolean;
+type RealtimeJoinDetail = {
+  realtimeCode: string;
+  realtimeName: string;
+  normalizedRealtimeName: string;
+  baseId: string | null;
+  baseName: string | null;
+  type: ParkingMatchType;
+  score: number | null;
 };
 
-type ChargerStation = {
-  stationId: string;
-  stationName: string;
-  address: string;
-  lat: number;
-  lng: number;
-  chargers: Charger[];
+type ParkingJoinResult = {
+  items: ParkingBase[];
+  details: RealtimeJoinDetail[];
+  summary: {
+    realtimeCount: number;
+    matched: number;
+    exact: number;
+    contained: number;
+    similar: number;
+    ambiguous: number;
+    unmatched: number;
+  };
+};
+
+type SchemaCheck = {
+  valid: boolean;
+  missing: string[];
+  receivedKeys: string[];
 };
 
 const PARKING_BASE_URL =
   'https://apis.data.go.kr/6260000/BusanPblcPrkngInfoService/getPblcPrkngInfo';
+const EV_INFO_URL = 'https://apis.data.go.kr/B552584/EvCharger/getChargerInfo';
+const EV_STATUS_URL = 'https://apis.data.go.kr/B552584/EvCharger/getChargerStatus';
 
-const EV_INFO_URL =
-  'https://apis.data.go.kr/B552584/EvCharger/getChargerInfo';
+const CACHE_VERSION = 'v6.0';
+const DATA_LAYER_VERSION = 'v0.6.0';
+const D1_EV_INFO_JOB = 'ev_info';
+const D1_INGEST_MAX_PAGES_PER_REQUEST = 1;
+const PARKING_BASE_PAGE_SIZE = 100;
+const PARKING_BASE_MAX_PAGES = 20;
+const PARKING_BASE_CACHE_SECONDS = 24 * 60 * 60;
+const EV_INFO_PAGE_SIZE = 200;
+const EV_STATUS_PAGE_SIZE = 500;
+const PLACES_CACHE_SECONDS = 5;
 
-const EV_STATUS_URL =
-  'https://apis.data.go.kr/B552584/EvCharger/getChargerStatus';
-
-const EV_BUSAN_PAGE_SIZE = 2000;
-const EV_BUSAN_MAX_PAGES = 10;
-const EV_NATIONAL_FALLBACK_PAGE_SIZE = 9999;
-const EV_NATIONAL_FALLBACK_MAX_PAGES = 10;
-const EV_SNAPSHOT_TTL_SECONDS = 6 * 60 * 60;
-const PLACES_TTL_SECONDS = 5 * 60;
+const BASE_REQUIRED_FIELDS = ['pkNam'] as const;
+const REALTIME_REQUIRED_FIELDS = [
+  'parkgcd',
+  'parknm',
+  'curravacnt',
+  'parkingcnt',
+  'maxcnt',
+  'lastupdatetime',
+] as const;
+const EV_INFO_REQUIRED_FIELDS = [
+  'statNm',
+  'statId',
+  'chgerId',
+  'chgerType',
+  'addr',
+  'lat',
+  'lng',
+  'stat',
+  'statUpdDt',
+  'zcode',
+  'delYn',
+] as const;
+const EV_STATUS_REQUIRED_FIELDS = ['statId', 'chgerId', 'stat', 'statUpdDt'] as const;
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
@@ -73,113 +211,282 @@ export default {
     if (url.pathname === '/api/health') {
       return json({
         ok: true,
+        dataLayerVersion: DATA_LAYER_VERSION,
         parkingSecretConfigured: Boolean(env.BUSAN_PARKING_API_KEY),
         evSecretConfigured: Boolean(env.EV_CHARGER_API_KEY),
         realtimeParkingUrlConfigured: Boolean(env.BUSAN_REALTIME_PARKING_API_URL),
+        d1Configured: Boolean(env.DB),
+        ingestAdminTokenConfigured: Boolean(env.INGEST_ADMIN_TOKEN),
       });
     }
 
-    if (url.pathname === '/api/parking-diagnostics') {
-      if (!env.BUSAN_PARKING_API_KEY) return configError('BUSAN_PARKING_API_KEY');
-      return handleParkingDiagnostics(env);
-    }
 
-    if (url.pathname === '/api/ev-diagnostics') {
-      if (!env.EV_CHARGER_API_KEY) return configError('EV_CHARGER_API_KEY');
-      return handleEvDiagnostics(env.EV_CHARGER_API_KEY);
-    }
-
-    if (url.pathname === '/api/parking') {
-      if (!env.BUSAN_PARKING_API_KEY) return configError('BUSAN_PARKING_API_KEY');
-      try {
-        const result = await fetchMergedParking(env);
-        return json({ ok: true, ...result }, 200, 60);
-      } catch (error) {
-        return upstreamError(error);
-      }
-    }
-
-    if (url.pathname === '/api/parking-places') {
-      if (!env.BUSAN_PARKING_API_KEY) return configError('BUSAN_PARKING_API_KEY');
-      try {
-        const result = await fetchMergedParking(env);
+    if (url.pathname === '/api/d1/health') {
+      if (!env.DB) {
         return json({
-          ok: true,
-          places: result.items.map(toParkingOnlyPlace),
-          realtimeParking: result.realtime,
-          realtimeMessage: result.realtimeMessage,
-        }, 200, 60);
-      } catch (error) {
-        return upstreamError(error);
+          ok: false,
+          dataLayerVersion: DATA_LAYER_VERSION,
+          d1Configured: false,
+          error: 'D1 binding DB가 아직 설정되지 않았습니다.',
+        }, 503);
       }
-    }
 
-    if (url.pathname === '/api/chargers') {
-      if (!env.EV_CHARGER_API_KEY) return configError('EV_CHARGER_API_KEY');
       try {
-        const snapshot = await getEvSnapshot(env, ctx);
-        const withStatus = await overlayRecentEvStatus(snapshot.items, env.EV_CHARGER_API_KEY);
+        const row = await env.DB.prepare('SELECT 1 AS ok').first<{ ok: number }>();
         return json({
-          ok: true,
-          items: withStatus,
-          complete: snapshot.complete,
-          source: snapshot.source,
-        }, 200, 120);
+          ok: row?.ok === 1,
+          dataLayerVersion: DATA_LAYER_VERSION,
+          d1Configured: true,
+        });
       } catch (error) {
-        return upstreamError(error);
-      }
-    }
-
-    if (url.pathname === '/api/ev-summary') {
-      if (!env.EV_CHARGER_API_KEY) return configError('EV_CHARGER_API_KEY');
-      try {
-        const snapshot = await getEvSnapshot(env, ctx);
-        const chargers = snapshot.items
-          .map(normalizeCharger)
-          .filter((charger) => !charger.deleted)
-          .filter(hasMapCoordinates);
-        const stations = groupChargerStations(chargers);
-
         return json({
-          ok: true,
-          complete: snapshot.complete,
-          source: snapshot.source,
-          chargerCount: chargers.length,
-          stationCount: stations.length,
-        }, 200, 120);
-      } catch (error) {
-        return upstreamError(error);
+          ok: false,
+          dataLayerVersion: DATA_LAYER_VERSION,
+          d1Configured: true,
+          error: safeError(error),
+        }, 500);
       }
     }
 
-    if (url.pathname === '/api/ev-search') {
-      if (!env.EV_CHARGER_API_KEY) return configError('EV_CHARGER_API_KEY');
+    if (url.pathname === '/api/d1/ev-info-state') {
+      if (!env.DB) return d1ConfigError();
       try {
-        const query = (url.searchParams.get('q') || '').trim().toLowerCase();
-        if (!query) {
-          return json({ ok: false, error: 'q 검색어를 입력해주세요.' }, 400);
+        return json(await getD1EvInfoState(env.DB));
+      } catch (error) {
+        return json({ ok: false, error: safeError(error) }, 500);
+      }
+    }
+
+    if (url.pathname === '/api/d1/ev-info-search') {
+      if (!env.DB) return d1ConfigError();
+      const q = (url.searchParams.get('q') || '').trim();
+      if (!q) return json({ ok: false, error: 'q 검색어가 필요합니다.' }, 400);
+      try {
+        const rows = await env.DB.prepare(
+          `SELECT stat_id, chger_id, station_name, address, lat, lng, zcode, zscode, del_yn, synced_at
+             FROM ev_chargers
+            WHERE station_name LIKE ?1 OR address LIKE ?1
+            ORDER BY station_name, stat_id, chger_id
+            LIMIT 100`,
+        ).bind(`%${q}%`).all();
+        return json({ ok: true, query: q, count: rows.results.length, items: rows.results });
+      } catch (error) {
+        return json({ ok: false, error: safeError(error) }, 500);
+      }
+    }
+
+    if (url.pathname === '/api/admin/d1/ev-info-ingest') {
+      if (request.method !== 'POST') {
+        return json({ ok: false, error: 'POST 요청만 허용됩니다.' }, 405);
+      }
+      if (!env.DB) return d1ConfigError();
+      if (!env.EV_CHARGER_API_KEY) return configError('EV_CHARGER_API_KEY');
+      const authError = validateIngestAdmin(request, env);
+      if (authError) return authError;
+
+      const requestedPages = clamp(
+        Math.trunc(Number(url.searchParams.get('pages') || '1')),
+        1,
+        D1_INGEST_MAX_PAGES_PER_REQUEST,
+      );
+
+      try {
+        const result = await ingestEvInfoPagesToD1(
+          env.DB,
+          env.EV_CHARGER_API_KEY,
+          requestedPages,
+        );
+        return json(result, 200);
+      } catch (error) {
+        return json({
+          ok: false,
+          error: safeError(error),
+          state: await getD1EvInfoStateSafe(env.DB),
+        }, 502);
+      }
+    }
+
+    if (url.pathname === '/api/admin/d1/ev-info-bulk-upsert') {
+      if (request.method !== 'POST') {
+        return json({ ok: false, error: 'POST 요청만 허용됩니다.' }, 405);
+      }
+      if (!env.DB) return d1ConfigError();
+      const authError = validateIngestAdmin(request, env);
+      if (authError) return authError;
+
+      try {
+        const body = await request.json() as {
+          items?: RawObject[];
+          checkpoint?: {
+            nextPage?: number;
+            totalPages?: number | null;
+            reportedTotalCount?: number | null;
+            complete?: boolean;
+            runId?: string;
+            pageNo?: number;
+          };
+        };
+
+        const rawItems = Array.isArray(body.items) ? body.items : [];
+        if (rawItems.length > 100) {
+          return json({ ok: false, error: '한 요청에는 EV item을 최대 100건까지 업로드할 수 있습니다.' }, 413);
         }
 
-        const snapshot = await getEvSnapshot(env, ctx);
-        const matches = snapshot.items
-          .filter((row) => {
-            const haystack = [
-              pickText(row, ['statNm']),
-              pickText(row, ['addr']),
-              pickText(row, ['addrDetail']),
-              pickText(row, ['statId']),
-            ].join(' ').toLowerCase();
-            return haystack.includes(query);
-          })
-          .slice(0, 100);
+        let storedCount = 0;
+        if (rawItems.length > 0) {
+          const parsed = parseEvInfoItems(rawItems);
+          if (parsed.invalid.length > 0) {
+            return json({
+              ok: false,
+              error: 'EV_SCHEMA_MISMATCH',
+              invalid: parsed.invalid.slice(0, 3).map((item) => ({
+                index: item.index,
+                missing: item.schema.missing,
+              })),
+            }, 400);
+          }
+
+          const wrongRegion = parsed.valid.filter((item) => item.zcode !== '26');
+          if (wrongRegion.length > 0) {
+            return json({
+              ok: false,
+              error: 'EV_REGION_MISMATCH',
+              count: wrongRegion.length,
+            }, 400);
+          }
+
+          const unique = new Map<string, EvChargerInfoApiItem>();
+          for (const item of parsed.valid) {
+            if (!item.statId.trim() || !item.chgerId.trim() || !item.statNm.trim()) {
+              return json({ ok: false, error: 'EV_IDENTITY_INVALID' }, 400);
+            }
+            unique.set(evCompositeKey(item.statId, item.chgerId), item);
+          }
+
+          const items = [...unique.values()];
+          await upsertEvInfoPage(env.DB, items);
+          storedCount = items.length;
+        }
+
+        let checkpointSaved = false;
+        if (body.checkpoint) {
+          const nextPage = Math.trunc(Number(body.checkpoint.nextPage));
+          const totalPagesRaw = body.checkpoint.totalPages;
+          const totalCountRaw = body.checkpoint.reportedTotalCount;
+          const totalPages = totalPagesRaw == null ? null : Math.trunc(Number(totalPagesRaw));
+          const reportedTotalCount = totalCountRaw == null ? null : Math.trunc(Number(totalCountRaw));
+          const runId = String(body.checkpoint.runId || crypto.randomUUID());
+
+          if (!Number.isFinite(nextPage) || nextPage < 1) {
+            return json({ ok: false, error: 'checkpoint.nextPage가 올바르지 않습니다.' }, 400);
+          }
+          if (totalPages != null && (!Number.isFinite(totalPages) || totalPages < 1)) {
+            return json({ ok: false, error: 'checkpoint.totalPages가 올바르지 않습니다.' }, 400);
+          }
+          if (reportedTotalCount != null && (!Number.isFinite(reportedTotalCount) || reportedTotalCount < 0)) {
+            return json({ ok: false, error: 'checkpoint.reportedTotalCount가 올바르지 않습니다.' }, 400);
+          }
+
+          await upsertSyncState(env.DB, {
+            status: body.checkpoint.complete ? 'complete' : 'running',
+            nextPage,
+            totalPages,
+            reportedTotalCount,
+            lastSuccessAt: new Date().toISOString(),
+            lastError: null,
+            runId,
+          });
+          await incrementApiUsage(env.DB, 'ev_info_local_backfill');
+          checkpointSaved = true;
+        }
 
         return json({
           ok: true,
-          query,
-          complete: snapshot.complete,
-          source: snapshot.source,
-          count: matches.length,
-          items: matches,
+          storedCount,
+          checkpointSaved,
+          dataLayerVersion: DATA_LAYER_VERSION,
+        });
+      } catch (error) {
+        return json({ ok: false, error: safeError(error) }, 500);
+      }
+    }
+
+
+    if (url.pathname === '/api/admin/d1/prepare-read-models') {
+      if (request.method !== 'POST') {
+        return json({ ok: false, error: 'POST 요청만 허용됩니다.' }, 405);
+      }
+      if (!env.DB) return d1ConfigError();
+      const authError = validateIngestAdmin(request, env);
+      if (authError) return authError;
+
+      const stage = (url.searchParams.get('stage') || 'all').trim().toLowerCase();
+      if (!['all', 'stations', 'parking', 'matches'].includes(stage)) {
+        return json({ ok: false, error: 'stage는 all/stations/parking/matches 중 하나여야 합니다.' }, 400);
+      }
+
+      try {
+        const result = await prepareD1ReadModels(env, stage as ReadModelPrepareStage);
+        return json(result, 200);
+      } catch (error) {
+        return json({ ok: false, stage, error: safeError(error) }, 500);
+      }
+    }
+
+    if (url.pathname === '/api/d1/read-model-state') {
+      if (!env.DB) return d1ConfigError();
+      try {
+        await ensureReadModelSchema(env.DB);
+        return json(await getReadModelState(env.DB), 200, 5);
+      } catch (error) {
+        return json({ ok: false, error: safeError(error) }, 500);
+      }
+    }
+
+    if (url.pathname === '/api/d1/match-debug') {
+      if (!env.DB) return d1ConfigError();
+      const q = (url.searchParams.get('q') || '').trim();
+      if (!q) return json({ ok: false, error: 'q 검색어가 필요합니다.' }, 400);
+      try {
+        await ensureReadModelSchema(env.DB);
+        const like = `%${q}%`;
+        const normalizedLike = `%${normalizeParkingName(q)}%`;
+        const rows = await env.DB.prepare(
+          `SELECT p.parking_id, p.name AS parking_name, p.address AS parking_address,
+                  p.lat AS parking_lat, p.lng AS parking_lng,
+                  m.stat_id, m.match_type, m.match_score, m.distance_m,
+                  s.station_name, s.address AS station_address,
+                  s.lat AS station_lat, s.lng AS station_lng,
+                  s.charger_count, s.available_count, s.charging_count
+             FROM parking_read_model p
+             LEFT JOIN parking_ev_matches m ON m.parking_id = p.parking_id
+             LEFT JOIN ev_stations s ON s.stat_id = m.stat_id
+            WHERE p.name LIKE ?1
+               OR p.address LIKE ?1
+               OR p.normalized_name LIKE ?2
+               OR s.station_name LIKE ?1
+               OR s.address LIKE ?1
+            ORDER BY p.name, m.match_score DESC, m.distance_m ASC
+            LIMIT 100`,
+        ).bind(like, normalizedLike).all();
+        return json({ ok: true, query: q, count: rows.results.length, items: rows.results });
+      } catch (error) {
+        return json({ ok: false, error: safeError(error) }, 500);
+      }
+    }
+
+    if (url.pathname === '/api/parking' || url.pathname === '/api/parking-places') {
+      if (!env.BUSAN_PARKING_API_KEY) return configError('BUSAN_PARKING_API_KEY');
+      try {
+        const parking = await fetchMergedParking(env);
+        return json({
+          ok: true,
+          places: parking.items.map(toParkingOnlyPlace),
+          realtimeParking: parking.realtimeCount > 0,
+          realtimeParkingConfigured: parking.realtimeConfigured,
+          realtimeParkingCount: parking.realtimeCount,
+          realtimeMessage: parking.userMessage,
+          parkingMatchSummary: parking.joinSummary,
         }, 200, 60);
       } catch (error) {
         return upstreamError(error);
@@ -190,830 +497,1213 @@ export default {
       return handlePlaces(env, ctx);
     }
 
+    if (url.pathname === '/api/chargers') {
+      if (!env.DB) return d1ConfigError();
+      try {
+        const rows = await env.DB.prepare(
+          `SELECT stat_id, chger_id, station_name, charger_type, address, address_detail,
+                  lat, lng, COALESCE(s.status, c.info_status) AS status,
+                  COALESCE(s.status_updated_at, c.info_status_updated_at) AS status_updated_at,
+                  output_kw, del_yn
+             FROM ev_chargers c
+             LEFT JOIN ev_status s USING(stat_id, chger_id)
+            WHERE COALESCE(c.del_yn, '') <> 'Y'
+            ORDER BY station_name, stat_id, chger_id
+            LIMIT 1000`,
+        ).all();
+        return json({ ok: true, complete: true, source: 'd1', count: rows.results.length, items: rows.results }, 200, 60);
+      } catch (error) {
+        return json({ ok: false, error: safeError(error) }, 500);
+      }
+    }
+
+    if (url.pathname === '/api/ev-summary' || url.pathname === '/api/ev-progress') {
+      if (!env.DB) return d1ConfigError();
+      try {
+        await ensureReadModelSchema(env.DB);
+        const state = await getReadModelState(env.DB);
+        return json({
+          ok: true,
+          complete: state.ready,
+          source: 'd1-read-model',
+          chargerCount: state.chargerCount,
+          stationCount: state.stationCount,
+          matchedParkingCount: state.matchedParkingCount,
+          readModelReady: state.ready,
+        }, 200, 30);
+      } catch (error) {
+        return json({ ok: false, error: safeError(error) }, 500);
+      }
+    }
+
+    if (url.pathname === '/api/ev-search') {
+      if (!env.DB) return d1ConfigError();
+      const q = (url.searchParams.get('q') || '').trim();
+      if (!q) return json({ ok: false, error: 'q 검색어가 필요합니다.' }, 400);
+      try {
+        const rows = await env.DB.prepare(
+          `SELECT stat_id, chger_id, station_name, address, address_detail, lat, lng,
+                  charger_type, output_kw, info_status, info_status_updated_at, del_yn
+             FROM ev_chargers
+            WHERE COALESCE(del_yn, '') <> 'Y'
+              AND (station_name LIKE ?1 OR address LIKE ?1 OR address_detail LIKE ?1 OR stat_id LIKE ?1)
+            ORDER BY station_name, stat_id, chger_id
+            LIMIT 100`,
+        ).bind(`%${q}%`).all();
+        return json({ ok: true, query: q, complete: true, source: 'd1', count: rows.results.length, items: rows.results }, 200, 30);
+      } catch (error) {
+        return json({ ok: false, error: safeError(error) }, 500);
+      }
+    }
+
     if (url.pathname === '/api/ev-refresh') {
+      return json({
+        ok: false,
+        deprecated: true,
+        message: 'v0.6.0부터 사용자 요청 기반 EV Info 수집은 사용하지 않습니다. D1 read model을 사용합니다.',
+      }, 410);
+    }
+
+    if (url.pathname === '/api/diagnostics/parking' || url.pathname === '/api/parking-diagnostics') {
+      if (!env.BUSAN_PARKING_API_KEY) return configError('BUSAN_PARKING_API_KEY');
+      return diagnosticsParkingBase(env.BUSAN_PARKING_API_KEY);
+    }
+
+    if (url.pathname === '/api/diagnostics/parking-realtime') {
+      if (!env.BUSAN_PARKING_API_KEY) return configError('BUSAN_PARKING_API_KEY');
+      return diagnosticsParkingRealtime(env);
+    }
+
+    if (url.pathname === '/api/diagnostics/matching') {
+      if (!env.BUSAN_PARKING_API_KEY) return configError('BUSAN_PARKING_API_KEY');
+      return diagnosticsParkingMatching(env);
+    }
+
+    if (url.pathname === '/api/diagnostics/ev-info' || url.pathname === '/api/ev-diagnostics') {
       if (!env.EV_CHARGER_API_KEY) return configError('EV_CHARGER_API_KEY');
-      ctx.waitUntil(refreshFullEvSnapshot(env.EV_CHARGER_API_KEY));
-      return json({ ok: true, message: 'EV 전체 스냅샷 갱신을 백그라운드에서 시작했습니다.' }, 202);
+      return diagnosticsEvInfo(env.EV_CHARGER_API_KEY);
+    }
+
+    if (url.pathname === '/api/diagnostics/ev-status') {
+      if (!env.EV_CHARGER_API_KEY) return configError('EV_CHARGER_API_KEY');
+      return diagnosticsEvStatus(env.EV_CHARGER_API_KEY);
     }
 
     return env.ASSETS.fetch(request);
   },
 };
 
-async function handlePlaces(env: Env, ctx: ExecutionContext) {
-  if (!env.BUSAN_PARKING_API_KEY) return configError('BUSAN_PARKING_API_KEY');
-  if (!env.EV_CHARGER_API_KEY) return configError('EV_CHARGER_API_KEY');
+async function handlePlaces(env: Env, _ctx: ExecutionContext) {
+  if (!env.DB) return d1ConfigError();
 
-  const radius = clamp(Number(env.MATCH_RADIUS_METERS || '200'), 50, 500);
+  const cache = getDefaultCache();
+  const cacheRequest = new Request(`https://plugpark.internal/${CACHE_VERSION}/places-d1`);
+  if (cache) {
+    const cached = await cache.match(cacheRequest);
+    if (cached) return cached;
+  }
 
   try {
-    const [parkingResult, evSnapshot] = await Promise.all([
-      fetchMergedParking(env),
-      getEvSnapshot(env, ctx),
-    ]);
+    const state = await getReadModelState(env.DB);
+    if (!state.ready) {
+      return json({
+        ok: false,
+        dataLayerVersion: DATA_LAYER_VERSION,
+        error: 'D1 read model 준비가 필요합니다. 배포 후 npm run data:prepare 를 한 번 실행해주세요.',
+        readModelState: state,
+      }, 503);
+    }
 
-    const chargerRows = await overlayRecentEvStatus(evSnapshot.items, env.EV_CHARGER_API_KEY);
-    const chargers = chargerRows
-      .map(normalizeCharger)
-      .filter(hasMapCoordinates)
-      .filter((c) => !c.deleted);
+    const rows = await env.DB.prepare(
+      `SELECT
+         p.parking_id, p.name, p.address, p.agency, p.lat, p.lng, p.capacity,
+         p.available_parking, p.occupied_parking, p.fee_text, p.operation_text,
+         p.parking_updated_at, p.parking_realtime, p.parking_source,
+         p.realtime_match_type, p.realtime_name,
+         COALESCE(SUM(s.charger_count), 0) AS charger_total,
+         COALESCE(SUM(s.available_count), 0) AS charger_available,
+         COALESCE(SUM(s.charging_count), 0) AS charger_charging,
+         COALESCE(SUM(s.fast_count), 0) AS charger_fast,
+         COALESCE(SUM(s.slow_count), 0) AS charger_slow,
+         GROUP_CONCAT(DISTINCT s.station_name) AS station_names,
+         MIN(m.distance_m) AS nearest_distance_m,
+         MAX(s.last_updated_at) AS charger_last_updated,
+         MAX(m.match_score) AS best_match_score
+       FROM parking_read_model p
+       LEFT JOIN parking_ev_matches m ON m.parking_id = p.parking_id
+       LEFT JOIN ev_stations s ON s.stat_id = m.stat_id
+       GROUP BY p.parking_id
+       ORDER BY charger_available DESC, available_parking DESC, p.name ASC`,
+    ).all<ParkingReadRow>();
 
-    const stations = groupChargerStations(chargers);
-
-    // EV 매칭이 없어도 주차장은 유지합니다.
-    const places = parkingResult.items
-      .map((parking) => matchPlaceImproved(parking, stations, radius))
-      .sort(sortPlaces);
-
-    return json({
+    const places = rows.results.map(readRowToPlace);
+    const payload = {
       ok: true,
       generatedAt: new Date().toISOString(),
-      matchRadiusMeters: radius,
-      parkingCount: parkingResult.items.length,
-      chargerCount: chargers.length,
-      chargerStationCount: stations.length,
-      matchedCount: places.filter((p) => p.charger.total > 0).length,
-      // matchedCount는 "EV가 매칭된 공영주차장 수"이고,
-      // chargerStationCount/chargerCount가 부산 EV 충전소/충전기 전체 수입니다.
-      evSnapshotComplete: evSnapshot.complete,
-      evSnapshotSource: evSnapshot.source,
-      realtimeParking: parkingResult.realtime,
-      realtimeMessage: parkingResult.realtimeMessage,
+      dataLayerVersion: DATA_LAYER_VERSION,
+      dataSource: 'd1-read-model',
+      upstreamEvCalls: 0,
+      matchRadiusMeters: state.matchRadiusMeters,
+      parkingCount: state.parkingCount,
+      realtimeParkingCount: state.realtimeParkingCount,
+      chargerCount: state.chargerCount,
+      chargerStationCount: state.stationCount,
+      matchedCount: state.matchedParkingCount,
+      evSnapshotComplete: true,
+      evSnapshotSource: 'd1-read-model',
+      evProgress: null,
+      readModelReady: true,
+      realtimeParking: state.realtimeParkingCount > 0,
+      realtimeParkingConfigured: Boolean(env.BUSAN_REALTIME_PARKING_API_URL),
+      realtimeMessage: env.BUSAN_REALTIME_PARKING_API_URL ? '' : '실시간 주차정보 연동 전입니다.',
       places,
-    }, 200, PLACES_TTL_SECONDS);
-  } catch (error) {
-    return upstreamError(error);
-  }
-}
-
-/* -------------------------------------------------------------------------- */
-/* Parking                                                                     */
-/* -------------------------------------------------------------------------- */
-
-async function fetchMergedParking(env: Env): Promise<{
-  items: ParkingBase[];
-  realtime: boolean;
-  realtimeMessage: string | null;
-}> {
-  const key = env.BUSAN_PARKING_API_KEY!;
-  const basePromise = fetchBaseParking(key);
-
-  if (!env.BUSAN_REALTIME_PARKING_API_URL) {
-    const base = (await basePromise).map(normalizeBaseParking);
-    return {
-      items: base,
-      realtime: false,
-      realtimeMessage:
-        'BUSAN_REALTIME_PARKING_API_URL이 아직 설정되지 않아 부산광역시 공영주차장 API를 사용 중입니다.',
     };
-  }
 
-  const [baseResult, realtimeResult] = await Promise.allSettled([
-    basePromise,
-    fetchRealtimeParking(key, env.BUSAN_REALTIME_PARKING_API_URL),
-  ]);
-
-  if (baseResult.status === 'rejected' && realtimeResult.status === 'rejected') {
-    throw new Error(
-      `주차 API 모두 실패: base=${safeError(baseResult.reason)} / realtime=${safeError(realtimeResult.reason)}`,
-    );
-  }
-
-  const base = baseResult.status === 'fulfilled'
-    ? baseResult.value.map(normalizeBaseParking)
-    : [];
-
-  if (realtimeResult.status === 'rejected') {
-    return {
-      items: base,
-      realtime: false,
-      realtimeMessage: `부산시설공단 실시간 API 호출 실패: ${safeError(realtimeResult.reason)}`,
-    };
-  }
-
-  const liveRows = realtimeResult.value.map(normalizeRealtimeParking);
-  const merged = mergeParkingRows(base, liveRows);
-
-  return {
-    items: merged,
-    realtime: liveRows.some((p) => p.availableParking != null || p.occupiedParking != null),
-    realtimeMessage: null,
-  };
-}
-
-async function fetchBaseParking(serviceKey: string): Promise<AnyObject[]> {
-  const url = new URL(PARKING_BASE_URL);
-  url.searchParams.set('serviceKey', normalizeServiceKey(serviceKey));
-  url.searchParams.set('numOfRows', '1000');
-  url.searchParams.set('pageNo', '1');
-  url.searchParams.set('resultType', 'json');
-
-  const payload = await fetchStructured(url);
-  ensureNormalResult(payload, '부산광역시 공영주차장');
-  return extractItems(payload);
-}
-
-async function fetchRealtimeParking(serviceKey: string, endpoint: string): Promise<AnyObject[]> {
-  const url = new URL(endpoint.trim());
-
-  // 이미 상세기능 URL에 파라미터가 포함된 경우 값을 덮어쓰지 않습니다.
-  if (!url.searchParams.has('serviceKey') && !url.searchParams.has('ServiceKey')) {
-    url.searchParams.set('serviceKey', normalizeServiceKey(serviceKey));
-  }
-  if (!url.searchParams.has('pageNo')) url.searchParams.set('pageNo', '1');
-  if (!url.searchParams.has('numOfRows')) url.searchParams.set('numOfRows', '200');
-  if (!url.searchParams.has('resultType')) url.searchParams.set('resultType', 'json');
-
-  const payload = await fetchStructured(url);
-  ensureNormalResult(payload, '부산시설공단 실시간 주차');
-  return extractItems(payload);
-}
-
-function normalizeBaseParking(p: AnyObject): ParkingBase {
-  const capacity = pickNumber(p, ['pkCnt', 'parkingCnt', 'capacity', 'totalCnt']);
-  const availableParking = pickNumber(p, ['currava', 'availableParking', 'availableCnt']);
-
-  const basicTime = pickText(p, ['pkBascTime']);
-  const baseFee = pickText(p, ['tenMin']);
-  const feeText = baseFee
-    ? `${basicTime || '기본'}분 ${Number(baseFee).toLocaleString('ko-KR')}원`
-    : pickText(p, ['feeInfo']) || '요금 정보 확인 필요';
-
-  const start = pickText(p, ['svcSrtTe']);
-  const end = pickText(p, ['svcEndTe']);
-
-  return {
-    id: pickText(p, ['mgntNum', 'pParkGCd', 'parkingCode']) || pickText(p, ['pkNam', 'name']) || crypto.randomUUID(),
-    name: pickText(p, ['pkNam', 'parkingName', 'parkName', 'name']) || '이름 없는 공영주차장',
-    address: pickText(p, ['doroAddr', 'jibunAddr', 'address', 'addr']) || '주소 정보 없음',
-    agency: pickText(p, ['guNm', 'agency', 'managementAgency']),
-    lat: normalizeLat(pickNumber(p, ['lat', 'latitude', 'xCdnt'])),
-    lng: normalizeLng(pickNumber(p, ['lng', 'longitude', 'lon', 'yCdnt'])),
-    capacity,
-    availableParking,
-    occupiedParking:
-      capacity != null && availableParking != null
-        ? Math.max(0, capacity - availableParking)
-        : null,
-    feeText,
-    operationText:
-      start || end
-        ? `${start || '?'} ~ ${end || '?'}`
-        : pickText(p, ['oprDay']) || '운영시간 확인 필요',
-    parkingUpdatedAt: pickText(p, ['fnlDt', 'updateDt', 'updatedAt']) || null,
-    parkingRealtime: availableParking != null,
-    parkingSource: 'busan-city',
-  };
-}
-
-function normalizeRealtimeParking(p: AnyObject): ParkingBase {
-  // 부산시설공단 실제 응답 필드 우선:
-  // maxcnt       = 최대 주차 가능 대수
-  // parkingcnt   = 현재 주차 대수
-  // curravacnt   = 현재 주차 가능 대수
-  let capacity = pickNumber(p, [
-    'maxcnt',
-    'maxParkingCount', 'maxParkingCnt', 'maxParkCnt', 'maximumParking',
-    'capacity', 'totalCnt', 'pkCnt',
-  ]);
-
-  let availableParking = pickNumber(p, [
-    'curravacnt',
-    'availableParkingCount', 'availableParkingCnt', 'parkingAvailableCount',
-    'parkingAvailable', 'availableCnt', 'availCnt', 'remainCnt',
-    'remainCount', 'freeSpace', 'emptyCnt', 'possibleCnt',
-  ]);
-
-  let occupiedParking = pickNumber(p, [
-    'parkingcnt',
-    'currentParkingCount', 'currentParkingCnt', 'currentParking',
-    'occupiedParkingCount', 'occupiedCnt', 'useCnt', 'parkingUseCnt',
-    'currentCnt',
-  ]);
-
-  if (availableParking == null && capacity != null && occupiedParking != null) {
-    availableParking = Math.max(0, capacity - occupiedParking);
-  }
-  if (occupiedParking == null && capacity != null && availableParking != null) {
-    occupiedParking = Math.max(0, capacity - availableParking);
-  }
-  if (capacity == null && availableParking != null && occupiedParking != null) {
-    capacity = availableParking + occupiedParking;
-  }
-
-  // 정상 응답은 maxcnt = parkingcnt + curravacnt 관계를 만족합니다.
-  // 데이터가 일시적으로 어긋나면 maxcnt와 parkingcnt를 기준으로 잔여면을 보정합니다.
-  if (
-    capacity != null &&
-    occupiedParking != null &&
-    availableParking != null &&
-    Math.abs(capacity - (occupiedParking + availableParking)) > 1
-  ) {
-    availableParking = Math.max(0, capacity - occupiedParking);
-  }
-
-  return {
-    id: pickText(p, ['parkgcd', 'pParkGCd', 'parkCode', 'parkingCode', 'mgntNum', 'id']) || crypto.randomUUID(),
-    name: pickText(p, [
-      'parknm', 'pParkNm', 'pParkName', 'parkingName', 'parkName', 'pkNam',
-      'facilityName', 'name',
-    ]) || '부산시설공단 공영주차장',
-    address: pickText(p, ['address', 'addr', 'roadAddress', 'doroAddr', 'jibunAddr']) || '',
-    agency: pickText(p, ['guNm', 'agency', 'managementAgency', 'operatorName']),
-    lat: normalizeLat(pickNumber(p, ['lat', 'latitude', 'x', 'xCdnt'])),
-    lng: normalizeLng(pickNumber(p, ['lng', 'longitude', 'lon', 'y', 'yCdnt'])),
-    capacity,
-    availableParking,
-    occupiedParking,
-    feeText: pickText(p, ['feeText', 'parkingFee', 'feeInfo']) || '요금 정보 확인 필요',
-    operationText: pickText(p, ['operationTime', 'operatingTime', 'useTime']) || '운영시간 확인 필요',
-    parkingUpdatedAt:
-      pickText(p, [
-        'lastupdatetime',
-        'lastUpdateDt', 'lastUpdatedAt', 'lastUpdate', 'updateDt',
-        'updatedAt', 'updateTime', 'lastUpdDt',
-      ]) || null,
-    parkingRealtime: availableParking != null || occupiedParking != null,
-    parkingSource: 'busan-facilities',
-  };
-}
-
-function mergeParkingRows(base: ParkingBase[], live: ParkingBase[]): ParkingBase[] {
-  const used = new Set<number>();
-  const merged = base.map((parking) => {
-    let bestIndex = -1;
-    let bestScore = 0;
-
-    for (let i = 0; i < live.length; i += 1) {
-      if (used.has(i)) continue;
-      const score = parkingIdentityScore(parking, live[i]);
-      if (score > bestScore) {
-        bestScore = score;
-        bestIndex = i;
-      }
-    }
-
-    if (bestIndex < 0 || bestScore < 4) return parking;
-
-    used.add(bestIndex);
-    const r = live[bestIndex];
-
-    return {
-      ...parking,
-      id: r.id || parking.id,
-      capacity: r.capacity ?? parking.capacity,
-      availableParking: r.availableParking ?? parking.availableParking,
-      occupiedParking: r.occupiedParking ?? parking.occupiedParking,
-      parkingUpdatedAt: r.parkingUpdatedAt ?? parking.parkingUpdatedAt,
-      parkingRealtime: r.parkingRealtime || parking.parkingRealtime,
-      parkingSource: 'merged' as const,
-      lat: r.lat ?? parking.lat,
-      lng: r.lng ?? parking.lng,
-      address: parking.address !== '주소 정보 없음' ? parking.address : (r.address || parking.address),
-      agency: parking.agency || r.agency,
-      feeText: parking.feeText !== '요금 정보 확인 필요' ? parking.feeText : r.feeText,
-      operationText:
-        parking.operationText !== '운영시간 확인 필요'
-          ? parking.operationText
-          : r.operationText,
-    };
-  });
-
-  // 부산시설공단 데이터에만 있는 주차장도 검색 목록에는 유지합니다.
-  // 좌표가 없으면 프론트의 Kakao geocoder가 위치를 보완합니다.
-  for (let i = 0; i < live.length; i += 1) {
-    if (!used.has(i)) merged.push(live[i]);
-  }
-
-  return dedupeParking(merged);
-}
-
-function parkingIdentityScore(a: ParkingBase, b: ParkingBase) {
-  let score = 0;
-
-  const aid = normalizeIdentity(a.id);
-  const bid = normalizeIdentity(b.id);
-  if (aid && bid && aid === bid) score += 10;
-
-  const an = normalizePlaceName(a.name);
-  const bn = normalizePlaceName(b.name);
-  if (an && bn) {
-    if (an === bn) score += 8;
-    else if (an.includes(bn) || bn.includes(an)) score += 6;
-    else score += tokenOverlapScore(an, bn) * 4;
-  }
-
-  const aa = normalizeAddress(a.address);
-  const ba = normalizeAddress(b.address);
-  if (aa && ba) {
-    if (aa === ba) score += 5;
-    else score += tokenOverlapScore(aa, ba) * 3;
-  }
-
-  if (hasMapCoordinates(a) && hasMapCoordinates(b)) {
-    const d = haversineMeters(a.lat, a.lng, b.lat, b.lng);
-    if (d <= 40) score += 6;
-    else if (d <= 100) score += 4;
-    else if (d <= 250) score += 2;
-  }
-
-  return score;
-}
-
-function dedupeParking(items: ParkingBase[]) {
-  const out: ParkingBase[] = [];
-  for (const p of items) {
-    const found = out.findIndex((q) => parkingIdentityScore(p, q) >= 8);
-    if (found < 0) out.push(p);
-    else if (parkingCompleteness(p) > parkingCompleteness(out[found])) out[found] = p;
-  }
-  return out;
-}
-
-function parkingCompleteness(p: ParkingBase) {
-  return [
-    p.capacity != null,
-    p.availableParking != null,
-    p.occupiedParking != null,
-    p.parkingRealtime,
-    Boolean(p.parkingUpdatedAt),
-    hasMapCoordinates(p),
-    p.address && p.address !== '주소 정보 없음',
-  ].filter(Boolean).length;
-}
-
-/* -------------------------------------------------------------------------- */
-/* EV snapshot + recent status                                                 */
-/* -------------------------------------------------------------------------- */
-
-async function getEvSnapshot(env: Env, ctx: ExecutionContext): Promise<{
-  items: AnyObject[];
-  complete: boolean;
-  source: 'full-cache' | 'busan-live';
-}> {
-  const cache = getDefaultCache();
-
-  if (cache) {
-    const cached = await cache.match(evCacheRequest('full'));
-    if (cached) {
-      const payload = await cached.json() as { items?: AnyObject[]; generatedAt?: string };
-      ctx.waitUntil(refreshFullEvSnapshotIfStale(env.EV_CHARGER_API_KEY!));
-      return {
-        items: payload.items || [],
-        complete: true,
-        source: 'full-cache',
-      };
-    }
-  }
-
-  // 중요:
-  // 기존 quick snapshot(첫 1000건)을 더 이상 "부산 전체"로 취급하지 않습니다.
-  // zcode=26으로 부산 페이지를 끝까지 읽고, 응답 필터가 무시되는 경우에만
-  // 전국 페이지를 훑어 부산 데이터만 로컬 필터링합니다.
-  const items = await fetchCompleteBusanEvInfo(env.EV_CHARGER_API_KEY!);
-
-  if (cache) {
-    ctx.waitUntil(
-      Promise.all([
-        cache.put(
-          evCacheRequest('full'),
-          cacheJson(
-            { items, generatedAt: new Date().toISOString() },
-            EV_SNAPSHOT_TTL_SECONDS,
-          ),
-        ),
-        cache.put(
-          evCacheRequest('full-meta'),
-          cacheJson(
-            { generatedAt: new Date().toISOString(), count: items.length },
-            EV_SNAPSHOT_TTL_SECONDS,
-          ),
-        ),
-      ]).then(() => undefined),
-    );
-  }
-
-  return {
-    items,
-    complete: true,
-    source: 'busan-live',
-  };
-}
-
-async function refreshFullEvSnapshotIfStale(serviceKey: string) {
-  const cache = getDefaultCache();
-  if (!cache) return;
-
-  const meta = await cache.match(evCacheRequest('full-meta'));
-
-  if (meta) {
-    try {
-      const data = await meta.json() as { generatedAt?: string };
-      const age = Date.now() - new Date(data.generatedAt || 0).getTime();
-      if (Number.isFinite(age) && age < EV_SNAPSHOT_TTL_SECONDS * 1000) return;
-    } catch {
-      // 메타가 깨졌으면 새로 수집합니다.
-    }
-  }
-
-  await refreshFullEvSnapshot(serviceKey);
-}
-
-async function refreshFullEvSnapshot(serviceKey: string) {
-  const cache = getDefaultCache();
-  if (!cache) return;
-
-  const lockReq = evCacheRequest('refresh-lock');
-  if (await cache.match(lockReq)) return;
-
-  await cache.put(
-    lockReq,
-    cacheJson({ startedAt: new Date().toISOString() }, 120),
-  );
-
-  try {
-    const items = await fetchCompleteBusanEvInfo(serviceKey);
-
-    await Promise.all([
-      cache.put(
-        evCacheRequest('full'),
-        cacheJson(
-          { items, generatedAt: new Date().toISOString() },
-          EV_SNAPSHOT_TTL_SECONDS,
-        ),
-      ),
-      cache.put(
-        evCacheRequest('full-meta'),
-        cacheJson(
-          { generatedAt: new Date().toISOString(), count: items.length },
-          EV_SNAPSHOT_TTL_SECONDS,
-        ),
-      ),
-    ]);
+    const response = json(payload, 200, PLACES_CACHE_SECONDS);
+    if (cache) await cache.put(cacheRequest, response.clone());
+    return response;
   } catch (error) {
-    console.error('EV full snapshot refresh failed', error);
+    return json({ ok: false, dataLayerVersion: DATA_LAYER_VERSION, error: safeError(error) }, 500);
   }
-}
-
-async function fetchCompleteBusanEvInfo(serviceKey: string): Promise<AnyObject[]> {
-  const key = normalizeServiceKey(serviceKey);
-  const collected: AnyObject[] = [];
-  const seen = new Set<string>();
-
-  let filterLooksHonored: boolean | null = null;
-  let previousUniqueCount = 0;
-  let stagnantPages = 0;
-
-  for (let pageNo = 1; pageNo <= EV_BUSAN_MAX_PAGES; pageNo += 1) {
-    const url = buildEvUrl(
-      EV_INFO_URL,
-      key,
-      pageNo,
-      EV_BUSAN_PAGE_SIZE,
-      { zcode: '26' },
-    );
-
-    const payload = await fetchStructured(url);
-    ensureNormalResult(payload, `EV 부산 page ${pageNo}`);
-
-    const rawRows = extractItems(payload);
-    const busanRows = filterBusanEvRows(rawRows);
-
-    if (pageNo === 1) {
-      const ratio = rawRows.length ? busanRows.length / rawRows.length : 1;
-      filterLooksHonored = ratio >= 0.8;
-
-      // zcode=26을 보냈는데 첫 페이지가 대부분 타지역이라면,
-      // API가 지역 필터를 무시하는 것으로 보고 전국 fallback으로 전환합니다.
-      if (!filterLooksHonored) {
-        return fetchBusanEvByNationalFallback(key);
-      }
-    }
-
-    for (const row of busanRows) {
-      const keyValue = evKey(row);
-      if (keyValue === ':' || seen.has(keyValue)) continue;
-      seen.add(keyValue);
-      collected.push(row);
-    }
-
-    if (collected.length === previousUniqueCount) stagnantPages += 1;
-    else stagnantPages = 0;
-    previousUniqueCount = collected.length;
-
-    // totalCount는 실제 필터 결과와 맞지 않는 경우가 있어 신뢰하지 않습니다.
-    // 실제 반환 row 수와 신규 key 증가 여부로 종료합니다.
-    if (rawRows.length < EV_BUSAN_PAGE_SIZE || rawRows.length === 0 || stagnantPages >= 2) {
-      break;
-    }
-  }
-
-  return dedupeEvRows(filterBusanEvRows(collected));
-}
-
-async function fetchBusanEvByNationalFallback(serviceKey: string): Promise<AnyObject[]> {
-  const firstUrl = buildEvUrl(
-    EV_INFO_URL,
-    serviceKey,
-    1,
-    EV_NATIONAL_FALLBACK_PAGE_SIZE,
-  );
-  const firstPayload = await fetchStructured(firstUrl);
-  ensureNormalResult(firstPayload, 'EV 전국 fallback page 1');
-
-  const totalCountRaw = deepFindFirst(firstPayload, 'totalCount');
-  const totalCount = Number(totalCountRaw);
-  const calculatedPages = Number.isFinite(totalCount) && totalCount > 0
-    ? Math.ceil(totalCount / EV_NATIONAL_FALLBACK_PAGE_SIZE)
-    : EV_NATIONAL_FALLBACK_MAX_PAGES;
-
-  const pageCount = Math.min(
-    Math.max(calculatedPages, 1),
-    EV_NATIONAL_FALLBACK_MAX_PAGES,
-  );
-
-  const collected: AnyObject[] = [];
-  const firstRows = filterBusanEvRows(extractItems(firstPayload));
-  collected.push(...firstRows);
-
-  // 너무 큰 XML 여러 개를 한꺼번에 메모리에 올리지 않도록 2페이지씩 처리합니다.
-  for (let startPage = 2; startPage <= pageCount; startPage += 2) {
-    const pages = [startPage, startPage + 1].filter((page) => page <= pageCount);
-
-    const payloads = await Promise.all(
-      pages.map(async (pageNo) => {
-        const url = buildEvUrl(
-          EV_INFO_URL,
-          serviceKey,
-          pageNo,
-          EV_NATIONAL_FALLBACK_PAGE_SIZE,
-        );
-        const payload = await fetchStructured(url);
-        ensureNormalResult(payload, `EV 전국 fallback page ${pageNo}`);
-        return payload;
-      }),
-    );
-
-    for (const payload of payloads) {
-      collected.push(...filterBusanEvRows(extractItems(payload)));
-    }
-  }
-
-  return dedupeEvRows(collected);
-}
-
-async function overlayRecentEvStatus(infoRows: AnyObject[], serviceKey: string) {
-  try {
-    const statusUrl = buildEvUrl(
-      EV_STATUS_URL,
-      normalizeServiceKey(serviceKey),
-      1,
-      9999,
-      { zcode: '26', period: '10' },
-      'serviceKey',
-    );
-
-    const payload = await fetchStructured(statusUrl);
-    ensureNormalResult(payload, 'EV 상태');
-    const statuses = extractItems(payload);
-
-    const statusMap = new Map<string, AnyObject>();
-    for (const row of statuses) {
-      statusMap.set(evKey(row), row);
-    }
-
-    return infoRows.map((row) => {
-      const status = statusMap.get(evKey(row));
-      return status
-        ? {
-            ...row,
-            stat: status.stat ?? row.stat,
-            statUpdDt: status.statUpdDt ?? row.statUpdDt,
-            lastTsdt: status.lastTsdt ?? row.lastTsdt,
-            lastTedt: status.lastTedt ?? row.lastTedt,
-            nowTsdt: status.nowTsdt ?? row.nowTsdt,
-          }
-        : row;
-    });
-  } catch (error) {
-    console.warn('Recent EV status overlay failed', safeError(error));
-    return infoRows;
-  }
-}
-
-function filterBusanEvRows(rows: AnyObject[]) {
-  return rows.filter((row) => {
-    const zcode = pickText(row, ['zcode']);
-    const address = pickText(row, ['addr', 'address']);
-    return zcode === '26' || address.startsWith('부산');
-  });
-}
-
-function dedupeEvRows(rows: AnyObject[]) {
-  const map = new Map<string, AnyObject>();
-  for (const row of rows) {
-    const key = evKey(row);
-    if (key === ':') continue;
-    map.set(key, row);
-  }
-  return [...map.values()];
-}
-
-function evKey(row: AnyObject) {
-  return `${pickText(row, ['statId'])}:${pickText(row, ['chgerId'])}`;
-}
-
-function buildEvUrl(
-  base: string,
-  serviceKey: string,
-  pageNo: number,
-  pageSize: number,
-  extras: Record<string, string> = {},
-  keyName: 'serviceKey' | 'ServiceKey' = 'serviceKey',
-) {
-  const url = new URL(base);
-  url.searchParams.set(keyName, serviceKey);
-  url.searchParams.set('pageNo', String(pageNo));
-  url.searchParams.set('numOfRows', String(pageSize));
-  Object.entries(extras).forEach(([k, v]) => url.searchParams.set(k, v));
-  return url;
 }
 
 /* -------------------------------------------------------------------------- */
-/* EV matching                                                                 */
+/* v0.6.0 D1 read model                                                        */
 /* -------------------------------------------------------------------------- */
 
-function normalizeCharger(c: AnyObject): Charger {
-  return {
-    stationId: pickText(c, ['statId']),
-    chargerId: pickText(c, ['chgerId']),
-    stationName: pickText(c, ['statNm']) || '전기차 충전소',
-    address: pickText(c, ['addr', 'addrDetail']),
-    lat: normalizeLat(pickNumber(c, ['lat'])),
-    lng: normalizeLng(pickNumber(c, ['lng'])),
-    type: pickText(c, ['chgerType']),
-    status: pickText(c, ['stat']),
-    output: pickNumber(c, ['output']),
-    updatedAt: pickText(c, ['statUpdDt']) || null,
-    deleted: pickText(c, ['delYn']) === 'Y',
-  };
+type ReadModelPrepareStage = 'all' | 'stations' | 'parking' | 'matches';
+
+type ParkingReadRow = {
+  parking_id: string;
+  name: string;
+  address: string | null;
+  agency: string | null;
+  lat: number | null;
+  lng: number | null;
+  capacity: number | null;
+  available_parking: number | null;
+  occupied_parking: number | null;
+  fee_text: string | null;
+  operation_text: string | null;
+  parking_updated_at: string | null;
+  parking_realtime: number;
+  parking_source: string | null;
+  realtime_match_type: ParkingMatchType | null;
+  realtime_name: string | null;
+  charger_total: number;
+  charger_available: number;
+  charger_charging: number;
+  charger_fast: number;
+  charger_slow: number;
+  station_names: string | null;
+  nearest_distance_m: number | null;
+  charger_last_updated: string | null;
+  best_match_score: number | null;
+};
+
+type MatchCandidateRow = {
+  parking_id: string;
+  parking_name: string;
+  parking_normalized_name: string;
+  parking_address: string;
+  parking_lat: number | null;
+  parking_lng: number | null;
+  stat_id: string;
+  station_name: string;
+  station_normalized_name: string;
+  station_address: string;
+  station_lat: number | null;
+  station_lng: number | null;
+};
+
+async function ensureReadModelSchema(db: D1Database) {
+  await db.batch([
+    db.prepare(`CREATE TABLE IF NOT EXISTS ev_stations (
+      stat_id TEXT PRIMARY KEY,
+      station_name TEXT NOT NULL,
+      normalized_station_name TEXT NOT NULL,
+      address TEXT,
+      lat REAL,
+      lng REAL,
+      charger_count INTEGER NOT NULL,
+      available_count INTEGER NOT NULL,
+      charging_count INTEGER NOT NULL,
+      fast_count INTEGER NOT NULL,
+      slow_count INTEGER NOT NULL,
+      last_updated_at TEXT,
+      synced_at TEXT NOT NULL
+    )`),
+    db.prepare(`CREATE INDEX IF NOT EXISTS idx_ev_stations_normalized_name ON ev_stations(normalized_station_name)`),
+    db.prepare(`CREATE INDEX IF NOT EXISTS idx_ev_stations_coords ON ev_stations(lat, lng)`),
+    db.prepare(`CREATE TABLE IF NOT EXISTS parking_read_model (
+      parking_id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      normalized_name TEXT NOT NULL,
+      address TEXT,
+      agency TEXT,
+      lat REAL,
+      lng REAL,
+      capacity INTEGER,
+      available_parking INTEGER,
+      occupied_parking INTEGER,
+      fee_text TEXT,
+      operation_text TEXT,
+      parking_updated_at TEXT,
+      parking_realtime INTEGER NOT NULL DEFAULT 0,
+      parking_source TEXT,
+      realtime_match_type TEXT,
+      realtime_name TEXT,
+      synced_at TEXT NOT NULL
+    )`),
+    db.prepare(`CREATE INDEX IF NOT EXISTS idx_parking_read_model_name ON parking_read_model(normalized_name)`),
+    db.prepare(`CREATE INDEX IF NOT EXISTS idx_parking_read_model_coords ON parking_read_model(lat, lng)`),
+    db.prepare(`CREATE TABLE IF NOT EXISTS parking_ev_matches (
+      parking_id TEXT NOT NULL,
+      stat_id TEXT NOT NULL,
+      match_type TEXT NOT NULL,
+      match_score REAL,
+      distance_m REAL,
+      reviewed INTEGER NOT NULL DEFAULT 0,
+      matched_at TEXT NOT NULL,
+      PRIMARY KEY (parking_id, stat_id)
+    )`),
+    db.prepare(`CREATE INDEX IF NOT EXISTS idx_parking_ev_matches_stat_id ON parking_ev_matches(stat_id)`),
+  ]);
 }
 
-function groupChargerStations(chargers: (Charger & { lat: number; lng: number })[]): ChargerStation[] {
-  const grouped = new Map<string, (Charger & { lat: number; lng: number })[]>();
+async function prepareD1ReadModels(env: Env, stage: ReadModelPrepareStage) {
+  if (!env.DB) throw new Error('D1 binding DB가 없습니다.');
+  await ensureReadModelSchema(env.DB);
+  const runId = `read-model-${crypto.randomUUID()}`;
+  const radius = clamp(Number(env.MATCH_RADIUS_METERS || '200'), 50, 500);
+  const completed: string[] = [];
 
-  for (const c of chargers) {
-    const key = c.stationId || `${normalizePlaceName(c.stationName)}:${c.lat.toFixed(5)}:${c.lng.toFixed(5)}`;
-    const list = grouped.get(key) || [];
-    list.push(c);
-    grouped.set(key, list);
+  if (stage === 'all' || stage === 'stations') {
+    const evInfoState = await env.DB.prepare(
+      `SELECT status, reported_total_count FROM sync_state WHERE job_name = ?1`,
+    ).bind(D1_EV_INFO_JOB).first<{ status: string; reported_total_count: number | null }>();
+    if (evInfoState?.status !== 'complete') {
+      throw new Error('EV Info backfill이 complete 상태가 아닙니다. 먼저 EV Info 적재를 완료해주세요.');
+    }
+    await rebuildEvStations(env.DB);
+    await markReadModelJob(env.DB, 'read_model_ev_stations', runId);
+    completed.push('stations');
   }
 
-  return [...grouped.entries()].map(([stationId, rows]) => ({
-    stationId,
-    stationName: rows[0].stationName,
-    address: rows[0].address,
-    lat: rows.reduce((s, r) => s + r.lat, 0) / rows.length,
-    lng: rows.reduce((s, r) => s + r.lng, 0) / rows.length,
-    chargers: rows,
+  if (stage === 'all' || stage === 'parking') {
+    if (!env.BUSAN_PARKING_API_KEY) throw new Error('BUSAN_PARKING_API_KEY가 설정되지 않았습니다.');
+    const parking = await fetchMergedParking(env);
+    await replaceParkingReadModel(env.DB, parking.items);
+    await markReadModelJob(env.DB, 'read_model_parking', runId);
+    completed.push('parking');
+  }
+
+  if (stage === 'all' || stage === 'matches') {
+    const matchCount = await rebuildParkingEvMatches(env.DB, radius);
+    await markReadModelJob(env.DB, 'read_model_matches', runId, matchCount);
+    completed.push('matches');
+  }
+
+  const state = await getReadModelState(env.DB);
+  return { ok: true, dataLayerVersion: DATA_LAYER_VERSION, stage, completed, state };
+}
+
+async function rebuildEvStations(db: D1Database) {
+  const now = new Date().toISOString();
+  await db.prepare('DELETE FROM ev_stations').run();
+  await db.prepare(
+    `INSERT INTO ev_stations (
+       stat_id, station_name, normalized_station_name, address, lat, lng,
+       charger_count, available_count, charging_count, fast_count, slow_count,
+       last_updated_at, synced_at
+     )
+     SELECT
+       c.stat_id,
+       MAX(c.station_name),
+       MAX(c.normalized_station_name),
+       MAX(COALESCE(c.address, '')),
+       AVG(c.lat),
+       AVG(c.lng),
+       COUNT(*),
+       SUM(CASE WHEN COALESCE(s.status, c.info_status) = '2' THEN 1 ELSE 0 END),
+       SUM(CASE WHEN COALESCE(s.status, c.info_status) = '3' THEN 1 ELSE 0 END),
+       SUM(CASE
+             WHEN c.output_kw >= 50 THEN 1
+             WHEN c.output_kw IS NULL AND c.charger_type IN ('01','03','04','05','06','07','09','10') THEN 1
+             ELSE 0
+           END),
+       SUM(CASE
+             WHEN c.output_kw >= 50 THEN 0
+             WHEN c.output_kw IS NULL AND c.charger_type IN ('01','03','04','05','06','07','09','10') THEN 0
+             ELSE 1
+           END),
+       MAX(COALESCE(s.status_updated_at, c.info_status_updated_at)),
+       ?1
+     FROM ev_chargers c
+     LEFT JOIN ev_status s USING(stat_id, chger_id)
+     WHERE COALESCE(c.del_yn, '') <> 'Y'
+     GROUP BY c.stat_id`,
+  ).bind(now).run();
+}
+
+async function replaceParkingReadModel(db: D1Database, items: ParkingBase[]) {
+  await db.prepare('DELETE FROM parking_read_model').run();
+  const syncedAt = new Date().toISOString();
+  const rows = items.map((item) => ({
+    parking_id: item.id,
+    name: item.name,
+    normalized_name: normalizeParkingName(item.name),
+    address: item.address,
+    agency: item.agency,
+    lat: item.lat,
+    lng: item.lng,
+    capacity: item.capacity,
+    available_parking: item.availableParking,
+    occupied_parking: item.occupiedParking,
+    fee_text: item.feeText,
+    operation_text: item.operationText,
+    parking_updated_at: item.parkingUpdatedAt,
+    parking_realtime: item.parkingRealtime ? 1 : 0,
+    parking_source: item.parkingSource,
+    realtime_match_type: item.realtimeMatch.type,
+    realtime_name: item.realtimeMatch.realtimeName,
+    synced_at: syncedAt,
   }));
+
+  const sql = `INSERT INTO parking_read_model (
+      parking_id, name, normalized_name, address, agency, lat, lng, capacity,
+      available_parking, occupied_parking, fee_text, operation_text,
+      parking_updated_at, parking_realtime, parking_source,
+      realtime_match_type, realtime_name, synced_at
+    )
+    SELECT
+      json_extract(j.value, '$.parking_id'),
+      json_extract(j.value, '$.name'),
+      json_extract(j.value, '$.normalized_name'),
+      json_extract(j.value, '$.address'),
+      json_extract(j.value, '$.agency'),
+      json_extract(j.value, '$.lat'),
+      json_extract(j.value, '$.lng'),
+      json_extract(j.value, '$.capacity'),
+      json_extract(j.value, '$.available_parking'),
+      json_extract(j.value, '$.occupied_parking'),
+      json_extract(j.value, '$.fee_text'),
+      json_extract(j.value, '$.operation_text'),
+      json_extract(j.value, '$.parking_updated_at'),
+      json_extract(j.value, '$.parking_realtime'),
+      json_extract(j.value, '$.parking_source'),
+      json_extract(j.value, '$.realtime_match_type'),
+      json_extract(j.value, '$.realtime_name'),
+      json_extract(j.value, '$.synced_at')
+    FROM json_each(?1) AS j`;
+
+  for (let offset = 0; offset < rows.length; offset += 100) {
+    await db.prepare(sql).bind(JSON.stringify(rows.slice(offset, offset + 100))).run();
+  }
 }
 
-function matchPlaceImproved(parking: ParkingBase, stations: ChargerStation[], radius: number) {
-  const hasParkingCoords = hasMapCoordinates(parking);
-  const candidateRadius = Math.max(radius, 500);
+async function rebuildParkingEvMatches(db: D1Database, radius: number) {
+  const latDelta = radius / 111_000;
+  const lngDelta = radius / 88_000;
+  const candidateRows = await db.prepare(
+    `SELECT
+       p.parking_id,
+       p.name AS parking_name,
+       p.normalized_name AS parking_normalized_name,
+       COALESCE(p.address, '') AS parking_address,
+       p.lat AS parking_lat,
+       p.lng AS parking_lng,
+       s.stat_id,
+       s.station_name,
+       s.normalized_station_name AS station_normalized_name,
+       COALESCE(s.address, '') AS station_address,
+       s.lat AS station_lat,
+       s.lng AS station_lng
+     FROM parking_read_model p
+     JOIN ev_stations s
+       ON (
+         (LENGTH(p.normalized_name) >= 4 AND LENGTH(s.normalized_station_name) >= 4 AND
+           (INSTR(p.normalized_name, s.normalized_station_name) > 0 OR
+            INSTR(s.normalized_station_name, p.normalized_name) > 0))
+         OR
+         (p.lat IS NOT NULL AND p.lng IS NOT NULL AND s.lat IS NOT NULL AND s.lng IS NOT NULL
+           AND s.lat BETWEEN p.lat - ?1 AND p.lat + ?1
+           AND s.lng BETWEEN p.lng - ?2 AND p.lng + ?2)
+       )`,
+  ).bind(latDelta, lngDelta).all<MatchCandidateRow>();
 
-  const candidates = stations
-    .map((station) => {
-      const distance = hasParkingCoords
-        ? haversineMeters(parking.lat, parking.lng, station.lat, station.lng)
-        : null;
-      const score = stationMatchScore(parking, station, distance, radius);
-      return { station, distance, score };
-    })
-    .filter((candidate) => {
-      if (candidate.distance != null) {
-        return candidate.distance <= candidateRadius && candidate.score >= 4;
-      }
-      // 좌표가 없는 주차장은 이름/주소/관리기관 텍스트가 충분히 강할 때만 매칭합니다.
-      return candidate.score >= 8;
-    })
-    .sort((a, b) => b.score - a.score || (a.distance ?? Number.MAX_SAFE_INTEGER) - (b.distance ?? Number.MAX_SAFE_INTEGER));
+  const matches = new Map<string, {
+    parking_id: string;
+    stat_id: string;
+    match_type: string;
+    match_score: number;
+    distance_m: number | null;
+    reviewed: number;
+    matched_at: string;
+  }>();
+  const matchedAt = new Date().toISOString();
 
-  const accepted = candidates.filter((candidate, index) => {
-    if (index === 0) return true;
-    const best = candidates[0];
-
-    if (candidate.distance != null && candidate.distance > 250) return false;
-
-    const stationName = normalizePlaceName(candidate.station.stationName);
-    const bestName = normalizePlaceName(best.station.stationName);
-    const parkingName = normalizePlaceName(parking.name);
-
-    return (
-      stationName.includes(bestName) ||
-      bestName.includes(stationName) ||
-      tokenOverlapScore(stationName, parkingName) >= 0.34
+  for (const row of candidateRows.results) {
+    const pName = row.parking_normalized_name || '';
+    const sName = row.station_normalized_name || '';
+    const exactName = Boolean(pName && sName && pName === sName);
+    const containedName = Boolean(
+      pName && sName && Math.min(pName.length, sName.length) >= 4 &&
+      (pName.includes(sName) || sName.includes(pName)),
     );
-  });
+    const hasBothCoordinates =
+      row.parking_lat != null && row.parking_lng != null &&
+      row.station_lat != null && row.station_lng != null;
+    const distance = hasBothCoordinates
+      ? haversineMeters(row.parking_lat!, row.parking_lng!, row.station_lat!, row.station_lng!)
+      : null;
 
-  if (!accepted.length) return toParkingOnlyPlace(parking);
+    let matchType: string | null = null;
+    let score = 0;
+    if (exactName) {
+      matchType = 'normalized_name';
+      score = distance != null && distance <= radius ? 100 : 96;
+    } else if (containedName) {
+      // Important: no Dice threshold here. This intentionally fixes cases such as
+      // "해운대센텀시티 공영주차장" ↔ "센텀시티" after normalization.
+      matchType = 'normalized_name';
+      score = distance != null && distance <= radius ? 94 : 88;
+    } else if (distance != null && distance <= Math.min(radius, 80)) {
+      matchType = 'coordinate';
+      score = 84 - Math.min(12, (distance / Math.min(radius, 80)) * 12);
+    } else if (distance != null && distance <= radius) {
+      const addressSimilarity = diceSimilarity(
+        normalizeAddress(row.parking_address),
+        normalizeAddress(row.station_address),
+      );
+      const nameSimilarity = diceSimilarity(pName, sName);
+      if (addressSimilarity >= 0.5 || nameSimilarity >= 0.45) {
+        matchType = 'address_name';
+        score = 76 + Math.max(addressSimilarity, nameSimilarity) * 8 - (distance / radius) * 8;
+      }
+    }
 
-  const chargerRows = accepted.flatMap((x) => x.station.chargers);
-  const available = chargerRows.filter((c) => c.status === '2').length;
-  const charging = chargerRows.filter((c) => c.status === '3').length;
-  const fast = chargerRows.filter(isFastCharger).length;
-  const slow = chargerRows.length - fast;
-  const distances = accepted
-    .map((x) => x.distance)
-    .filter((d): d is number => d != null);
-  const nearestDistanceMeters = distances.length ? Math.min(...distances) : null;
-  const lastUpdated =
-    chargerRows.map((c) => c.updatedAt).filter(Boolean).sort().at(-1) || null;
+    if (!matchType) continue;
+    const key = `${row.parking_id}:${row.stat_id}`;
+    const candidate = {
+      parking_id: row.parking_id,
+      stat_id: row.stat_id,
+      match_type: matchType,
+      match_score: Math.round(score * 100) / 100,
+      distance_m: distance == null ? null : Math.round(distance),
+      reviewed: 0,
+      matched_at: matchedAt,
+    };
+    const current = matches.get(key);
+    if (!current || candidate.match_score > current.match_score) matches.set(key, candidate);
+  }
 
+  await db.prepare('DELETE FROM parking_ev_matches').run();
+  const rows = [...matches.values()];
+  const sql = `INSERT INTO parking_ev_matches (
+      parking_id, stat_id, match_type, match_score, distance_m, reviewed, matched_at
+    )
+    SELECT
+      json_extract(j.value, '$.parking_id'),
+      json_extract(j.value, '$.stat_id'),
+      json_extract(j.value, '$.match_type'),
+      json_extract(j.value, '$.match_score'),
+      json_extract(j.value, '$.distance_m'),
+      json_extract(j.value, '$.reviewed'),
+      json_extract(j.value, '$.matched_at')
+    FROM json_each(?1) AS j`;
+  for (let offset = 0; offset < rows.length; offset += 100) {
+    await db.prepare(sql).bind(JSON.stringify(rows.slice(offset, offset + 100))).run();
+  }
+  return rows.length;
+}
+
+async function markReadModelJob(db: D1Database, jobName: string, runId: string, count: number | null = null) {
+  await db.prepare(
+    `INSERT INTO sync_state (
+       job_name, status, next_page, total_pages, reported_total_count,
+       last_success_at, last_error, run_id
+     ) VALUES (?1, 'complete', NULL, NULL, ?2, ?3, NULL, ?4)
+     ON CONFLICT(job_name) DO UPDATE SET
+       status='complete', reported_total_count=excluded.reported_total_count,
+       last_success_at=excluded.last_success_at, last_error=NULL, run_id=excluded.run_id`,
+  ).bind(jobName, count, new Date().toISOString(), runId).run();
+}
+
+async function getReadModelState(db: D1Database) {
+  const counts = await db.prepare(
+    `SELECT
+       (SELECT COUNT(*) FROM parking_read_model) AS parking_count,
+       (SELECT COUNT(*) FROM parking_read_model WHERE parking_realtime = 1) AS realtime_parking_count,
+       (SELECT COUNT(*) FROM ev_chargers WHERE COALESCE(del_yn, '') <> 'Y') AS charger_count,
+       (SELECT COUNT(*) FROM ev_stations) AS station_count,
+       (SELECT COUNT(DISTINCT parking_id) FROM parking_ev_matches) AS matched_parking_count,
+       (SELECT COUNT(*) FROM parking_ev_matches) AS match_count`,
+  ).first<{
+    parking_count: number;
+    realtime_parking_count: number;
+    charger_count: number;
+    station_count: number;
+    matched_parking_count: number;
+    match_count: number;
+  }>();
+  const jobs = await db.prepare(
+    `SELECT job_name, status, last_success_at, last_error, reported_total_count
+       FROM sync_state
+      WHERE job_name IN ('ev_info','read_model_ev_stations','read_model_parking','read_model_matches')
+      ORDER BY job_name`,
+  ).all();
+  const parkingCount = Number(counts?.parking_count || 0);
+  const chargerCount = Number(counts?.charger_count || 0);
+  const stationCount = Number(counts?.station_count || 0);
+  const matchedParkingCount = Number(counts?.matched_parking_count || 0);
+  const jobRows = jobs.results as Array<{ job_name: string; status: string }>;
+  const completedJobs = new Set(
+    jobRows.filter((row) => row.status === 'complete').map((row) => row.job_name),
+  );
+  const ready =
+    parkingCount > 0 && chargerCount > 0 && stationCount > 0 &&
+    completedJobs.has('read_model_ev_stations') &&
+    completedJobs.has('read_model_parking') &&
+    completedJobs.has('read_model_matches');
   return {
-    ...parking,
+    ok: true,
+    dataLayerVersion: DATA_LAYER_VERSION,
+    ready,
+    parkingCount,
+    realtimeParkingCount: Number(counts?.realtime_parking_count || 0),
+    chargerCount,
+    stationCount,
+    matchedParkingCount,
+    matchCount: Number(counts?.match_count || 0),
+    matchRadiusMeters: 200,
+    jobs: jobs.results,
+  };
+}
+
+function readRowToPlace(row: ParkingReadRow) {
+  const score = row.best_match_score == null ? null : Number(row.best_match_score);
+  return {
+    id: row.parking_id,
+    name: row.name,
+    address: row.address || '주소 정보 없음',
+    agency: row.agency || '',
+    lat: row.lat == null ? null : Number(row.lat),
+    lng: row.lng == null ? null : Number(row.lng),
+    capacity: row.capacity == null ? null : Number(row.capacity),
+    availableParking: row.available_parking == null ? null : Number(row.available_parking),
+    occupiedParking: row.occupied_parking == null ? null : Number(row.occupied_parking),
+    feeText: row.fee_text || '요금 정보 확인 필요',
+    operationText: row.operation_text || '운영시간 확인 필요',
+    parkingUpdatedAt: row.parking_updated_at || null,
+    parkingRealtime: Number(row.parking_realtime || 0) === 1,
+    parkingSource: (row.parking_source || 'busan-city') as ParkingBase['parkingSource'],
+    realtimeMatch: {
+      matched: Boolean(row.realtime_name),
+      type: row.realtime_match_type || 'unmatched',
+      realtimeName: row.realtime_name || null,
+    },
     charger: {
-      total: chargerRows.length,
-      available,
-      charging,
-      fast,
-      slow,
-      stations: accepted.map((x) => x.station.stationName),
-      nearestDistanceMeters: nearestDistanceMeters == null ? null : Math.round(nearestDistanceMeters),
-      lastUpdated,
-      matchConfidence: matchConfidenceLabel(accepted[0].score),
+      total: Number(row.charger_total || 0),
+      available: Number(row.charger_available || 0),
+      charging: Number(row.charger_charging || 0),
+      fast: Number(row.charger_fast || 0),
+      slow: Number(row.charger_slow || 0),
+      stations: row.station_names ? row.station_names.split(',').filter(Boolean) : [],
+      nearestDistanceMeters: row.nearest_distance_m == null ? null : Math.round(Number(row.nearest_distance_m)),
+      lastUpdated: row.charger_last_updated || null,
+      matchConfidence: score == null ? null : score >= 94 ? 'high' : score >= 82 ? 'medium' : 'low',
     },
     source: 'live' as const,
   };
 }
 
-function stationMatchScore(
-  parking: ParkingBase,
-  station: ChargerStation,
-  distance: number | null,
-  radius: number,
-) {
-  let score = 0;
+/* -------------------------------------------------------------------------- */
+/* Parking API data layer                                                      */
+/* -------------------------------------------------------------------------- */
 
-  if (distance != null) {
-    if (distance <= 50) score += 7;
-    else if (distance <= 100) score += 5;
-    else if (distance <= radius) score += 3;
-    else if (distance <= 350) score += 1;
+async function fetchMergedParking(env: Env): Promise<{
+  items: ParkingBase[];
+  realtimeConfigured: boolean;
+  realtimeCount: number;
+  userMessage: string;
+  joinSummary: ParkingJoinResult['summary'];
+  joinDetails: RealtimeJoinDetail[];
+}> {
+  const baseRaw = await fetchBaseParkingRaw(env.BUSAN_PARKING_API_KEY!);
+  const baseParsed = parseBaseParkingItems(baseRaw.items);
+  const baseItems = baseParsed.valid.map(normalizeBaseParking);
+
+  if (!env.BUSAN_REALTIME_PARKING_API_URL) {
+    return {
+      items: baseItems,
+      realtimeConfigured: false,
+      realtimeCount: 0,
+      userMessage: '실시간 주차정보 연동 전입니다.',
+      joinSummary: emptyJoinSummary(),
+      joinDetails: [],
+    };
   }
 
-  const pn = normalizePlaceName(parking.name);
-  const sn = normalizePlaceName(station.stationName);
+  try {
+    const realtimeRaw = await fetchRealtimeParkingRaw(
+      env.BUSAN_PARKING_API_KEY!,
+      env.BUSAN_REALTIME_PARKING_API_URL,
+    );
+    const realtimeParsed = parseRealtimeParkingItems(realtimeRaw.items);
+    const joined = joinRealtimeParkingByName(baseItems, realtimeParsed.valid);
+    const realtimeCount = joined.items.filter(
+      (item) => item.parkingRealtime && item.availableParking != null,
+    ).length;
 
-  if (pn && sn) {
-    if (pn === sn) score += 8;
-    else if (pn.includes(sn) || sn.includes(pn)) score += 6;
-    else score += tokenOverlapScore(pn, sn) * 6;
+    return {
+      items: joined.items,
+      realtimeConfigured: true,
+      realtimeCount,
+      userMessage:
+        joined.summary.matched > 0
+          ? ''
+          : '실시간 주차정보를 가져왔지만 기존 주차장과 이름을 연결하지 못했습니다.',
+      joinSummary: joined.summary,
+      joinDetails: joined.details,
+    };
+  } catch (error) {
+    console.warn('Realtime parking unavailable', safeError(error));
+    return {
+      items: baseItems,
+      realtimeConfigured: true,
+      realtimeCount: 0,
+      userMessage: '실시간 주차정보 업데이트가 지연되고 있습니다.',
+      joinSummary: emptyJoinSummary(),
+      joinDetails: [],
+    };
   }
-
-  const pa = normalizeAddress(parking.address);
-  const sa = normalizeAddress(station.address);
-  if (pa && sa && pa !== '주소 정보 없음') {
-    score += tokenOverlapScore(pa, sa) * 4;
-  }
-
-  const agency = normalizePlaceName(parking.agency || '');
-  if (agency && sn) {
-    score += tokenOverlapScore(agency, sn) * 2;
-  }
-
-  return score;
 }
 
-function matchConfidenceLabel(score: number): 'high' | 'medium' | 'low' {
-  if (score >= 10) return 'high';
-  if (score >= 6) return 'medium';
-  return 'low';
-}
+async function fetchBaseParkingRaw(serviceKey: string) {
+  const cache = getDefaultCache();
+  const cacheRequest = new Request(
+    `https://plugpark.internal/cache/${CACHE_VERSION}/parking/base`,
+  );
 
-function isFastCharger(c: Charger) {
-  if (typeof c.output === 'number' && c.output > 0) return c.output >= 50;
-  return ['01', '03', '04', '05', '06', '07', '09', '10'].includes(c.type);
-}
-
-function sortPlaces(a: any, b: any) {
-  const aEv = a.charger.available > 0 ? 1 : 0;
-  const bEv = b.charger.available > 0 ? 1 : 0;
-  if (aEv !== bEv) return bEv - aEv;
-
-  const aParking = a.availableParking ?? -1;
-  const bParking = b.availableParking ?? -1;
-  if ((aParking > 0 ? 1 : 0) !== (bParking > 0 ? 1 : 0)) {
-    return (bParking > 0 ? 1 : 0) - (aParking > 0 ? 1 : 0);
+  if (cache) {
+    const cached = await cache.match(cacheRequest);
+    if (cached) {
+      try {
+        const payload = await cached.json() as {
+          items?: RawObject[];
+          totalCount?: number | null;
+          pageCount?: number;
+        };
+        if (Array.isArray(payload.items) && payload.items.length > 0) {
+          return {
+            items: payload.items,
+            totalCount:
+              typeof payload.totalCount === 'number'
+                ? payload.totalCount
+                : payload.items.length,
+            pageCount:
+              typeof payload.pageCount === 'number'
+                ? payload.pageCount
+                : Math.ceil(payload.items.length / PARKING_BASE_PAGE_SIZE),
+            source: 'cache' as const,
+          };
+        }
+      } catch {
+        // 깨진 캐시는 무시하고 원본 API를 다시 조회합니다.
+      }
+    }
   }
 
-  return b.charger.available - a.charger.available;
+  const collected: RawObject[] = [];
+  let totalCount: number | null = null;
+  let pageCount = 0;
+
+  for (let pageNo = 1; pageNo <= PARKING_BASE_MAX_PAGES; pageNo += 1) {
+    const url = new URL(PARKING_BASE_URL);
+    url.searchParams.set('serviceKey', normalizeServiceKey(serviceKey));
+    url.searchParams.set('numOfRows', String(PARKING_BASE_PAGE_SIZE));
+    url.searchParams.set('pageNo', String(pageNo));
+    url.searchParams.set('resultType', 'json');
+
+    const payload = await fetchStructuredWithBackoff(
+      url,
+      `부산광역시 공영주차장 page ${pageNo}`,
+      3,
+    );
+    ensureNormalResult(payload, '부산광역시 공영주차장');
+
+    const items = extractKnownItems(payload);
+    if (pageNo === 1) {
+      totalCount = readMetaNumber(payload, 'totalCount');
+    }
+
+    collected.push(...items);
+    pageCount = pageNo;
+
+    if (items.length === 0 || items.length < PARKING_BASE_PAGE_SIZE) break;
+    if (totalCount != null && collected.length >= totalCount) break;
+  }
+
+  if (collected.length === 0) {
+    throw new Error('부산광역시 공영주차장 API가 0건을 반환했습니다.');
+  }
+
+  const result = {
+    items: collected,
+    totalCount: totalCount ?? collected.length,
+    pageCount,
+    source: 'live' as const,
+  };
+
+  if (cache) {
+    await cache.put(
+      cacheRequest,
+      cacheJson(result, PARKING_BASE_CACHE_SECONDS),
+    );
+  }
+
+  return result;
+}
+
+async function fetchRealtimeParkingRaw(serviceKey: string, endpoint: string) {
+  const original = new URL(endpoint.trim());
+  const listTemplate = new URL(original.toString());
+
+  if (!listTemplate.searchParams.has('serviceKey') && !listTemplate.searchParams.has('ServiceKey')) {
+    listTemplate.searchParams.set('serviceKey', normalizeServiceKey(serviceKey));
+  }
+
+  // 공공데이터포털 테스트 URL에 A01 같은 단일 주차장 예제가 붙어 있어도
+  // PlugPark에서는 전체 목록 조회를 먼저 시도합니다.
+  const removedFilters: string[] = [];
+  for (const key of ['parkgcd', 'parkcd', 'pParkGCd']) {
+    if (listTemplate.searchParams.has(key)) {
+      listTemplate.searchParams.delete(key);
+      removedFilters.push(key);
+    }
+  }
+
+  const pageSize = 100;
+  const collected: RawObject[] = [];
+  let totalCount: number | null = null;
+
+  for (let pageNo = 1; pageNo <= 20; pageNo += 1) {
+    const pageUrl = new URL(listTemplate.toString());
+    pageUrl.searchParams.set('pageNo', String(pageNo));
+    pageUrl.searchParams.set('numOfRows', String(pageSize));
+
+    try {
+      const payload = await fetchStructuredWithRetry(pageUrl, `부산시설공단 실시간 주차 page ${pageNo}`);
+      ensureNormalResult(payload, '부산시설공단 실시간 주차');
+      const items = extractKnownItems(payload);
+      if (pageNo === 1) totalCount = readMetaNumber(payload, 'totalCount');
+      collected.push(...items);
+      if (items.length < pageSize || items.length === 0) break;
+    } catch (error) {
+      if (pageNo === 1 && removedFilters.length > 0) {
+        const fallback = new URL(original.toString());
+        if (!fallback.searchParams.has('serviceKey') && !fallback.searchParams.has('ServiceKey')) {
+          fallback.searchParams.set('serviceKey', normalizeServiceKey(serviceKey));
+        }
+        const payload = await fetchStructuredWithRetry(fallback, '부산시설공단 실시간 주차 단일 조회');
+        ensureNormalResult(payload, '부산시설공단 실시간 주차');
+        return {
+          items: extractKnownItems(payload),
+          totalCount: readMetaNumber(payload, 'totalCount'),
+          removedFilters,
+          listMode: false,
+        };
+      }
+      throw error;
+    }
+  }
+
+  return { items: collected, totalCount, removedFilters, listMode: true };
+}
+
+function parseBaseParkingItems(rawItems: RawObject[]) {
+  const valid: BusanParkingApiItem[] = [];
+  const invalid: { index: number; schema: SchemaCheck }[] = [];
+
+  rawItems.forEach((raw, index) => {
+    const schema = validateFields(raw, BASE_REQUIRED_FIELDS);
+    if (!schema.valid) {
+      invalid.push({ index, schema });
+      return;
+    }
+
+    valid.push({
+      mgntNum: field(raw, 'mgntNum'),
+      pkNam: field(raw, 'pkNam'),
+      doroAddr: field(raw, 'doroAddr'),
+      jibunAddr: field(raw, 'jibunAddr'),
+      pkCnt: field(raw, 'pkCnt'),
+      xCdnt: field(raw, 'xCdnt'),
+      yCdnt: field(raw, 'yCdnt'),
+      guNm: field(raw, 'guNm'),
+      pkFm: field(raw, 'pkFm'),
+      pkGubun: field(raw, 'pkGubun'),
+      svcSrtTe: field(raw, 'svcSrtTe'),
+      svcEndTe: field(raw, 'svcEndTe'),
+      pkBascTime: field(raw, 'pkBascTime'),
+      tenMin: field(raw, 'tenMin'),
+      feeAdd: field(raw, 'feeAdd'),
+      feeInfo: field(raw, 'feeInfo'),
+      currava: field(raw, 'currava'),
+      fnlDt: field(raw, 'fnlDt'),
+    });
+  });
+
+  return { valid, invalid };
+}
+
+function parseRealtimeParkingItems(rawItems: RawObject[]) {
+  const valid: BusanRealtimeParkingApiItem[] = [];
+  const invalid: { index: number; schema: SchemaCheck }[] = [];
+
+  rawItems.forEach((raw, index) => {
+    const schema = validateFields(raw, REALTIME_REQUIRED_FIELDS);
+    if (!schema.valid) {
+      invalid.push({ index, schema });
+      return;
+    }
+
+    valid.push({
+      parkgcd: field(raw, 'parkgcd'),
+      parknm: field(raw, 'parknm'),
+      curravacnt: field(raw, 'curravacnt'),
+      parkingcnt: field(raw, 'parkingcnt'),
+      maxcnt: field(raw, 'maxcnt'),
+      lastupdatetime: field(raw, 'lastupdatetime'),
+    });
+  });
+
+  return { valid, invalid };
+}
+
+function normalizeBaseParking(item: BusanParkingApiItem): ParkingBase {
+  const capacity = numberField(item.pkCnt);
+  const basicMinutes = numberField(item.pkBascTime);
+  const baseFee = numberField(item.tenMin);
+  const address = cleanValue(item.doroAddr) || cleanValue(item.jibunAddr) || '주소 정보 없음';
+
+  return {
+    id: cleanValue(item.mgntNum) || `base:${normalizeParkingName(item.pkNam)}`,
+    name: cleanValue(item.pkNam) || '이름 없는 공영주차장',
+    address,
+    agency: cleanValue(item.guNm),
+    lat: latitudeField(item.xCdnt),
+    lng: longitudeField(item.yCdnt),
+    capacity,
+    availableParking: null,
+    occupiedParking: null,
+    feeText:
+      baseFee != null
+        ? `${basicMinutes ?? 10}분 ${baseFee.toLocaleString('ko-KR')}원`
+        : cleanValue(item.feeInfo) || '요금 정보 확인 필요',
+    operationText:
+      cleanValue(item.svcSrtTe) || cleanValue(item.svcEndTe)
+        ? `${cleanValue(item.svcSrtTe) || '?'} ~ ${cleanValue(item.svcEndTe) || '?'}`
+        : '운영시간 확인 필요',
+    parkingUpdatedAt: null,
+    parkingRealtime: false,
+    parkingSource: 'busan-city',
+    realtimeMatch: {
+      matched: false,
+      type: 'unmatched',
+      realtimeName: null,
+    },
+  };
+}
+
+function normalizeRealtimeNumbers(item: BusanRealtimeParkingApiItem) {
+  let available = numberField(item.curravacnt);
+  let occupied = numberField(item.parkingcnt);
+  let capacity = numberField(item.maxcnt);
+
+  if (capacity == null && available != null && occupied != null) capacity = available + occupied;
+  if (available == null && capacity != null && occupied != null) available = Math.max(0, capacity - occupied);
+  if (occupied == null && capacity != null && available != null) occupied = Math.max(0, capacity - available);
+
+  if (
+    capacity != null &&
+    available != null &&
+    occupied != null &&
+    Math.abs(capacity - (available + occupied)) > 1
+  ) {
+    available = Math.max(0, capacity - occupied);
+  }
+
+  return { available, occupied, capacity };
+}
+
+function joinRealtimeParkingByName(baseItems: ParkingBase[], realtimeItems: BusanRealtimeParkingApiItem[]): ParkingJoinResult {
+  const output = baseItems.map((item) => ({ ...item, realtimeMatch: { ...item.realtimeMatch } }));
+  const usedBaseIndexes = new Set<number>();
+  const details: RealtimeJoinDetail[] = [];
+
+  for (const realtime of realtimeItems) {
+    const realtimeName = cleanValue(realtime.parknm);
+    const normalizedRealtime = normalizeParkingName(realtimeName);
+
+    if (!normalizedRealtime) {
+      details.push({
+        realtimeCode: cleanValue(realtime.parkgcd),
+        realtimeName,
+        normalizedRealtimeName: '',
+        baseId: null,
+        baseName: null,
+        type: 'unmatched',
+        score: null,
+      });
+      continue;
+    }
+
+    const candidates = output
+      .map((base, index) => ({
+        base,
+        index,
+        normalized: normalizeParkingName(base.name),
+      }))
+      .filter((candidate) => !usedBaseIndexes.has(candidate.index) && candidate.normalized);
+
+    const exact = candidates.filter((candidate) => candidate.normalized === normalizedRealtime);
+    let chosen: typeof candidates[number] | null = null;
+    let type: ParkingMatchType = 'unmatched';
+    let score: number | null = null;
+
+    if (exact.length === 1) {
+      chosen = exact[0];
+      type = 'exact-name';
+      score = 1;
+    } else if (exact.length > 1) {
+      type = 'ambiguous';
+    } else {
+      const contained = candidates.filter((candidate) => {
+        const shorter = Math.min(candidate.normalized.length, normalizedRealtime.length);
+        return shorter >= 4 && (
+          candidate.normalized.includes(normalizedRealtime) ||
+          normalizedRealtime.includes(candidate.normalized)
+        );
+      });
+
+      if (contained.length === 1) {
+        chosen = contained[0];
+        type = 'contained-name';
+        score = 0.94;
+      } else if (contained.length > 1) {
+        type = 'ambiguous';
+      } else {
+        const ranked = candidates
+          .map((candidate) => ({
+            candidate,
+            similarity: diceSimilarity(normalizedRealtime, candidate.normalized),
+          }))
+          .sort((a, b) => b.similarity - a.similarity);
+
+        const best = ranked[0];
+        const second = ranked[1];
+        if (best && best.similarity >= 0.84 && (!second || best.similarity - second.similarity >= 0.08)) {
+          chosen = best.candidate;
+          type = 'similar-name';
+          score = Number(best.similarity.toFixed(3));
+        } else if (best && best.similarity >= 0.84) {
+          type = 'ambiguous';
+          score = Number(best.similarity.toFixed(3));
+        }
+      }
+    }
+
+    if (!chosen) {
+      details.push({
+        realtimeCode: cleanValue(realtime.parkgcd),
+        realtimeName,
+        normalizedRealtimeName: normalizedRealtime,
+        baseId: null,
+        baseName: null,
+        type,
+        score,
+      });
+      continue;
+    }
+
+    usedBaseIndexes.add(chosen.index);
+    const current = output[chosen.index];
+    const numbers = normalizeRealtimeNumbers(realtime);
+    output[chosen.index] = {
+      ...current,
+      capacity: numbers.capacity ?? current.capacity,
+      availableParking: numbers.available,
+      occupiedParking: numbers.occupied,
+      parkingUpdatedAt: cleanValue(realtime.lastupdatetime) || current.parkingUpdatedAt,
+      parkingRealtime: numbers.available != null,
+      parkingSource: 'merged',
+      realtimeMatch: {
+        matched: true,
+        type,
+        realtimeName,
+      },
+    };
+
+    details.push({
+      realtimeCode: cleanValue(realtime.parkgcd),
+      realtimeName,
+      normalizedRealtimeName: normalizedRealtime,
+      baseId: current.id,
+      baseName: current.name,
+      type,
+      score,
+    });
+  }
+
+  return {
+    items: dedupeParking(output),
+    details,
+    summary: summarizeJoin(details),
+  };
+}
+
+function emptyJoinSummary(): ParkingJoinResult['summary'] {
+  return {
+    realtimeCount: 0,
+    matched: 0,
+    exact: 0,
+    contained: 0,
+    similar: 0,
+    ambiguous: 0,
+    unmatched: 0,
+  };
+}
+
+function summarizeJoin(details: RealtimeJoinDetail[]): ParkingJoinResult['summary'] {
+  return {
+    realtimeCount: details.length,
+    matched: details.filter((item) => ['exact-name', 'contained-name', 'similar-name'].includes(item.type)).length,
+    exact: details.filter((item) => item.type === 'exact-name').length,
+    contained: details.filter((item) => item.type === 'contained-name').length,
+    similar: details.filter((item) => item.type === 'similar-name').length,
+    ambiguous: details.filter((item) => item.type === 'ambiguous').length,
+    unmatched: details.filter((item) => item.type === 'unmatched').length,
+  };
+}
+
+function dedupeParking(items: ParkingBase[]) {
+  const seen = new Set<string>();
+  const result: ParkingBase[] = [];
+  for (const item of items) {
+    const key = `${normalizeParkingName(item.name)}|${normalizeAddress(item.address)}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push(item);
+  }
+  return result;
 }
 
 /* -------------------------------------------------------------------------- */
-/* Response helpers                                                            */
+/* EV API data layer                                                           */
 /* -------------------------------------------------------------------------- */
+
+async function fetchEvInfoPage(serviceKey: string, pageNo: number) {
+  const url = new URL(EV_INFO_URL);
+  url.searchParams.set('serviceKey', normalizeServiceKey(serviceKey));
+  url.searchParams.set('pageNo', String(pageNo));
+  url.searchParams.set('numOfRows', String(EV_INFO_PAGE_SIZE));
+  url.searchParams.set('zcode', '26');
+  url.searchParams.set('dataType', 'JSON');
+
+  const payload = await fetchStructuredWithRetry(url, `EV info page ${pageNo}`);
+  ensureNormalResult(payload, 'EV getChargerInfo');
+  const rawItems = extractKnownItems(payload);
+  const parsed = parseEvInfoItems(rawItems);
+
+  return {
+    rawItems,
+    validItems: parsed.valid.filter((item) => item.zcode === '26' || item.addr.startsWith('부산')),
+    invalid: parsed.invalid,
+    totalCount: readMetaNumber(payload, 'totalCount'),
+  };
+}
+
+function parseEvInfoItems(rawItems: RawObject[]) {
+  const valid: EvChargerInfoApiItem[] = [];
+  const invalid: { index: number; schema: SchemaCheck }[] = [];
+
+  rawItems.forEach((raw, index) => {
+    const schema = validateFields(raw, EV_INFO_REQUIRED_FIELDS);
+    if (!schema.valid) {
+      invalid.push({ index, schema });
+      return;
+    }
+
+    valid.push({
+      statNm: field(raw, 'statNm'),
+      statId: field(raw, 'statId'),
+      chgerId: field(raw, 'chgerId'),
+      chgerType: field(raw, 'chgerType'),
+      addr: field(raw, 'addr'),
+      addrDetail: field(raw, 'addrDetail'),
+      location: field(raw, 'location'),
+      lat: field(raw, 'lat'),
+      lng: field(raw, 'lng'),
+      useTime: field(raw, 'useTime'),
+      busiId: field(raw, 'busiId'),
+      bnm: field(raw, 'bnm'),
+      busiNm: field(raw, 'busiNm'),
+      busiCall: field(raw, 'busiCall'),
+      stat: field(raw, 'stat'),
+      statUpdDt: field(raw, 'statUpdDt'),
+      lastTsdt: field(raw, 'lastTsdt'),
+      lastTedt: field(raw, 'lastTedt'),
+      nowTsdt: field(raw, 'nowTsdt'),
+      output: field(raw, 'output'),
+      method: field(raw, 'method'),
+      zcode: field(raw, 'zcode'),
+      zscode: field(raw, 'zscode'),
+      kind: field(raw, 'kind'),
+      kindDetail: field(raw, 'kindDetail'),
+      parkingFree: field(raw, 'parkingFree'),
+      note: field(raw, 'note'),
+      limitYn: field(raw, 'limitYn'),
+      limitDetail: field(raw, 'limitDetail'),
+      delYn: field(raw, 'delYn'),
+      delDetail: field(raw, 'delDetail'),
+      trafficYn: field(raw, 'trafficYn'),
+      year: field(raw, 'year'),
+      floorNum: field(raw, 'floorNum'),
+      floorType: field(raw, 'floorType'),
+      maker: field(raw, 'maker'),
+    });
+  });
+
+  return { valid, invalid };
+}
+
+function parseEvStatusItems(rawItems: RawObject[]) {
+  const valid: EvChargerStatusApiItem[] = [];
+  const invalid: { index: number; schema: SchemaCheck }[] = [];
+
+  rawItems.forEach((raw, index) => {
+    const schema = validateFields(raw, EV_STATUS_REQUIRED_FIELDS);
+    if (!schema.valid) {
+      invalid.push({ index, schema });
+      return;
+    }
+
+    valid.push({
+      busiId: field(raw, 'busiId'),
+      statId: field(raw, 'statId'),
+      chgerId: field(raw, 'chgerId'),
+      stat: field(raw, 'stat'),
+      statUpdDt: field(raw, 'statUpdDt'),
+      lastTsdt: field(raw, 'lastTsdt'),
+      lastTedt: field(raw, 'lastTedt'),
+      nowTsdt: field(raw, 'nowTsdt'),
+    });
+  });
+
+  return { valid, invalid };
+}
 
 function toParkingOnlyPlace(parking: ParkingBase) {
   return {
@@ -1024,181 +1714,879 @@ function toParkingOnlyPlace(parking: ParkingBase) {
       charging: 0,
       fast: 0,
       slow: 0,
-      stations: [],
-      nearestDistanceMeters: null,
-      lastUpdated: null,
-      matchConfidence: null,
+      stations: [] as string[],
+      nearestDistanceMeters: null as number | null,
+      lastUpdated: null as string | null,
+      matchConfidence: null as 'high' | 'medium' | 'low' | null,
     },
     source: 'live' as const,
   };
 }
 
-async function handleParkingDiagnostics(env: Env) {
-  const results: AnyObject[] = [];
+/* -------------------------------------------------------------------------- */
+/* Diagnostics                                                                 */
+/* -------------------------------------------------------------------------- */
 
+async function diagnosticsParkingBase(serviceKey: string) {
   try {
-    const rows = await fetchBaseParking(env.BUSAN_PARKING_API_KEY!);
-    results.push({
-      name: 'busan-city-base',
-      ok: true,
-      count: rows.length,
-      sampleKeys: rows[0] ? Object.keys(rows[0]).slice(0, 30) : [],
-      sample: rows[0] || null,
+    const raw = await fetchBaseParkingRaw(serviceKey);
+    const parsed = parseBaseParkingItems(raw.items);
+    return json({
+      ok: parsed.invalid.length === 0,
+      source: 'busan-city-parking',
+      totalCount: raw.totalCount,
+      itemCount: raw.items.length,
+      pageCount: raw.pageCount,
+      fetchSource: raw.source,
+      validCount: parsed.valid.length,
+      invalidCount: parsed.invalid.length,
+      schema: schemaDiagnostic(raw.items[0], BASE_REQUIRED_FIELDS),
+      sample: raw.items[0] || null,
+      invalid: parsed.invalid.slice(0, 5),
     });
   } catch (error) {
-    results.push({ name: 'busan-city-base', ok: false, error: safeError(error) });
+    return upstreamError(error);
   }
+}
 
-  if (env.BUSAN_REALTIME_PARKING_API_URL) {
-    try {
-      const rows = await fetchRealtimeParking(
-        env.BUSAN_PARKING_API_KEY!,
-        env.BUSAN_REALTIME_PARKING_API_URL,
-      );
-      results.push({
-        name: 'busan-facilities-realtime',
-        ok: true,
-        count: rows.length,
-        sampleKeys: rows[0] ? Object.keys(rows[0]).slice(0, 50) : [],
-        sample: rows[0] || null,
-      });
-    } catch (error) {
-      results.push({
-        name: 'busan-facilities-realtime',
-        ok: false,
-        error: safeError(error),
-      });
-    }
-  } else {
-    results.push({
-      name: 'busan-facilities-realtime',
+async function diagnosticsParkingRealtime(env: Env) {
+  if (!env.BUSAN_REALTIME_PARKING_API_URL) {
+    return json({
       ok: false,
-      error: 'BUSAN_REALTIME_PARKING_API_URL 미설정',
-    });
+      configured: false,
+      message: '실시간 주차 API URL이 아직 설정되지 않았습니다.',
+      expectedFields: REALTIME_REQUIRED_FIELDS,
+    }, 200);
   }
 
-  return json({ ok: results.every((r) => r.ok), results }, 200);
+  try {
+    const raw = await fetchRealtimeParkingRaw(
+      env.BUSAN_PARKING_API_KEY!,
+      env.BUSAN_REALTIME_PARKING_API_URL,
+    );
+    const parsed = parseRealtimeParkingItems(raw.items);
+    return json({
+      ok: parsed.invalid.length === 0 && parsed.valid.length > 0,
+      configured: true,
+      totalCount: raw.totalCount,
+      itemCount: raw.items.length,
+      validCount: parsed.valid.length,
+      invalidCount: parsed.invalid.length,
+      listMode: raw.listMode,
+      removedSampleFilters: raw.removedFilters,
+      schema: schemaDiagnostic(raw.items[0], REALTIME_REQUIRED_FIELDS),
+      sample: raw.items[0] || null,
+      invalid: parsed.invalid.slice(0, 5),
+    });
+  } catch (error) {
+    return upstreamError(error);
+  }
 }
 
-async function handleEvDiagnostics(serviceKey: string) {
-  const key = normalizeServiceKey(serviceKey);
-  const probes = [
-    ['getChargerInfo', buildEvUrl(EV_INFO_URL, key, 1, 10, { zcode: '26' })],
-    ['getChargerStatus', buildEvUrl(EV_STATUS_URL, key, 1, 10, { zcode: '26', period: '5' }, 'ServiceKey')],
-  ] as const;
+async function diagnosticsParkingMatching(env: Env) {
+  try {
+    const parking = await fetchMergedParking(env);
+    return json({
+      ok: true,
+      summary: parking.joinSummary,
+      matchedSamples: parking.joinDetails.filter((item) => ['exact-name', 'contained-name', 'similar-name'].includes(item.type)).slice(0, 20),
+      ambiguous: parking.joinDetails.filter((item) => item.type === 'ambiguous').slice(0, 20),
+      unmatched: parking.joinDetails.filter((item) => item.type === 'unmatched').slice(0, 20),
+    });
+  } catch (error) {
+    return upstreamError(error);
+  }
+}
 
-  const results: AnyObject[] = [];
+async function diagnosticsEvInfo(serviceKey: string) {
+  try {
+    const page = await fetchEvInfoPage(serviceKey, 1);
+    return json({
+      ok: page.invalid.length === 0,
+      source: 'getChargerInfo',
+      request: { pageNo: 1, numOfRows: EV_INFO_PAGE_SIZE, zcode: '26', dataType: 'JSON' },
+      totalCountReported: page.totalCount,
+      rawItemCount: page.rawItems.length,
+      busanValidCount: page.validItems.length,
+      regionFilterHonored: page.rawItems.length === 0 ? null : page.validItems.length / page.rawItems.length >= 0.8,
+      schema: schemaDiagnostic(page.rawItems[0], EV_INFO_REQUIRED_FIELDS),
+      sample: page.rawItems[0] || null,
+      invalid: page.invalid.slice(0, 5),
+    });
+  } catch (error) {
+    return upstreamError(error);
+  }
+}
 
-  for (const [name, url] of probes) {
-    const startedAt = Date.now();
+async function diagnosticsEvStatus(serviceKey: string) {
+  try {
+    const url = new URL(EV_STATUS_URL);
+    url.searchParams.set('serviceKey', normalizeServiceKey(serviceKey));
+    url.searchParams.set('pageNo', '1');
+    url.searchParams.set('numOfRows', String(Math.min(EV_STATUS_PAGE_SIZE, 100)));
+    url.searchParams.set('period', '10');
+    url.searchParams.set('zcode', '26');
+    url.searchParams.set('dataType', 'JSON');
+    const payload = await fetchStructuredWithRetry(url, 'EV status diagnostics');
+    ensureNormalResult(payload, 'EV getChargerStatus');
+    const rawItems = extractKnownItems(payload);
+    const parsed = parseEvStatusItems(rawItems);
+    return json({
+      ok: parsed.invalid.length === 0,
+      source: 'getChargerStatus',
+      request: { pageNo: 1, numOfRows: Math.min(EV_STATUS_PAGE_SIZE, 100), period: 10, zcode: '26', dataType: 'JSON' },
+      totalCountReported: readMetaNumber(payload, 'totalCount'),
+      itemCount: rawItems.length,
+      validCount: parsed.valid.length,
+      schema: schemaDiagnostic(rawItems[0], EV_STATUS_REQUIRED_FIELDS),
+      sample: rawItems[0] || null,
+      invalid: parsed.invalid.slice(0, 5),
+    });
+  } catch (error) {
+    return upstreamError(error);
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+/* HTTP / payload parsing                                                      */
+/* -------------------------------------------------------------------------- */
+
+
+/* -------------------------------------------------------------------------- */
+/* v0.5.1 D1 foundation + EV Info ingest                                     */
+/* -------------------------------------------------------------------------- */
+
+function d1ConfigError() {
+  return json({
+    ok: false,
+    error: 'D1 binding DB가 설정되지 않았습니다. v0.5.1 설정 가이드를 적용해주세요.',
+  }, 503);
+}
+
+function validateIngestAdmin(request: Request, env: Env): Response | null {
+  const expected = env.INGEST_ADMIN_TOKEN?.trim();
+  if (!expected) return configError('INGEST_ADMIN_TOKEN');
+  const authorization = request.headers.get('authorization') || '';
+  if (authorization !== `Bearer ${expected}`) {
+    return json({ ok: false, error: 'EV ingest 관리자 인증에 실패했습니다.' }, 401);
+  }
+  return null;
+}
+
+async function getD1EvInfoState(db: D1Database) {
+  const state = await db.prepare(
+    `SELECT job_name, status, next_page, total_pages, reported_total_count,
+            last_success_at, last_error, run_id
+       FROM sync_state
+      WHERE job_name = ?1`,
+  ).bind(D1_EV_INFO_JOB).first<EvInfoSyncStateRow>();
+
+  const counts = await db.prepare(
+    `SELECT COUNT(*) AS charger_count,
+            COUNT(DISTINCT stat_id) AS station_count,
+            SUM(CASE WHEN del_yn = 'Y' THEN 1 ELSE 0 END) AS deleted_count
+       FROM ev_chargers`,
+  ).first<{ charger_count: number; station_count: number; deleted_count: number | null }>();
+
+  return {
+    ok: true,
+    dataLayerVersion: DATA_LAYER_VERSION,
+    job: D1_EV_INFO_JOB,
+    state: state || {
+      job_name: D1_EV_INFO_JOB,
+      status: 'not-started',
+      next_page: 1,
+      total_pages: null,
+      reported_total_count: null,
+      last_success_at: null,
+      last_error: null,
+      run_id: null,
+    },
+    stored: {
+      chargerCount: Number(counts?.charger_count || 0),
+      stationCount: Number(counts?.station_count || 0),
+      deletedCount: Number(counts?.deleted_count || 0),
+    },
+  };
+}
+
+async function getD1EvInfoStateSafe(db: D1Database) {
+  try {
+    return await getD1EvInfoState(db);
+  } catch (error) {
+    return { ok: false, error: safeError(error) };
+  }
+}
+
+async function ingestEvInfoPagesToD1(
+  db: D1Database,
+  serviceKey: string,
+  requestedPages: number,
+) {
+  const existing = await db.prepare(
+    `SELECT job_name, status, next_page, total_pages, reported_total_count,
+            last_success_at, last_error, run_id
+       FROM sync_state
+      WHERE job_name = ?1`,
+  ).bind(D1_EV_INFO_JOB).first<EvInfoSyncStateRow>();
+
+  let pageNo = Math.max(1, Number(existing?.next_page || 1));
+  let totalPages = existing?.total_pages == null ? null : Number(existing.total_pages);
+  let reportedTotalCount =
+    existing?.reported_total_count == null ? null : Number(existing.reported_total_count);
+  const runId = crypto.randomUUID();
+  const startedAt = new Date().toISOString();
+  const pages: Array<{
+    pageNo: number;
+    rawCount: number;
+    storedCount: number;
+    duplicateCount: number;
+    totalCount: number | null;
+  }> = [];
+
+  // Do not mutate the durable checkpoint before a page succeeds.
+  // If Cloudflare terminates this invocation (1102), the last good checkpoint stays intact.
+  try {
+    for (let step = 0; step < requestedPages; step += 1) {
+      if (totalPages != null && pageNo > totalPages) break;
+
+      await incrementApiUsage(db, 'ev_info');
+      const page = await fetchEvInfoPageForD1(serviceKey, pageNo);
+      await upsertEvInfoPage(db, page.items);
+
+      if (page.totalCount != null) {
+        if (reportedTotalCount != null && reportedTotalCount !== page.totalCount) {
+          throw new Error(
+            `EV_TOTAL_COUNT_CHANGED: 기존 ${reportedTotalCount}, page ${pageNo} 응답 ${page.totalCount}`,
+          );
+        }
+        reportedTotalCount = page.totalCount;
+        totalPages = Math.ceil(page.totalCount / EV_INFO_PAGE_SIZE);
+      }
+
+      const completedByShortPage = page.rawCount < EV_INFO_PAGE_SIZE;
+      const nextPage = pageNo + 1;
+      const completedByTotal = totalPages != null && nextPage > totalPages;
+      const complete = completedByShortPage || completedByTotal;
+      const completedAt = new Date().toISOString();
+
+      pages.push({
+        pageNo,
+        rawCount: page.rawCount,
+        storedCount: page.items.length,
+        duplicateCount: page.duplicateCount,
+        totalCount: page.totalCount,
+      });
+
+      pageNo = nextPage;
+      await upsertSyncState(db, {
+        status: complete ? 'complete' : 'running',
+        nextPage: pageNo,
+        totalPages,
+        reportedTotalCount,
+        lastSuccessAt: completedAt,
+        lastError: null,
+        runId,
+      });
+
+      if (complete) break;
+    }
+  } catch (error) {
+    await upsertSyncState(db, {
+      status: 'error',
+      nextPage: pageNo,
+      totalPages,
+      reportedTotalCount,
+      lastSuccessAt: existing?.last_success_at || null,
+      lastError: safeError(error),
+      runId,
+    });
+    throw error;
+  }
+
+  const state = await getD1EvInfoState(db);
+  return {
+    ok: true,
+    runId,
+    startedAt,
+    pagesRequested: requestedPages,
+    pagesProcessed: pages.length,
+    pages,
+    state,
+  };
+}
+
+async function fetchEvInfoPageForD1(
+  serviceKey: string,
+  requestedPageNo: number,
+): Promise<D1EvInfoPage> {
+  const url = new URL(EV_INFO_URL);
+  url.searchParams.set('serviceKey', normalizeServiceKey(serviceKey));
+  url.searchParams.set('pageNo', String(requestedPageNo));
+  url.searchParams.set('numOfRows', String(EV_INFO_PAGE_SIZE));
+  url.searchParams.set('zcode', '26');
+  url.searchParams.set('dataType', 'JSON');
+
+  const payload = await fetchStructuredWithRetry(url, `D1 EV info page ${requestedPageNo}`);
+  ensureNormalResult(payload, 'EV getChargerInfo');
+
+  const responsePageNo = readMetaNumber(payload, 'pageNo');
+  if (responsePageNo == null) {
+    throw new Error(`EV_META_MISSING: pageNo가 없습니다. requested=${requestedPageNo}`);
+  }
+  if (responsePageNo !== requestedPageNo) {
+    throw new Error(
+      `EV_PAGE_MISMATCH: requested=${requestedPageNo}, response=${responsePageNo}`,
+    );
+  }
+
+  const responseNumOfRows = readMetaNumber(payload, 'numOfRows');
+  if (responseNumOfRows != null && responseNumOfRows !== EV_INFO_PAGE_SIZE) {
+    throw new Error(
+      `EV_PAGE_SIZE_MISMATCH: requested=${EV_INFO_PAGE_SIZE}, response=${responseNumOfRows}`,
+    );
+  }
+
+  const rawItems = extractKnownItems(payload);
+  const parsed = parseEvInfoItems(rawItems);
+  if (parsed.invalid.length > 0) {
+    const sample = parsed.invalid.slice(0, 3).map((item) => ({
+      index: item.index,
+      missing: item.schema.missing,
+    }));
+    throw new Error(
+      `EV_SCHEMA_MISMATCH: page=${requestedPageNo}, invalid=${parsed.invalid.length}, sample=${JSON.stringify(sample)}`,
+    );
+  }
+
+  const invalidIdentity = parsed.valid.filter(
+    (item) => !item.statId.trim() || !item.chgerId.trim() || !item.statNm.trim(),
+  );
+  if (invalidIdentity.length > 0) {
+    throw new Error(
+      `EV_IDENTITY_INVALID: page=${requestedPageNo}, count=${invalidIdentity.length}`,
+    );
+  }
+
+  const wrongRegion = parsed.valid.filter((item) => item.zcode !== '26');
+  if (wrongRegion.length > 0) {
+    const sample = wrongRegion.slice(0, 5).map((item) => ({
+      statId: item.statId,
+      chgerId: item.chgerId,
+      stationName: item.statNm,
+      zcode: item.zcode,
+      address: item.addr,
+    }));
+    throw new Error(
+      `EV_REGION_MISMATCH: zcode=26 요청에 타지역 ${wrongRegion.length}건. sample=${JSON.stringify(sample)}`,
+    );
+  }
+
+  const unique = new Map<string, EvChargerInfoApiItem>();
+  for (const item of parsed.valid) {
+    unique.set(evCompositeKey(item.statId, item.chgerId), item);
+  }
+
+  return {
+    items: [...unique.values()],
+    rawCount: rawItems.length,
+    pageNo: responsePageNo,
+    numOfRows: responseNumOfRows,
+    totalCount: readMetaNumber(payload, 'totalCount'),
+    duplicateCount: parsed.valid.length - unique.size,
+  };
+}
+
+async function upsertEvInfoPage(db: D1Database, items: EvChargerInfoApiItem[]) {
+  const syncedAt = new Date().toISOString();
+
+  // Preparing/binding 200 individual 38-column statements was expensive enough to
+  // trigger Worker 1102 on the free CPU budget. D1 supports SQLite JSON functions,
+  // so ship rows as JSON and expand them inside SQLite instead.
+  const rows = items.map((item) => ({
+    stat_id: item.statId,
+    chger_id: item.chgerId,
+    station_name: item.statNm,
+    normalized_station_name: normalizeParkingName(item.statNm),
+    charger_type: nullableText(item.chgerType),
+    address: nullableText(item.addr),
+    address_detail: nullableText(item.addrDetail),
+    location: nullableText(item.location),
+    lat: nullableNumber(item.lat),
+    lng: nullableNumber(item.lng),
+    use_time: nullableText(item.useTime),
+    busi_id: nullableText(item.busiId),
+    bnm: nullableText(item.bnm),
+    busi_name: nullableText(item.busiNm),
+    busi_call: nullableText(item.busiCall),
+    info_status: nullableText(item.stat),
+    info_status_updated_at: nullableText(item.statUpdDt),
+    last_start_at: nullableText(item.lastTsdt),
+    last_end_at: nullableText(item.lastTedt),
+    now_start_at: nullableText(item.nowTsdt),
+    output_kw: nullableNumber(item.output),
+    method: nullableText(item.method),
+    zcode: item.zcode,
+    zscode: nullableText(item.zscode),
+    kind: nullableText(item.kind),
+    kind_detail: nullableText(item.kindDetail),
+    parking_free: nullableText(item.parkingFree),
+    note: nullableText(item.note),
+    limit_yn: nullableText(item.limitYn),
+    limit_detail: nullableText(item.limitDetail),
+    del_yn: nullableText(item.delYn),
+    del_detail: nullableText(item.delDetail),
+    traffic_yn: nullableText(item.trafficYn),
+    year: nullableText(item.year),
+    floor_num: nullableText(item.floorNum),
+    floor_type: nullableText(item.floorType),
+    maker: nullableText(item.maker),
+    synced_at: syncedAt,
+  }));
+
+  const sql = `INSERT INTO ev_chargers (
+      stat_id, chger_id, station_name, normalized_station_name,
+      charger_type, address, address_detail, location, lat, lng,
+      use_time, busi_id, bnm, busi_name, busi_call,
+      info_status, info_status_updated_at,
+      last_start_at, last_end_at, now_start_at,
+      output_kw, method, zcode, zscode, kind, kind_detail,
+      parking_free, note, limit_yn, limit_detail,
+      del_yn, del_detail, traffic_yn, year, floor_num, floor_type, maker,
+      synced_at
+    )
+    SELECT
+      json_extract(j.value, '$.stat_id'),
+      json_extract(j.value, '$.chger_id'),
+      json_extract(j.value, '$.station_name'),
+      json_extract(j.value, '$.normalized_station_name'),
+      json_extract(j.value, '$.charger_type'),
+      json_extract(j.value, '$.address'),
+      json_extract(j.value, '$.address_detail'),
+      json_extract(j.value, '$.location'),
+      json_extract(j.value, '$.lat'),
+      json_extract(j.value, '$.lng'),
+      json_extract(j.value, '$.use_time'),
+      json_extract(j.value, '$.busi_id'),
+      json_extract(j.value, '$.bnm'),
+      json_extract(j.value, '$.busi_name'),
+      json_extract(j.value, '$.busi_call'),
+      json_extract(j.value, '$.info_status'),
+      json_extract(j.value, '$.info_status_updated_at'),
+      json_extract(j.value, '$.last_start_at'),
+      json_extract(j.value, '$.last_end_at'),
+      json_extract(j.value, '$.now_start_at'),
+      json_extract(j.value, '$.output_kw'),
+      json_extract(j.value, '$.method'),
+      json_extract(j.value, '$.zcode'),
+      json_extract(j.value, '$.zscode'),
+      json_extract(j.value, '$.kind'),
+      json_extract(j.value, '$.kind_detail'),
+      json_extract(j.value, '$.parking_free'),
+      json_extract(j.value, '$.note'),
+      json_extract(j.value, '$.limit_yn'),
+      json_extract(j.value, '$.limit_detail'),
+      json_extract(j.value, '$.del_yn'),
+      json_extract(j.value, '$.del_detail'),
+      json_extract(j.value, '$.traffic_yn'),
+      json_extract(j.value, '$.year'),
+      json_extract(j.value, '$.floor_num'),
+      json_extract(j.value, '$.floor_type'),
+      json_extract(j.value, '$.maker'),
+      json_extract(j.value, '$.synced_at')
+    FROM json_each(?1) AS j
+    WHERE 1
+    ON CONFLICT(stat_id, chger_id) DO UPDATE SET
+      station_name=excluded.station_name,
+      normalized_station_name=excluded.normalized_station_name,
+      charger_type=excluded.charger_type,
+      address=excluded.address,
+      address_detail=excluded.address_detail,
+      location=excluded.location,
+      lat=excluded.lat,
+      lng=excluded.lng,
+      use_time=excluded.use_time,
+      busi_id=excluded.busi_id,
+      bnm=excluded.bnm,
+      busi_name=excluded.busi_name,
+      busi_call=excluded.busi_call,
+      info_status=excluded.info_status,
+      info_status_updated_at=excluded.info_status_updated_at,
+      last_start_at=excluded.last_start_at,
+      last_end_at=excluded.last_end_at,
+      now_start_at=excluded.now_start_at,
+      output_kw=excluded.output_kw,
+      method=excluded.method,
+      zcode=excluded.zcode,
+      zscode=excluded.zscode,
+      kind=excluded.kind,
+      kind_detail=excluded.kind_detail,
+      parking_free=excluded.parking_free,
+      note=excluded.note,
+      limit_yn=excluded.limit_yn,
+      limit_detail=excluded.limit_detail,
+      del_yn=excluded.del_yn,
+      del_detail=excluded.del_detail,
+      traffic_yn=excluded.traffic_yn,
+      year=excluded.year,
+      floor_num=excluded.floor_num,
+      floor_type=excluded.floor_type,
+      maker=excluded.maker,
+      synced_at=excluded.synced_at`;
+
+  // Keep each JSON parameter comfortably below D1 row/binding size limits.
+  for (let index = 0; index < rows.length; index += 100) {
+    const chunk = rows.slice(index, index + 100);
+    await db.prepare(sql).bind(JSON.stringify(chunk)).run();
+  }
+}
+
+async function upsertSyncState(
+  db: D1Database,
+  value: {
+    status: string;
+    nextPage: number;
+    totalPages: number | null;
+    reportedTotalCount: number | null;
+    lastSuccessAt: string | null;
+    lastError: string | null;
+    runId: string;
+  },
+) {
+  await db.prepare(
+    `INSERT INTO sync_state (
+       job_name, status, next_page, total_pages, reported_total_count,
+       last_success_at, last_error, run_id
+     ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+     ON CONFLICT(job_name) DO UPDATE SET
+       status=excluded.status,
+       next_page=excluded.next_page,
+       total_pages=excluded.total_pages,
+       reported_total_count=excluded.reported_total_count,
+       last_success_at=excluded.last_success_at,
+       last_error=excluded.last_error,
+       run_id=excluded.run_id`,
+  ).bind(
+    D1_EV_INFO_JOB,
+    value.status,
+    value.nextPage,
+    value.totalPages,
+    value.reportedTotalCount,
+    value.lastSuccessAt,
+    value.lastError,
+    value.runId,
+  ).run();
+}
+
+async function incrementApiUsage(db: D1Database, apiName: string) {
+  const usageDate = new Date().toISOString().slice(0, 10);
+  await db.prepare(
+    `INSERT INTO api_usage_daily (usage_date, api_name, request_count)
+     VALUES (?1, ?2, 1)
+     ON CONFLICT(usage_date, api_name) DO UPDATE SET
+       request_count = request_count + 1`,
+  ).bind(usageDate, apiName).run();
+}
+
+function nullableText(value: string) {
+  const cleaned = cleanValue(value);
+  return cleaned || null;
+}
+
+function nullableNumber(value: string) {
+  return numberField(value);
+}
+
+async function fetchStructuredWithBackoff(
+  url: URL,
+  label: string,
+  maxAttempts = 3,
+) {
+  let lastError: unknown = null;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     try {
-      const response = await fetch(url.toString(), {
-        headers: { Accept: 'application/xml, text/xml, application/json;q=0.9, */*;q=0.1' },
-      });
-      const raw = await response.text();
-      const parsed = parseStructuredPayload(raw, response.headers.get('content-type') || '');
-
-      results.push({
-        name,
-        httpStatus: response.status,
-        elapsedMs: Date.now() - startedAt,
-        contentType: response.headers.get('content-type'),
-        resultCode: deepFindFirst(parsed, 'resultCode') ?? null,
-        resultMsg: deepFindFirst(parsed, 'resultMsg') ?? null,
-        totalCount: deepFindFirst(parsed, 'totalCount') ?? null,
-        itemCount: extractItems(parsed).length,
-      });
+      return await fetchStructured(url);
     } catch (error) {
-      results.push({
-        name,
-        httpStatus: null,
-        elapsedMs: Date.now() - startedAt,
-        error: safeError(error),
-      });
+      lastError = error;
+      const message = safeError(error);
+      const retryable =
+        message.includes('503') ||
+        message.includes('SERVICETIMEOUT') ||
+        message.includes('서비스 연결실패');
+
+      if (!retryable || attempt >= maxAttempts) {
+        throw new Error(`${label} 실패: ${message}`);
+      }
+
+      await delay(350 * attempt);
     }
   }
 
-  return json({
-    ok: results.every((r) => r.httpStatus === 200 && (!r.resultCode || String(r.resultCode) === '00')),
-    generatedAt: new Date().toISOString(),
-    results,
-  }, 200);
+  throw new Error(`${label} 실패: ${safeError(lastError)}`);
 }
 
-/* -------------------------------------------------------------------------- */
-/* Generic HTTP/XML/JSON                                                       */
-/* -------------------------------------------------------------------------- */
+async function fetchStructuredWithRetry(url: URL, label: string) {
+  try {
+    return await fetchStructured(url);
+  } catch (error) {
+    const message = safeError(error);
+    if (!message.includes('503') && !message.includes('SERVICETIMEOUT')) throw error;
+    await delay(400);
+    try {
+      return await fetchStructured(url);
+    } catch (retryError) {
+      throw new Error(`${label} 재시도 실패: ${safeError(retryError)}`);
+    }
+  }
+}
 
-async function fetchStructured(url: URL) {
+async function fetchStructured(url: URL): Promise<RawObject> {
   const response = await fetch(url.toString(), {
-    headers: {
-      Accept: 'application/json, application/xml;q=0.9, text/xml;q=0.8, */*;q=0.1',
-    },
+    headers: { Accept: 'application/json, application/xml;q=0.9, text/xml;q=0.8, */*;q=0.1' },
   });
-
-  const text = await response.text();
+  const contentType = response.headers.get('content-type') || '';
 
   if (!response.ok) {
-    throw new Error(`Upstream HTTP ${response.status}: ${compactText(text).slice(0, 240)}`);
+    const raw = await response.text();
+    throw new Error(`Upstream HTTP ${response.status}: ${compact(raw).slice(0, 300)}`);
   }
 
-  return parseStructuredPayload(text, response.headers.get('content-type') || '');
+  if (contentType.includes('json')) {
+    const parsed = await response.json() as unknown;
+    if (!isObject(parsed)) throw new Error('JSON root가 object가 아닙니다.');
+    return parsed;
+  }
+
+  const raw = await response.text();
+  return parseStructuredPayload(raw, contentType);
 }
 
-function parseStructuredPayload(raw: string, contentType: string): AnyObject {
-  const body = raw.trim();
-  if (!body) throw new Error('외부 API가 빈 응답을 반환했습니다.');
-
-  const looksJson = contentType.includes('json') || body.startsWith('{') || body.startsWith('[');
-
-  if (looksJson) {
+function parseStructuredPayload(raw: string, contentType: string): RawObject {
+  const text = raw.trim();
+  if (!text) throw new Error('외부 API가 빈 응답을 반환했습니다.');
+  if (contentType.includes('json') || text.startsWith('{') || text.startsWith('[')) {
     try {
-      return JSON.parse(body);
+      const parsed = JSON.parse(text) as unknown;
+      if (!isObject(parsed)) throw new Error('JSON root가 object가 아닙니다.');
+      return parsed;
     } catch (error) {
       throw new Error(`JSON 파싱 실패: ${safeError(error)}`);
     }
   }
-
-  if (body.startsWith('<')) return parseXmlPayload(body);
-
-  try {
-    return JSON.parse(body);
-  } catch {
-    throw new Error(`알 수 없는 응답 형식: ${compactText(body).slice(0, 240)}`);
-  }
+  if (text.startsWith('<')) return parseXmlPayload(text);
+  throw new Error(`알 수 없는 응답 형식: ${compact(text).slice(0, 180)}`);
 }
 
-function parseXmlPayload(xml: string): AnyObject {
-  const itemBlocks = [...xml.matchAll(/<item>([\s\S]*?)<\/item>/gi)].map((m) => m[1]);
-
-  const items = itemBlocks.map((block) => {
-    const item: AnyObject = {};
-    for (const match of block.matchAll(/<([A-Za-z0-9_]+)>([\s\S]*?)<\/\1>/g)) {
-      item[match[1]] = decodeXml(match[2].trim());
+function parseXmlPayload(xml: string): RawObject {
+  const items = [...xml.matchAll(/<item>([\s\S]*?)<\/item>/gi)].map((match) => {
+    const item: RawObject = {};
+    for (const fieldMatch of match[1].matchAll(/<([A-Za-z0-9_]+)(?:\s[^>]*)?>([\s\S]*?)<\/\1>|<([A-Za-z0-9_]+)\s*\/>/g)) {
+      const key = fieldMatch[1] || fieldMatch[3];
+      const value = fieldMatch[2] ?? '';
+      if (key) item[key] = decodeXml(value.trim());
     }
     return item;
   });
 
+  const resultCode = xmlTag(xml, 'resultCode');
+  const resultMsg = xmlTag(xml, 'resultMsg');
+  const returnReasonCode = xmlTag(xml, 'returnReasonCode');
+  const returnAuthMsg = xmlTag(xml, 'returnAuthMsg');
+  const errMsg = xmlTag(xml, 'errMsg');
+  const totalCount = xmlTag(xml, 'totalCount');
+  const pageNo = xmlTag(xml, 'pageNo');
+  const numOfRows = xmlTag(xml, 'numOfRows');
+
   return {
     response: {
       header: {
-        resultCode: xmlTag(xml, 'resultCode'),
-        resultMsg: xmlTag(xml, 'resultMsg'),
+        resultCode,
+        resultMsg,
+        returnReasonCode,
+        returnAuthMsg,
+        errMsg,
+        totalCount,
+        pageNo,
+        numOfRows,
       },
-      body: {
-        totalCount: xmlTag(xml, 'totalCount'),
-        pageNo: xmlTag(xml, 'pageNo'),
-        numOfRows: xmlTag(xml, 'numOfRows'),
-        items: { item: items },
-      },
+      body: { items: { item: items }, totalCount, pageNo, numOfRows },
     },
   };
+}
+
+function extractKnownItems(payload: RawObject): RawObject[] {
+  const response = objectField(payload, 'response');
+  const body = objectField(response, 'body') || objectField(payload, 'body');
+  const itemsNode = objectField(body, 'items') || objectField(payload, 'items');
+  const item = itemsNode?.item;
+
+  if (Array.isArray(item)) return item.filter(isObject);
+  if (isObject(item)) return [item];
+  if (Array.isArray(itemsNode)) return itemsNode.filter(isObject);
+  return [];
+}
+
+function ensureNormalResult(payload: RawObject, source: string) {
+  const resultCode = readMetaString(payload, 'resultCode');
+  const resultMsg = readMetaString(payload, 'resultMsg');
+  const returnReasonCode = readMetaString(payload, 'returnReasonCode');
+  const returnAuthMsg = readMetaString(payload, 'returnAuthMsg');
+  const errMsg = readMetaString(payload, 'errMsg');
+
+  if (returnReasonCode || returnAuthMsg || errMsg) {
+    throw new Error(
+      `${source} API 오류 ${returnReasonCode || resultCode || 'UNKNOWN'}: ` +
+      `${errMsg || returnAuthMsg || resultMsg || 'unknown'}`,
+    );
+  }
+
+  if (resultCode && resultCode !== '00') {
+    throw new Error(`${source} API 오류 ${resultCode}: ${resultMsg || 'unknown'}`);
+  }
+}
+
+function readMetaString(payload: RawObject, key: string) {
+  const response = objectField(payload, 'response');
+  const header = objectField(response, 'header');
+  const body = objectField(response, 'body');
+  return field(header || {}, key) || field(body || {}, key) || field(payload, key);
+}
+
+function readMetaNumber(payload: RawObject, key: string) {
+  const value = readMetaString(payload, key).trim();
+  if (!value) return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Primitive parsers / validation                                              */
+/* -------------------------------------------------------------------------- */
+
+function validateFields(raw: RawObject, required: readonly string[]): SchemaCheck {
+  const receivedKeys = Object.keys(raw);
+  const missing = required.filter((key) => !receivedKeys.includes(key));
+  return { valid: missing.length === 0, missing: [...missing], receivedKeys };
+}
+
+function schemaDiagnostic(raw: RawObject | undefined, required: readonly string[]) {
+  if (!raw) return { valid: false, missing: [...required], receivedKeys: [] };
+  return validateFields(raw, required);
+}
+
+function field(raw: RawObject, key: string): string {
+  const value = raw[key];
+  if (value == null) return '';
+  return String(value).trim();
+}
+
+function cleanValue(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed || trimmed === '-' || trimmed.toLowerCase() === 'null') return '';
+  return trimmed;
+}
+
+function numberField(value: string) {
+  const cleaned = cleanValue(value).replace(/,/g, '');
+  if (!cleaned) return null;
+  const parsed = Number(cleaned);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function latitudeField(value: string) {
+  const parsed = numberField(value);
+  return parsed != null && parsed >= 34 && parsed <= 36 ? parsed : null;
+}
+
+function longitudeField(value: string) {
+  const parsed = numberField(value);
+  return parsed != null && parsed >= 128 && parsed <= 130 ? parsed : null;
+}
+
+function normalizeParkingName(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/부산광역시|부산시/g, '')
+    .replace(/공영주차장|노외공영주차장|노상공영주차장|공영|주차장/g, '')
+    .replace(/[\s,\.·ㆍ()\[\]{}\-_\/]/g, '')
+    .trim();
+}
+
+function normalizeAddress(value: string) {
+  return cleanValue(value)
+    .toLowerCase()
+    .replace(/부산광역시|부산시/g, '')
+    .replace(/[\s,\.·ㆍ()\[\]{}\-_\/]/g, '')
+    .trim();
+}
+
+function diceSimilarity(a: string, b: string) {
+  if (!a || !b) return 0;
+  if (a === b) return 1;
+  if (a.length < 2 || b.length < 2) return 0;
+
+  const pairs = (value: string) => {
+    const map = new Map<string, number>();
+    for (let i = 0; i < value.length - 1; i += 1) {
+      const pair = value.slice(i, i + 2);
+      map.set(pair, (map.get(pair) || 0) + 1);
+    }
+    return map;
+  };
+
+  const left = pairs(a);
+  const right = pairs(b);
+  let intersection = 0;
+  let leftCount = 0;
+  let rightCount = 0;
+  for (const count of left.values()) leftCount += count;
+  for (const count of right.values()) rightCount += count;
+  for (const [pair, count] of left) intersection += Math.min(count, right.get(pair) || 0);
+  return (2 * intersection) / (leftCount + rightCount);
+}
+
+function evCompositeKey(statId: string, chgerId: string) {
+  return `${statId}:${chgerId}`;
+}
+
+function haversineMeters(aLat: number, aLng: number, bLat: number, bLng: number) {
+  const radius = 6371000;
+  const rad = (value: number) => (value * Math.PI) / 180;
+  const dLat = rad(bLat - aLat);
+  const dLng = rad(bLng - aLng);
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(rad(aLat)) * Math.cos(rad(bLat)) * Math.sin(dLng / 2) ** 2;
+  return 2 * radius * Math.asin(Math.sqrt(h));
+}
+
+function clamp(value: number, min: number, max: number) {
+  if (!Number.isFinite(value)) return min;
+  return Math.min(Math.max(value, min), max);
+}
+
+function normalizeServiceKey(value: string) {
+  const trimmed = value.trim();
+  try {
+    return decodeURIComponent(trimmed);
+  } catch {
+    return trimmed;
+  }
+}
+
+function isObject(value: unknown): value is RawObject {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function objectField(value: RawObject | null | undefined, key: string): RawObject | null {
+  if (!value) return null;
+  const child = value[key];
+  return isObject(child) ? child : null;
 }
 
 function xmlTag(xml: string, tag: string) {
   const escaped = tag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const match = xml.match(new RegExp(`<${escaped}>([\\s\\S]*?)<\\/${escaped}>`, 'i'));
-  return match ? decodeXml(match[1].trim()) : undefined;
+  return match ? decodeXml(match[1].trim()) : '';
 }
 
 function decodeXml(value: string) {
@@ -1210,180 +2598,7 @@ function decodeXml(value: string) {
     .replace(/&amp;/g, '&');
 }
 
-function ensureNormalResult(payload: AnyObject, source: string) {
-  const resultCode = deepFindFirst(payload, 'resultCode');
-  const resultMsg = deepFindFirst(payload, 'resultMsg');
-
-  if (resultCode != null && String(resultCode) !== '00') {
-    throw new Error(`${source} API 오류 ${resultCode}: ${resultMsg || 'unknown'}`);
-  }
-}
-
-function extractItems(payload: any): AnyObject[] {
-  const common = [
-    payload?.response?.body?.items?.item,
-    payload?.body?.items?.item,
-    payload?.items?.item,
-    payload?.response?.body?.items,
-    payload?.body?.items,
-    payload?.data,
-    payload?.result,
-    payload?.list,
-  ];
-
-  for (const value of common) {
-    if (Array.isArray(value)) return value;
-    if (value && typeof value === 'object' && !Array.isArray(value)) {
-      if (Array.isArray(value.item)) return value.item;
-      return [value];
-    }
-  }
-
-  const arrays = findArrays(payload);
-  if (arrays.length) return arrays.sort((a, b) => b.length - a.length)[0];
-
-  const found = deepFindFirst(payload, 'item');
-  if (Array.isArray(found)) return found;
-  if (found && typeof found === 'object') return [found];
-
-  return [];
-}
-
-function findArrays(node: any, depth = 0): AnyObject[][] {
-  if (depth > 8 || node == null) return [];
-  if (Array.isArray(node)) {
-    return node.length && node.every((x) => x && typeof x === 'object')
-      ? [node as AnyObject[]]
-      : [];
-  }
-  if (typeof node !== 'object') return [];
-
-  return Object.values(node).flatMap((value) => findArrays(value, depth + 1));
-}
-
-function deepFindFirst(node: any, key: string): any {
-  if (!node || typeof node !== 'object') return undefined;
-  if (Object.prototype.hasOwnProperty.call(node, key)) return node[key];
-
-  for (const value of Object.values(node)) {
-    const found = deepFindFirst(value, key);
-    if (found !== undefined) return found;
-  }
-
-  return undefined;
-}
-
-/* -------------------------------------------------------------------------- */
-/* String/coordinate helpers                                                   */
-/* -------------------------------------------------------------------------- */
-
-function normalizePlaceName(value: string) {
-  return value
-    .toLowerCase()
-    .replace(/부산광역시|부산시설공단|공영|주차장|주차|전기차|전기자동차|ev|충전소|충전/g, ' ')
-    .replace(/[()\[\]{}·ㆍ.,_\-/]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
-function normalizeAddress(value: string) {
-  return value
-    .toLowerCase()
-    .replace(/부산광역시|부산시/g, ' ')
-    .replace(/[()\[\]{}·ㆍ.,_\-/]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
-function normalizeIdentity(value: string) {
-  return value.toLowerCase().replace(/[^a-z0-9가-힣]/g, '');
-}
-
-function tokenOverlapScore(a: string, b: string) {
-  const at = new Set(a.split(/\s+/).filter((x) => x.length >= 2));
-  const bt = new Set(b.split(/\s+/).filter((x) => x.length >= 2));
-  if (!at.size || !bt.size) return 0;
-
-  let common = 0;
-  for (const token of at) if (bt.has(token)) common += 1;
-
-  return common / Math.max(at.size, bt.size);
-}
-
-function pickText(obj: AnyObject, keys: string[]) {
-  const keyMap = new Map(
-    Object.keys(obj).map((key) => [key.toLowerCase(), key]),
-  );
-
-  for (const wanted of keys) {
-    const actual = keyMap.get(wanted.toLowerCase());
-    if (!actual) continue;
-    const value = obj[actual];
-    if (value == null) continue;
-    const text = String(value).trim();
-    if (text && text !== '-' && text.toLowerCase() !== 'null') return text;
-  }
-
-  return '';
-}
-
-function pickNumber(obj: AnyObject, keys: string[]) {
-  const text = pickText(obj, keys);
-  if (!text) return null;
-  const n = Number(text.replace(/,/g, ''));
-  return Number.isFinite(n) ? n : null;
-}
-
-function normalizeLat(value: number | null) {
-  if (value == null) return null;
-  return value >= 34 && value <= 36 ? value : null;
-}
-
-function normalizeLng(value: number | null) {
-  if (value == null) return null;
-  return value >= 128 && value <= 130 ? value : null;
-}
-
-function hasMapCoordinates<T extends { lat: number | null; lng: number | null }>(
-  item: T,
-): item is T & { lat: number; lng: number } {
-  return (
-    item.lat != null &&
-    item.lng != null &&
-    item.lat >= 34 &&
-    item.lat <= 36 &&
-    item.lng >= 128 &&
-    item.lng <= 130
-  );
-}
-
-function haversineMeters(aLat: number, aLng: number, bLat: number, bLng: number) {
-  const R = 6371000;
-  const rad = (v: number) => (v * Math.PI) / 180;
-  const dLat = rad(bLat - aLat);
-  const dLng = rad(bLng - aLng);
-  const h =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(rad(aLat)) * Math.cos(rad(bLat)) * Math.sin(dLng / 2) ** 2;
-
-  return 2 * R * Math.asin(Math.sqrt(h));
-}
-
-function clamp(v: number, min: number, max: number) {
-  if (!Number.isFinite(v)) return min;
-  return Math.min(Math.max(v, min), max);
-}
-
-function normalizeServiceKey(serviceKey: string) {
-  const trimmed = serviceKey.trim();
-  try {
-    return decodeURIComponent(trimmed);
-  } catch {
-    return trimmed;
-  }
-}
-
-function compactText(value: string) {
+function compact(value: string) {
   return value.replace(/\s+/g, ' ').trim();
 }
 
@@ -1391,8 +2606,12 @@ function safeError(error: unknown) {
   return error instanceof Error ? error.message : String(error);
 }
 
+function delay(ms: number) {
+  return new Promise<void>((resolve) => setTimeout(resolve, ms));
+}
+
 /* -------------------------------------------------------------------------- */
-/* Cloudflare cache helpers                                                    */
+/* Cache / response helpers                                                    */
 /* -------------------------------------------------------------------------- */
 
 function getDefaultCache(): Cache | null {
@@ -1400,39 +2619,26 @@ function getDefaultCache(): Cache | null {
   return (caches as unknown as { default: Cache }).default;
 }
 
-function evCacheRequest(kind: string) {
-  return new Request(`https://plugpark.internal/cache/ev/${kind}`);
-}
-
-function cacheJson(data: unknown, ttlSeconds: number) {
+function cacheJson(data: unknown, seconds: number) {
   return new Response(JSON.stringify(data), {
     headers: {
       'content-type': 'application/json; charset=utf-8',
-      'cache-control': `public, max-age=${ttlSeconds}`,
+      'cache-control': `public, max-age=${seconds}`,
     },
   });
 }
 
 function json(data: unknown, status = 200, maxAge = 0) {
   const headers = new Headers({ 'content-type': 'application/json; charset=utf-8' });
-  if (maxAge) headers.set('cache-control', `public, max-age=${maxAge}`);
+  if (maxAge > 0) headers.set('cache-control', `public, max-age=${maxAge}`);
   return new Response(JSON.stringify(data), { status, headers });
 }
 
 function configError(name: string) {
-  return json({
-    ok: false,
-    error: `${name}이(가) 설정되지 않았습니다.`,
-  }, 503);
+  return json({ ok: false, error: `${name}이(가) 설정되지 않았습니다.` }, 503);
 }
 
 function upstreamError(error: unknown) {
   console.error(error);
-  return json(
-    {
-      ok: false,
-      error: error instanceof Error ? error.message : '외부 API 호출 실패',
-    },
-    502,
-  );
+  return json({ ok: false, error: safeError(error) }, 502);
 }

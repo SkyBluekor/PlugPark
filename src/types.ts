@@ -10,6 +10,12 @@ export type ChargerSummary = {
   matchConfidence: 'high' | 'medium' | 'low' | null;
 };
 
+export type RealtimeMatch = {
+  matched: boolean;
+  type: 'exact-name' | 'contained-name' | 'similar-name' | 'unmatched' | 'ambiguous';
+  realtimeName: string | null;
+};
+
 export type PlugParkPlace = {
   id: string;
   name: string;
@@ -25,22 +31,57 @@ export type PlugParkPlace = {
   parkingUpdatedAt: string | null;
   parkingRealtime: boolean;
   parkingSource: 'busan-city' | 'busan-facilities' | 'merged';
+  realtimeMatch?: RealtimeMatch;
   charger: ChargerSummary;
   source: 'live' | 'mock';
+};
+
+export type ParkingMatchSummary = {
+  realtimeCount: number;
+  matched: number;
+  exact: number;
+  contained: number;
+  similar: number;
+  ambiguous: number;
+  unmatched: number;
+};
+
+export type EvProgress = {
+  complete: boolean;
+  currentPage: number;
+  totalPages: number | null;
+  totalCount: number | null;
+  collectedChargers: number;
+  collectedStations: number;
+  nextPage: number;
+  lastRawCount: number;
+  lastBusanCount: number;
+  regionFilterHonored: boolean | null;
+  lastError: string | null;
+  startedAt: string | null;
+  updatedAt: string | null;
 };
 
 export type PlacesResponse = {
   ok: boolean;
   generatedAt: string;
+  dataLayerVersion?: string;
   matchRadiusMeters: number;
   parkingCount: number;
+  realtimeParkingConfigured: boolean;
+  realtimeParkingCount: number;
   chargerCount: number;
   chargerStationCount: number;
   matchedCount: number;
   evSnapshotComplete: boolean;
-  evSnapshotSource: 'full-cache' | 'busan-live' | 'quick-cache' | 'quick-live';
+  evSnapshotSource: 'd1-read-model' | 'd1-empty';
+  evProgress?: null;
+  readModelReady?: boolean;
+  dataSource?: 'd1-read-model';
+  upstreamEvCalls?: number;
   realtimeParking: boolean;
-  realtimeMessage: string | null;
+  realtimeMessage: string;
+  parkingMatchSummary?: ParkingMatchSummary;
   places: PlugParkPlace[];
   error?: string;
 };

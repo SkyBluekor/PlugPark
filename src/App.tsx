@@ -7,14 +7,6 @@ type ChargerFilter = 'all' | 'parking' | 'available' | 'fast' | 'slow';
 type SortKey = 'charger' | 'parking' | 'distance';
 type UserLocation = { lat: number; lng: number } | null;
 type RadiusKm = 1 | 3 | 5 | null;
-type ParkingPlacesResponse = {
-  ok: boolean;
-  places: PlugParkPlace[];
-  realtimeParking?: boolean;
-  realtimeMessage?: string | null;
-  error?: string;
-};
-
 const PAGE_SIZE = 20;
 
 function haversineMeters(aLat: number, aLng: number, bLat: number, bLng: number) {
@@ -41,10 +33,16 @@ function formatMeters(m: number | null | undefined) {
 }
 
 function kakaoDirectionsUrl(place: PlugParkPlace) {
+  if (place.lat == null || place.lng == null) {
+    return `https://map.kakao.com/?q=${encodeURIComponent(`${place.name} ${place.address}`)}`;
+  }
   return `https://map.kakao.com/link/to/${encodeURIComponent(place.name)},${place.lat},${place.lng}`;
 }
 
 function kakaoMapUrl(place: PlugParkPlace) {
+  if (place.lat == null || place.lng == null) {
+    return `https://map.kakao.com/?q=${encodeURIComponent(`${place.name} ${place.address}`)}`;
+  }
   return `https://map.kakao.com/link/map/${encodeURIComponent(place.name)},${place.lat},${place.lng}`;
 }
 
@@ -73,7 +71,6 @@ export default function App() {
   const [places, setPlaces] = useState<PlugParkPlace[]>([]);
   const [live, setLive] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [evRefreshing, setEvRefreshing] = useState(false);
   const [notice, setNotice] = useState('');
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<ChargerFilter>('all');
@@ -88,71 +85,41 @@ export default function App() {
     stationCount: 0,
     chargerCount: 0,
     complete: false,
+    realtimeParkingConfigured: false,
+    realtimeParkingCount: 0,
   });
 
-  async function refreshEvPlaces(attempt = 0) {
-    setEvRefreshing(true);
+  async function load() {
+    setLoading(true);
+    setNotice('공영주차장과 EV 충전정보를 불러오는 중…');
+
     try {
       const data = await fetchApiJson<PlacesResponse>('/api/places');
-      if (!data.ok) throw new Error(data.error || 'EV API 오류');
+      if (!data.ok) throw new Error(data.error || 'PlugPark API 오류');
 
       setPlaces(data.places);
+      setLive(true);
       setEvStats({
         parkingCount: data.parkingCount,
         matchedCount: data.matchedCount,
         stationCount: data.chargerStationCount,
         chargerCount: data.chargerCount,
         complete: data.evSnapshotComplete,
+        realtimeParkingConfigured: data.realtimeParkingConfigured ?? false,
+        realtimeParkingCount: data.realtimeParkingCount ?? 0,
       });
 
-      if (!data.realtimeParking && data.realtimeMessage) {
-        setNotice(data.realtimeMessage);
-      } else if (data.places.length === 0) {
-        setNotice(`공영주차장은 정상입니다. ${data.matchRadiusMeters}m 이내 EV 매칭 결과가 없습니다.`);
-      } else if (!data.evSnapshotComplete) {
-        setNotice('부산 EV 전체 데이터를 확인하는 중입니다. 아래 숫자는 아직 임시값입니다.');
+      if (data.places.length === 0) {
+        setNotice('표시할 공영주차장이 없습니다.');
       } else {
-        setNotice('');
+        setNotice(data.realtimeMessage || '');
       }
-
-      if (!data.evSnapshotComplete && attempt < 2) {
-        window.setTimeout(() => {
-          void refreshEvPlaces(attempt + 1);
-        }, attempt === 0 ? 7000 : 12000);
-      }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : '알 수 없는 오류';
-      setNotice(`공영주차장은 정상 표시 중 · EV 충전정보 갱신 실패: ${message}`);
-    } finally {
-      setEvRefreshing(false);
-    }
-  }
-
-  async function load() {
-    setLoading(true);
-    setNotice('공영주차장을 불러오는 중…');
-
-    try {
-      const parkingData = await fetchApiJson<ParkingPlacesResponse>('/api/parking-places');
-      if (!parkingData.ok) throw new Error(parkingData.error || 'Parking API 오류');
-
-      // 여기서 즉시 첫 화면 로딩을 끝냅니다.
-      setPlaces(parkingData.places);
-      setLive(true);
-      setNotice(
-        parkingData.realtimeParking
-          ? ''
-          : (parkingData.realtimeMessage || '실시간 잔여 주차면은 일부 주차장에서 제공되지 않습니다.'),
-      );
-      setLoading(false);
-
-      // EV는 기다리지 않고 뒤에서 갱신합니다.
-      void refreshEvPlaces();
     } catch (error) {
       const message = error instanceof Error ? error.message : '알 수 없는 오류';
       setPlaces(mockPlaces);
       setLive(false);
-      setNotice(`공영주차장 API 연결 실패: ${message} · 예시 데이터로 표시 중`);
+      setNotice(`PlugPark 데이터 연결 실패: ${message} · 예시 데이터로 표시 중`);
+    } finally {
       setLoading(false);
     }
   }
@@ -169,7 +136,7 @@ export default function App() {
     const q = query.trim().toLowerCase();
     let result = places.filter((p) => {
       if (q && !`${p.name} ${p.address} ${p.agency || ''} ${p.charger.stations.join(' ')}`.toLowerCase().includes(q)) return false;
-      if (filter === 'parking' && (p.availableParking ?? 0) <= 0) return false;
+      if (filter === 'parking' && !(p.parkingRealtime && p.availableParking != null)) return false;
       if (filter === 'available' && p.charger.available <= 0) return false;
       if (filter === 'fast' && p.charger.fast <= 0) return false;
       if (filter === 'slow' && p.charger.slow <= 0) return false;
@@ -237,7 +204,7 @@ export default function App() {
         </a>
         <div className="top-actions">
           <button className={`top-location ${userLocation ? 'active' : ''}`} onClick={locate}>◎ {userLocation ? '내 위치 사용 중' : '내 위치'}</button>
-          <div className={`live-badge ${live ? 'on' : ''}`}><span />{live ? 'LIVE API' : 'DEMO'}</div>
+          <div className={`live-badge ${live ? 'on' : ''}`}><span />{live ? 'LIVE DATA' : 'DEMO'}</div>
         </div>
       </header>
 
@@ -246,7 +213,7 @@ export default function App() {
           <div className="hero-copy">
             <p className="eyebrow">BUSAN EV PARKING + CHARGING</p>
             <h1>주차와 충전을<br/><em>한 번에 찾으세요.</em></h1>
-            <p className="hero-desc">부산 공영주차장 실시간 주차면과 EV 충전기 상태를 한 화면에서 확인합니다.</p>
+            <p className="hero-desc">부산 공영주차장과 EV 충전기 정보를 한 화면에서 확인합니다.</p>
             <a className="primary" href="#finder">지금 찾기</a>
           </div>
           <div className="hero-visual">
@@ -260,16 +227,24 @@ export default function App() {
               <p className="eyebrow">LIVE MATCHING</p>
               <h2>부산 공영주차장 찾기</h2>
             </div>
-            <button className="refresh" onClick={() => void load()} disabled={loading}>{loading ? '불러오는 중…' : evRefreshing ? 'EV 갱신 중…' : '새로고침'}</button>
+            <button className="refresh" onClick={() => void load()} disabled={loading}>{loading ? '불러오는 중…' : '새로고침'}</button>
           </div>
 
-          {evStats.chargerCount > 0 && (
+          {evStats.parkingCount > 0 && (
             <div className="dataset-summary">
               <span>공영주차장 <b>{evStats.parkingCount.toLocaleString()}곳</b></span>
-              <span>EV 충전 가능 공영주차장 <b>{evStats.matchedCount.toLocaleString()}곳</b></span>
-              <span>부산 EV 충전소 <b>{evStats.stationCount.toLocaleString()}곳</b></span>
-              <span>충전기 <b>{evStats.chargerCount.toLocaleString()}기</b></span>
-              <em>{evStats.complete ? '전체 스냅샷' : '수집 중'}</em>
+              <span>
+                실시간 잔여 제공{' '}
+                <b>
+                  {evStats.realtimeParkingConfigured
+                    ? `${evStats.realtimeParkingCount.toLocaleString()}곳`
+                    : '연동 전'}
+                </b>
+              </span>
+              <span>EV 충전 가능 공영주차장 <b>{`${evStats.matchedCount.toLocaleString()}곳`}</b></span>
+              <span>부산 EV 충전소 <b>{`${evStats.stationCount.toLocaleString()}곳`}</b></span>
+              <span>충전기 <b>{`${evStats.chargerCount.toLocaleString()}기`}</b></span>
+              <em>{live ? 'D1 데이터' : '예시 데이터'}</em>
             </div>
           )}
 
@@ -286,7 +261,7 @@ export default function App() {
           </div>
 
           <div className="filters">
-            {([['all','전체'],['parking','주차 가능'],['available','충전 가능'],['fast','급속'],['slow','완속']] as const).map(([key,label]) => (
+            {([['all','전체'],['parking','실시간 잔여'],['available','충전 가능'],['fast','급속'],['slow','완속']] as const).map(([key,label]) => (
               <button key={key} className={filter === key ? 'active' : ''} onClick={() => setFilter(key)}>{label}</button>
             ))}
           </div>
@@ -327,6 +302,8 @@ export default function App() {
             </div>
           )}
 
+
+
           {notice && <div className="notice">{notice}</div>}
 
           <div className="finder-grid">
@@ -364,7 +341,10 @@ export default function App() {
                         ) : place.capacity != null && place.capacity > 0 ? (
                           <span>
                             주차 <b className="neutral">총 {place.capacity}면</b>
-                            <small> · 실시간 잔여 미제공</small>
+                            <small>
+                              {' · '}
+                              {evStats.realtimeParkingConfigured ? '실시간 잔여 미제공' : '실시간 정보 연동 전'}
+                            </small>
                           </span>
                         ) : (
                           <span>주차 <b className="neutral">면수 확인 필요</b></span>
@@ -379,9 +359,7 @@ export default function App() {
                             <span><b>{place.charger.fast}</b> 급속 · <b>{place.charger.slow}</b> 완속</span>
                           </>
                         ) : (
-                          <span className="charger-pending">
-                            {evRefreshing ? '충전 정보 확인 중…' : 'EV 매칭 정보 없음'}
-                          </span>
+                          <span className="charger-pending">EV 충전정보 없음</span>
                         )}
                       </div>
                     </button>
@@ -434,7 +412,11 @@ export default function App() {
                 ) : selected.capacity != null && selected.capacity > 0 ? (
                   <>
                     <strong>총 {selected.capacity}<small>면</small></strong>
-                    <small>실시간 잔여 면수는 제공되지 않습니다.</small>
+                    <small>
+                      {evStats.realtimeParkingConfigured
+                        ? '실시간 잔여 면수는 제공되지 않습니다.'
+                        : '실시간 주차정보는 아직 연동되지 않았습니다.'}
+                    </small>
                   </>
                 ) : (
                   <strong className="neutral">확인 필요</strong>
@@ -445,7 +427,7 @@ export default function App() {
                 {selected.charger.total > 0 ? (
                   <strong>{selected.charger.available} <small>/ 총 {selected.charger.total}기</small></strong>
                 ) : (
-                  <strong className="neutral">{evRefreshing ? '확인 중' : '매칭 없음'}</strong>
+                  <strong className="neutral">정보 미확인</strong>
                 )}
               </div>
             </div>
