@@ -6,6 +6,14 @@ import type { PlacesResponse, PlugParkPlace } from './types';
 type ChargerFilter = 'all' | 'parking' | 'available' | 'fast' | 'slow';
 type SortKey = 'charger' | 'parking' | 'distance';
 type UserLocation = { lat: number; lng: number } | null;
+type RadiusKm = 1 | 3 | 5 | null;
+type ParkingPlacesResponse = {
+  ok: boolean;
+  places: PlugParkPlace[];
+  realtimeParking?: boolean;
+  realtimeMessage?: string | null;
+  error?: string;
+};
 
 const PAGE_SIZE = 20;
 
@@ -40,38 +48,111 @@ function kakaoMapUrl(place: PlugParkPlace) {
   return `https://map.kakao.com/link/map/${encodeURIComponent(place.name)},${place.lat},${place.lng}`;
 }
 
+async function fetchApiJson<T>(url: string): Promise<T> {
+  const response = await fetch(url, { headers: { Accept: 'application/json' } });
+  const raw = await response.text();
+  let data: any;
+
+  try {
+    data = JSON.parse(raw);
+  } catch {
+    const preview = raw.replace(/\s+/g, ' ').trim().slice(0, 120);
+    throw new Error(
+      `API가 JSON 대신 HTML/텍스트를 반환했습니다 (HTTP ${response.status}): ${preview || '빈 응답'}`,
+    );
+  }
+
+  if (!response.ok) {
+    throw new Error(data?.error || data?.message || `API ${response.status}`);
+  }
+
+  return data as T;
+}
+
 export default function App() {
   const [places, setPlaces] = useState<PlugParkPlace[]>([]);
   const [live, setLive] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [evRefreshing, setEvRefreshing] = useState(false);
   const [notice, setNotice] = useState('');
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<ChargerFilter>('all');
   const [sort, setSort] = useState<SortKey>('charger');
   const [selected, setSelected] = useState<PlugParkPlace | null>(null);
   const [userLocation, setUserLocation] = useState<UserLocation>(null);
+  const [radiusKm, setRadiusKm] = useState<RadiusKm>(null);
   const [displayCount, setDisplayCount] = useState(PAGE_SIZE);
+  const [evStats, setEvStats] = useState({
+    parkingCount: 0,
+    matchedCount: 0,
+    stationCount: 0,
+    chargerCount: 0,
+    complete: false,
+  });
+
+  async function refreshEvPlaces(attempt = 0) {
+    setEvRefreshing(true);
+    try {
+      const data = await fetchApiJson<PlacesResponse>('/api/places');
+      if (!data.ok) throw new Error(data.error || 'EV API 오류');
+
+      setPlaces(data.places);
+      setEvStats({
+        parkingCount: data.parkingCount,
+        matchedCount: data.matchedCount,
+        stationCount: data.chargerStationCount,
+        chargerCount: data.chargerCount,
+        complete: data.evSnapshotComplete,
+      });
+
+      if (!data.realtimeParking && data.realtimeMessage) {
+        setNotice(data.realtimeMessage);
+      } else if (data.places.length === 0) {
+        setNotice(`공영주차장은 정상입니다. ${data.matchRadiusMeters}m 이내 EV 매칭 결과가 없습니다.`);
+      } else if (!data.evSnapshotComplete) {
+        setNotice('부산 EV 전체 데이터를 확인하는 중입니다. 아래 숫자는 아직 임시값입니다.');
+      } else {
+        setNotice('');
+      }
+
+      if (!data.evSnapshotComplete && attempt < 2) {
+        window.setTimeout(() => {
+          void refreshEvPlaces(attempt + 1);
+        }, attempt === 0 ? 7000 : 12000);
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '알 수 없는 오류';
+      setNotice(`공영주차장은 정상 표시 중 · EV 충전정보 갱신 실패: ${message}`);
+    } finally {
+      setEvRefreshing(false);
+    }
+  }
 
   async function load() {
     setLoading(true);
-    setNotice('');
+    setNotice('공영주차장을 불러오는 중…');
+
     try {
-      const response = await fetch('/api/places');
-      const data = (await response.json()) as PlacesResponse;
-      if (!response.ok || !data.ok) {
-        throw new Error(data.error || `API ${response.status}`);
-      }
-      setPlaces(data.places);
+      const parkingData = await fetchApiJson<ParkingPlacesResponse>('/api/parking-places');
+      if (!parkingData.ok) throw new Error(parkingData.error || 'Parking API 오류');
+
+      // 여기서 즉시 첫 화면 로딩을 끝냅니다.
+      setPlaces(parkingData.places);
       setLive(true);
-      if (data.places.length === 0) {
-        setNotice(`API 연결은 정상이나 ${data.matchRadiusMeters}m 이내에서 주차장·충전소 매칭 결과가 없습니다.`);
-      }
+      setNotice(
+        parkingData.realtimeParking
+          ? ''
+          : (parkingData.realtimeMessage || '실시간 잔여 주차면은 일부 주차장에서 제공되지 않습니다.'),
+      );
+      setLoading(false);
+
+      // EV는 기다리지 않고 뒤에서 갱신합니다.
+      void refreshEvPlaces();
     } catch (error) {
       const message = error instanceof Error ? error.message : '알 수 없는 오류';
       setPlaces(mockPlaces);
       setLive(false);
-      setNotice(`실데이터 연결 실패: ${message} · 예시 데이터로 표시 중`);
-    } finally {
+      setNotice(`공영주차장 API 연결 실패: ${message} · 예시 데이터로 표시 중`);
       setLoading(false);
     }
   }
@@ -82,12 +163,12 @@ export default function App() {
 
   useEffect(() => {
     setDisplayCount(PAGE_SIZE);
-  }, [query, filter, sort, userLocation]);
+  }, [query, filter, sort, userLocation, radiusKm]);
 
   const filteredPlaces = useMemo(() => {
     const q = query.trim().toLowerCase();
     let result = places.filter((p) => {
-      if (q && !`${p.name} ${p.address} ${p.charger.stations.join(' ')}`.toLowerCase().includes(q)) return false;
+      if (q && !`${p.name} ${p.address} ${p.agency || ''} ${p.charger.stations.join(' ')}`.toLowerCase().includes(q)) return false;
       if (filter === 'parking' && (p.availableParking ?? 0) <= 0) return false;
       if (filter === 'available' && p.charger.available <= 0) return false;
       if (filter === 'fast' && p.charger.fast <= 0) return false;
@@ -95,17 +176,32 @@ export default function App() {
       return true;
     });
 
+    if (userLocation && radiusKm) {
+      const maxMeters = radiusKm * 1000;
+      result = result.filter((place) => {
+        if (place.lat == null || place.lng == null) return false;
+        return haversineMeters(userLocation.lat, userLocation.lng, place.lat, place.lng) <= maxMeters;
+      });
+    }
+
     result = [...result].sort((a, b) => {
       if (sort === 'distance' && userLocation) {
-        return haversineMeters(userLocation.lat, userLocation.lng, a.lat, a.lng)
-          - haversineMeters(userLocation.lat, userLocation.lng, b.lat, b.lng);
+        const aDistance =
+          a.lat != null && a.lng != null
+            ? haversineMeters(userLocation.lat, userLocation.lng, a.lat, a.lng)
+            : Number.POSITIVE_INFINITY;
+        const bDistance =
+          b.lat != null && b.lng != null
+            ? haversineMeters(userLocation.lat, userLocation.lng, b.lat, b.lng)
+            : Number.POSITIVE_INFINITY;
+        return aDistance - bDistance;
       }
       if (sort === 'parking') return (b.availableParking ?? -1) - (a.availableParking ?? -1);
       return b.charger.available - a.charger.available;
     });
 
     return result;
-  }, [places, query, filter, sort, userLocation]);
+  }, [places, query, filter, sort, userLocation, radiusKm]);
 
   const displayedPlaces = filteredPlaces.slice(0, displayCount);
 
@@ -117,11 +213,19 @@ export default function App() {
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+        setRadiusKm(3);
         setSort('distance');
-        setNotice('현재 위치 기준 가까운 순으로 정렬했습니다.');
+        setSelected(null);
+        setNotice('현재 위치 기준 3km 이내 장소를 가까운 순으로 표시합니다.');
       },
-      () => setNotice('위치 권한을 허용하지 않아 기존 정렬을 유지합니다.'),
-      { enableHighAccuracy: false, timeout: 7000 },
+      (error) => {
+        const message =
+          error.code === 1
+            ? '위치 권한이 차단되었습니다. 브라우저 사이트 설정에서 위치 권한을 허용해주세요.'
+            : '현재 위치를 가져오지 못했습니다. 잠시 후 다시 시도해주세요.';
+        setNotice(message);
+      },
+      { enableHighAccuracy: true, timeout: 8000, maximumAge: 60_000 },
     );
   }
 
@@ -132,7 +236,7 @@ export default function App() {
           <span className="brand-mark">P</span><span>PlugPark</span>
         </a>
         <div className="top-actions">
-          <button className="top-location" onClick={locate}>◎ 현재 위치</button>
+          <button className={`top-location ${userLocation ? 'active' : ''}`} onClick={locate}>◎ {userLocation ? '내 위치 사용 중' : '내 위치'}</button>
           <div className={`live-badge ${live ? 'on' : ''}`}><span />{live ? 'LIVE API' : 'DEMO'}</div>
         </div>
       </header>
@@ -154,13 +258,26 @@ export default function App() {
           <div className="finder-toolbar">
             <div>
               <p className="eyebrow">LIVE MATCHING</p>
-              <h2>주차 + 충전 가능 장소</h2>
+              <h2>부산 공영주차장 찾기</h2>
             </div>
-            <button className="refresh" onClick={() => void load()} disabled={loading}>{loading ? '불러오는 중…' : '새로고침'}</button>
+            <button className="refresh" onClick={() => void load()} disabled={loading}>{loading ? '불러오는 중…' : evRefreshing ? 'EV 갱신 중…' : '새로고침'}</button>
           </div>
+
+          {evStats.chargerCount > 0 && (
+            <div className="dataset-summary">
+              <span>공영주차장 <b>{evStats.parkingCount.toLocaleString()}곳</b></span>
+              <span>EV 충전 가능 공영주차장 <b>{evStats.matchedCount.toLocaleString()}곳</b></span>
+              <span>부산 EV 충전소 <b>{evStats.stationCount.toLocaleString()}곳</b></span>
+              <span>충전기 <b>{evStats.chargerCount.toLocaleString()}기</b></span>
+              <em>{evStats.complete ? '전체 스냅샷' : '수집 중'}</em>
+            </div>
+          )}
 
           <div className="search-tools">
             <label className="search-box"><span>⌕</span><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="주차장명·주소 검색" /></label>
+            <button className={`location-button ${userLocation ? 'active' : ''}`} onClick={locate}>
+              <span>◎</span>{userLocation ? '내 위치 다시 찾기' : '내 위치 기준'}
+            </button>
             <select value={sort} onChange={(e) => setSort(e.target.value as SortKey)} aria-label="정렬">
               <option value="charger">충전 가능순</option>
               <option value="parking">주차 여유순</option>
@@ -174,6 +291,42 @@ export default function App() {
             ))}
           </div>
 
+          {userLocation && (
+            <div className="nearby-tools">
+              <span className="nearby-title">내 주변</span>
+              {([1, 3, 5] as const).map((km) => (
+                <button
+                  key={km}
+                  className={radiusKm === km ? 'active' : ''}
+                  onClick={() => {
+                    setRadiusKm(km);
+                    setSort('distance');
+                    setSelected(null);
+                  }}
+                >
+                  {km}km
+                </button>
+              ))}
+              <button
+                className={radiusKm === null ? 'active' : ''}
+                onClick={() => setRadiusKm(null)}
+              >
+                전체
+              </button>
+              <button
+                className="clear-location"
+                onClick={() => {
+                  setUserLocation(null);
+                  setRadiusKm(null);
+                  if (sort === 'distance') setSort('charger');
+                  setNotice('');
+                }}
+              >
+                위치 해제
+              </button>
+            </div>
+          )}
+
           {notice && <div className="notice">{notice}</div>}
 
           <div className="finder-grid">
@@ -186,18 +339,50 @@ export default function App() {
               <div className="result-scroll">
                 {displayedPlaces.map((place) => {
                   const tone = parkingTone(place);
-                  const distance = userLocation ? haversineMeters(userLocation.lat, userLocation.lng, place.lat, place.lng) : null;
+                  const distance =
+                    userLocation && place.lat != null && place.lng != null
+                      ? haversineMeters(userLocation.lat, userLocation.lng, place.lat, place.lng)
+                      : null;
                   return (
                     <button className={`place-row ${selected?.id === place.id ? 'selected' : ''}`} key={place.id} onClick={() => setSelected(place)}>
                       <div className="row-head">
-                        <div><span className="parking-label">P⚡</span><h3>{place.name}</h3></div>
+                        <div><span className="parking-label">{place.charger.total > 0 ? 'P⚡' : 'P'}</span><h3>{place.name}</h3></div>
                         <span className="distance">{distance != null ? formatMeters(distance) : formatMeters(place.charger.nearestDistanceMeters)}</span>
                       </div>
-                      <p>{place.address}</p>
+                      <p>
+                        {place.address && place.address !== '주소 정보 없음'
+                          ? place.address
+                          : (place.agency || '주소 위치 확인 중')}
+                      </p>
                       <div className="row-stats">
-                        <span>주차 <b className={tone}>{place.availableParking ?? '—'}</b><small> / {place.capacity ?? '—'}</small></span>
-                        <span>충전 <b className={place.charger.available > 0 ? 'good' : 'bad'}>{place.charger.available}</b><small> / {place.charger.total}</small></span>
-                        <span><b>{place.charger.fast}</b> 급속 · <b>{place.charger.slow}</b> 완속</span>
+                        {place.availableParking != null ? (
+                          <span>
+                            주차 가능 <b className={tone}>{place.availableParking}</b>
+                            <small>{place.capacity && place.capacity > 0 ? ` / 총 ${place.capacity}면` : '면'}</small>
+                            {place.parkingRealtime && <small className="realtime-mini"> · 실시간</small>}
+                          </span>
+                        ) : place.capacity != null && place.capacity > 0 ? (
+                          <span>
+                            주차 <b className="neutral">총 {place.capacity}면</b>
+                            <small> · 실시간 잔여 미제공</small>
+                          </span>
+                        ) : (
+                          <span>주차 <b className="neutral">면수 확인 필요</b></span>
+                        )}
+
+                        {place.charger.total > 0 ? (
+                          <>
+                            <span>
+                              충전 가능 <b className={place.charger.available > 0 ? 'good' : 'bad'}>{place.charger.available}</b>
+                              <small> / 총 {place.charger.total}기</small>
+                            </span>
+                            <span><b>{place.charger.fast}</b> 급속 · <b>{place.charger.slow}</b> 완속</span>
+                          </>
+                        ) : (
+                          <span className="charger-pending">
+                            {evRefreshing ? '충전 정보 확인 중…' : 'EV 매칭 정보 없음'}
+                          </span>
+                        )}
                       </div>
                     </button>
                   );
@@ -212,7 +397,7 @@ export default function App() {
               </div>
             </section>
 
-            <KakaoMap places={filteredPlaces} selected={selected} userLocation={userLocation} onSelect={setSelected} />
+            <KakaoMap places={filteredPlaces} selected={selected} userLocation={userLocation} onSelect={setSelected} onLocate={locate} />
           </div>
         </section>
       </main>
@@ -221,13 +406,48 @@ export default function App() {
         <div className="drawer-backdrop" onClick={() => setSelected(null)}>
           <aside className="detail-panel" onClick={(e) => e.stopPropagation()}>
             <button className="close" onClick={() => setSelected(null)} aria-label="상세 닫기">×</button>
-            <span className="parking-label">P⚡ MATCHED</span>
+            <span className="parking-label">{selected.charger.total > 0 ? 'P⚡ MATCHED' : 'P PARKING'}</span>
             <h2>{selected.name}</h2>
-            <p className="detail-address">{selected.address}</p>
+            <p className="detail-address">
+              {selected.address && selected.address !== '주소 정보 없음'
+                ? selected.address
+                : (selected.agency || '주소 위치 확인 중')}
+            </p>
 
             <div className="detail-score">
-              <div><span>주차 가능</span><strong>{selected.availableParking ?? '—'} <small>/ {selected.capacity ?? '—'}면</small></strong></div>
-              <div><span>EV 충전 가능</span><strong>{selected.charger.available} <small>/ {selected.charger.total}기</small></strong></div>
+              <div>
+                <span>{selected.availableParking != null ? '실시간 주차 가능' : '주차 규모'}</span>
+                {selected.availableParking != null ? (
+                  <>
+                    <strong>
+                      {selected.availableParking}
+                      <small>{selected.capacity && selected.capacity > 0 ? ` / 총 ${selected.capacity}면` : '면'}</small>
+                    </strong>
+                    {selected.parkingRealtime && (
+                      <small>
+                        실시간
+                        {selected.occupiedParking != null ? ` · 현재 주차 ${selected.occupiedParking}대` : ''}
+                        {selected.parkingUpdatedAt ? ` · ${selected.parkingUpdatedAt}` : ''}
+                      </small>
+                    )}
+                  </>
+                ) : selected.capacity != null && selected.capacity > 0 ? (
+                  <>
+                    <strong>총 {selected.capacity}<small>면</small></strong>
+                    <small>실시간 잔여 면수는 제공되지 않습니다.</small>
+                  </>
+                ) : (
+                  <strong className="neutral">확인 필요</strong>
+                )}
+              </div>
+              <div>
+                <span>EV 충전</span>
+                {selected.charger.total > 0 ? (
+                  <strong>{selected.charger.available} <small>/ 총 {selected.charger.total}기</small></strong>
+                ) : (
+                  <strong className="neutral">{evRefreshing ? '확인 중' : '매칭 없음'}</strong>
+                )}
+              </div>
             </div>
 
             <dl>

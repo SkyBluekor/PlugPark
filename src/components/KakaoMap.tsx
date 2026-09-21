@@ -6,6 +6,7 @@ type Props = {
   selected: PlugParkPlace | null;
   userLocation: { lat: number; lng: number } | null;
   onSelect: (place: PlugParkPlace) => void;
+  onLocate: () => void;
 };
 
 declare global {
@@ -35,7 +36,7 @@ function loadKakaoMapSdk(appKey: string) {
     const script = document.createElement('script');
     script.dataset.plugparkKakaoMap = 'true';
     script.async = true;
-    script.src = `https://dapi.kakao.com/v2/maps/sdk.js?appkey=${encodeURIComponent(appKey)}&autoload=false`;
+    script.src = `https://dapi.kakao.com/v2/maps/sdk.js?appkey=${encodeURIComponent(appKey)}&autoload=false&libraries=services`;
     script.onload = () => {
       if (!window.kakao?.maps) {
         reject(new Error('Kakao Map SDK 객체를 찾을 수 없습니다.'));
@@ -50,12 +51,71 @@ function loadKakaoMapSdk(appKey: string) {
   return sdkPromise;
 }
 
-export default function KakaoMap({ places, selected, userLocation, onSelect }: Props) {
+
+function hasValidCoordinates(place: PlugParkPlace) {
+  return (
+    place.lat != null &&
+    place.lng != null &&
+    place.lat >= 34 &&
+    place.lat <= 36 &&
+    place.lng >= 128 &&
+    place.lng <= 130
+  );
+}
+
+function geocodePlace(kakao: any, place: PlugParkPlace): Promise<{ lat: number; lng: number } | null> {
+  return new Promise((resolve) => {
+    const services = kakao?.maps?.services;
+    if (!services) {
+      resolve(null);
+      return;
+    }
+
+    const fallbackKeyword = () => {
+      const places = new services.Places();
+      const keyword = `부산 ${place.name}`;
+      places.keywordSearch(
+        keyword,
+        (result: any[], status: string) => {
+          if (status === services.Status.OK && result?.length) {
+            resolve({ lat: Number(result[0].y), lng: Number(result[0].x) });
+          } else {
+            resolve(null);
+          }
+        },
+        { size: 5 },
+      );
+    };
+
+    const address =
+      place.address && place.address !== '주소 정보 없음'
+        ? place.address
+        : '';
+
+    if (!address) {
+      fallbackKeyword();
+      return;
+    }
+
+    const geocoder = new services.Geocoder();
+    geocoder.addressSearch(address, (result: any[], status: string) => {
+      if (status === services.Status.OK && result?.length) {
+        resolve({ lat: Number(result[0].y), lng: Number(result[0].x) });
+      } else {
+        fallbackKeyword();
+      }
+    });
+  });
+}
+
+export default function KakaoMap({ places, selected, userLocation, onSelect, onLocate }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<any>(null);
   const kakaoRef = useRef<any>(null);
   const overlaysRef = useRef<any[]>([]);
   const userOverlayRef = useRef<any>(null);
+  const resolvedPositionsRef = useRef<Map<string, { lat: number; lng: number }>>(new Map());
+  const [resolvedVersion, setResolvedVersion] = useState(0);
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
   const [errorText, setErrorText] = useState('');
 
@@ -90,6 +150,51 @@ export default function KakaoMap({ places, selected, userLocation, onSelect }: P
   }, [appKey]);
 
   useEffect(() => {
+    if (status !== 'ready' || !kakaoRef.current) return;
+
+    let cancelled = false;
+    const kakao = kakaoRef.current;
+
+    const unresolved = places
+      .filter((place) => !hasValidCoordinates(place) && !resolvedPositionsRef.current.has(place.id))
+      .slice(0, 60);
+
+    if (!unresolved.length) return;
+
+    const run = async () => {
+      // Kakao local 호출을 한꺼번에 몰아치지 않도록 4개씩 처리합니다.
+      for (let i = 0; i < unresolved.length; i += 4) {
+        const batch = unresolved.slice(i, i + 4);
+        const results = await Promise.all(
+          batch.map(async (place) => ({
+            id: place.id,
+            coords: await geocodePlace(kakao, place),
+          })),
+        );
+
+        if (cancelled) return;
+
+        let changed = false;
+        for (const result of results) {
+          if (result.coords) {
+            resolvedPositionsRef.current.set(result.id, result.coords);
+            changed = true;
+          }
+        }
+
+        if (changed) setResolvedVersion((version) => version + 1);
+        await new Promise((resolve) => window.setTimeout(resolve, 60));
+      }
+    };
+
+    void run();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [places, status]);
+
+  useEffect(() => {
     if (status !== 'ready' || !mapRef.current || !kakaoRef.current) return;
     const kakao = kakaoRef.current;
     const map = mapRef.current;
@@ -100,16 +205,25 @@ export default function KakaoMap({ places, selected, userLocation, onSelect }: P
     if (!places.length) return;
     const bounds = new kakao.maps.LatLngBounds();
 
+    let markerCount = 0;
+
     places.slice(0, 150).forEach((place) => {
-      const position = new kakao.maps.LatLng(place.lat, place.lng);
+      const coords = hasValidCoordinates(place)
+        ? { lat: place.lat as number, lng: place.lng as number }
+        : resolvedPositionsRef.current.get(place.id);
+
+      if (!coords) return;
+
+      const position = new kakao.maps.LatLng(coords.lat, coords.lng);
       bounds.extend(position);
+      markerCount += 1;
 
       const marker = document.createElement('button');
       marker.type = 'button';
       marker.className = 'kakao-place-marker';
       marker.title = place.name;
       marker.setAttribute('aria-label', `${place.name} 선택`);
-      marker.innerHTML = `<span>P</span><b>⚡</b>`;
+      marker.innerHTML = place.charger.total > 0 ? `<span>P</span><b>⚡</b>` : `<span>P</span>`;
       marker.addEventListener('click', (event) => {
         event.stopPropagation();
         onSelect(place);
@@ -127,7 +241,7 @@ export default function KakaoMap({ places, selected, userLocation, onSelect }: P
       overlaysRef.current.push(overlay);
     });
 
-    if (!selected) {
+    if (!selected && markerCount > 0) {
       map.setBounds(bounds, 42, 42, 42, 42);
     }
 
@@ -135,14 +249,18 @@ export default function KakaoMap({ places, selected, userLocation, onSelect }: P
       overlaysRef.current.forEach((overlay) => overlay.setMap(null));
       overlaysRef.current = [];
     };
-  }, [places, status, onSelect]);
+  }, [places, status, onSelect, resolvedVersion]);
 
   useEffect(() => {
     if (!selected || status !== 'ready' || !mapRef.current || !kakaoRef.current) return;
-    const position = new kakaoRef.current.maps.LatLng(selected.lat, selected.lng);
+    const coords = hasValidCoordinates(selected)
+      ? { lat: selected.lat as number, lng: selected.lng as number }
+      : resolvedPositionsRef.current.get(selected.id);
+    if (!coords) return;
+    const position = new kakaoRef.current.maps.LatLng(coords.lat, coords.lng);
     mapRef.current.panTo(position);
     if (mapRef.current.getLevel() > 5) mapRef.current.setLevel(5);
-  }, [selected, status]);
+  }, [selected, status, resolvedVersion]);
 
   useEffect(() => {
     if (status !== 'ready' || !mapRef.current || !kakaoRef.current) return;
@@ -154,14 +272,18 @@ export default function KakaoMap({ places, selected, userLocation, onSelect }: P
     const node = document.createElement('div');
     node.className = 'kakao-user-marker';
     node.title = '현재 위치';
+    const position = new kakao.maps.LatLng(userLocation.lat, userLocation.lng);
     userOverlayRef.current = new kakao.maps.CustomOverlay({
       map: mapRef.current,
-      position: new kakao.maps.LatLng(userLocation.lat, userLocation.lng),
+      position,
       content: node,
       xAnchor: 0.5,
       yAnchor: 0.5,
       zIndex: 5,
     });
+
+    mapRef.current.panTo(position);
+    if (mapRef.current.getLevel() > 5) mapRef.current.setLevel(5);
 
     return () => userOverlayRef.current?.setMap(null);
   }, [userLocation, status]);
@@ -177,7 +299,18 @@ export default function KakaoMap({ places, selected, userLocation, onSelect }: P
           <small>카카오맵 사용 설정과 JavaScript SDK 도메인도 확인하세요.</small>
         </div>
       )}
-      {status === 'ready' && <div className="map-caption">P⚡ 주차 + 충전 매칭 장소</div>}
+      {status === 'ready' && (
+        <>
+          <button className="map-location-button" type="button" onClick={onLocate}>
+            ◎ 내 위치
+          </button>
+          <div className="map-caption">
+            <span>P</span> 공영주차장
+            <span className="caption-separator">·</span>
+            <span>P⚡</span> EV 매칭
+          </div>
+        </>
+      )}
     </div>
   );
 }
