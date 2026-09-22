@@ -61,8 +61,13 @@ if (!existsSync(PROBE_FILE)) {
 }
 
 const probe = JSON.parse(await readFile(PROBE_FILE, 'utf8'));
-if (probe.ok !== true || Number(probe.publicApiCalls || 0) !== 1 || Number(probe.remoteD1Writes || 0) !== 0) {
-  throw new Error('Parking API probe가 PASS가 아닙니다.');
+if (
+  probe.ok !== true ||
+  probe.releaseReady !== true ||
+  Number(probe.publicApiCalls || 0) !== 1 ||
+  Number(probe.remoteD1Writes || 0) !== 0
+) {
+  throw new Error('Parking API probe가 release-ready PASS가 아닙니다.');
 }
 
 const envFile = await localEnv();
