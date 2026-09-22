@@ -1398,7 +1398,7 @@ async function syncParkingRealtime(env: Env) {
       });
     }
 
-    await upsertParkingRealtimeLinks(env.DB, linkRows);    await upsertParkingRealtimeLinks(env.DB, linkRows);
+    await upsertParkingRealtimeLinks(env.DB, linkRows);
 
     const snapshot = [...snapshotByParkingId.values()];
     const chunkStatements: D1PreparedStatement[] = [
@@ -2728,36 +2728,35 @@ function joinRealtimeParkingByName(
 
     if (rule) {
       const ruleIndex = output.findIndex((base) => base.id === rule.parkingId);
-      if (ruleIndex >= 0) {
+      if (ruleIndex >= 0 && (!usedBaseIndexes.has(ruleIndex) || rule.allowAggregate)) {
         const current = output[ruleIndex];
         const numbers = normalizeRealtimeNumbers(realtime);
-        if (!usedBaseIndexes.has(ruleIndex) || rule.allowAggregate) {
-          if (!rule.allowAggregate) usedBaseIndexes.add(ruleIndex);
-          details.push({
-            realtimeCode,
-            realtimeName,
-            normalizedRealtimeName: normalizedRealtime,
-            baseId: current.id,
-            baseName: current.name,
-            type: 'code-rule',
-            score: rule.confidence,
-          });
+        if (!rule.allowAggregate) usedBaseIndexes.add(ruleIndex);
 
-          if (numbers.consistent) {
-            output[ruleIndex] = {
-              ...current,
-              parkingUpdatedAt: cleanValue(realtime.lastupdatetime) || current.parkingUpdatedAt,
-              parkingRealtime: numbers.available != null,
-              parkingSource: 'merged',
-              realtimeMatch: {
-                matched: true,
-                type: 'code-rule',
-                realtimeName,
-              },
-            };
-          }
-          continue;
+        details.push({
+          realtimeCode,
+          realtimeName,
+          normalizedRealtimeName: normalizedRealtime,
+          baseId: current.id,
+          baseName: current.name,
+          type: 'code-rule',
+          score: rule.confidence,
+        });
+
+        if (numbers.consistent) {
+          output[ruleIndex] = {
+            ...current,
+            parkingUpdatedAt: cleanValue(realtime.lastupdatetime) || current.parkingUpdatedAt,
+            parkingRealtime: numbers.available != null,
+            parkingSource: 'merged',
+            realtimeMatch: {
+              matched: true,
+              type: 'code-rule',
+              realtimeName,
+            },
+          };
         }
+        continue;
       }
     }
 
@@ -2873,17 +2872,1099 @@ function joinRealtimeParkingByName(
     });
   }
 
-  const summary = {
-    realtimeCount: realtimeItems.length,
-    matched: details.filter((detail) => detail.baseId != null).length,
-    exact: details.filter((detail) => detail.type === 'exact-name').length,
-    contained: details.filter((detail) => detail.type === 'contained-name').length,
-    similar: details.filter((detail) => detail.type === 'similar-name').length,
-    ambiguous: details.filter((detail) => detail.type === 'ambiguous').length,
-    unmatched: details.filter((detail) => detail.type === 'unmatched').length,
+  return {
+    items: dedupeParking(output),
+    details,
+    summary: summarizeJoin(details),
+  };
+}
+
+function emptyJoinSummary(): ParkingJoinResult['summary'] {
+  return {
+    realtimeCount: 0,
+    matched: 0,
+    exact: 0,
+    contained: 0,
+    similar: 0,
+    ambiguous: 0,
+    unmatched: 0,
+  };
+}
+
+function summarizeJoin(details: RealtimeJoinDetail[]): ParkingJoinResult['summary'] {
+  return {
+    realtimeCount: details.length,
+    matched: details.filter((item) => ['code-rule', 'exact-name', 'contained-name', 'similar-name'].includes(item.type)).length,
+    exact: details.filter((item) => item.type === 'exact-name').length,
+    contained: details.filter((item) => item.type === 'contained-name').length,
+    similar: details.filter((item) => item.type === 'similar-name').length,
+    ambiguous: details.filter((item) => item.type === 'ambiguous').length,
+    unmatched: details.filter((item) => item.type === 'unmatched').length,
+  };
+}
+
+function parkingRowQuality(item: ParkingBase) {
+  let score = 0;
+  if (item.parkingRealtime) score += 100;
+  if (item.availableParking != null) score += 20;
+  if (item.occupiedParking != null) score += 10;
+  if (item.lat != null && item.lng != null) score += 8;
+  if (item.capacity != null) score += 4;
+  if (item.address && item.address !== '주소 정보 없음') score += 2;
+  if (item.agency) score += 1;
+  return score;
+}
+
+function dedupeParkingById(items: ParkingBase[]) {
+  const byId = new Map<string, ParkingBase>();
+  let duplicateCount = 0;
+
+  for (const item of items) {
+    const id = String(item.id || '').trim();
+    if (!id) continue;
+
+    const current = byId.get(id);
+    if (!current) {
+      byId.set(id, item);
+      continue;
+    }
+
+    duplicateCount += 1;
+    const currentScore = parkingRowQuality(current);
+    const incomingScore = parkingRowQuality(item);
+    if (incomingScore > currentScore) {
+      byId.set(id, item);
+      continue;
+    }
+
+    // 동점이면 더 최신 실시간 시각을 가진 행을 선택합니다.
+    if (incomingScore === currentScore) {
+      const currentUpdated = String(current.parkingUpdatedAt || '');
+      const incomingUpdated = String(item.parkingUpdatedAt || '');
+      if (incomingUpdated > currentUpdated) byId.set(id, item);
+    }
+  }
+
+  return {
+    items: [...byId.values()],
+    inputCount: items.length,
+    uniqueCount: byId.size,
+    duplicateCount,
+  };
+}
+
+function dedupeParking(items: ParkingBase[]) {
+  const byId = dedupeParkingById(items).items;
+  const seen = new Set<string>();
+  const result: ParkingBase[] = [];
+  for (const item of byId) {
+    const key = `${normalizeParkingName(item.name)}|${normalizeAddress(item.address)}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push(item);
+  }
+  return result;
+}
+
+/* -------------------------------------------------------------------------- */
+/* EV API data layer                                                           */
+/* -------------------------------------------------------------------------- */
+
+async function fetchEvInfoPage(serviceKey: string, pageNo: number) {
+  const url = new URL(EV_INFO_URL);
+  url.searchParams.set('serviceKey', normalizeServiceKey(serviceKey));
+  url.searchParams.set('pageNo', String(pageNo));
+  url.searchParams.set('numOfRows', String(EV_INFO_PAGE_SIZE));
+  url.searchParams.set('zcode', '26');
+  url.searchParams.set('dataType', 'JSON');
+
+  const payload = await fetchStructuredWithRetry(url, `EV info page ${pageNo}`);
+  ensureNormalResult(payload, 'EV getChargerInfo');
+  const rawItems = extractKnownItems(payload);
+  const parsed = parseEvInfoItems(rawItems);
+
+  return {
+    rawItems,
+    validItems: parsed.valid.filter((item) => item.zcode === '26' || item.addr.startsWith('부산')),
+    invalid: parsed.invalid,
+    totalCount: readMetaNumber(payload, 'totalCount'),
+  };
+}
+
+function parseEvInfoItems(rawItems: RawObject[]) {
+  const valid: EvChargerInfoApiItem[] = [];
+  const invalid: { index: number; schema: SchemaCheck }[] = [];
+
+  rawItems.forEach((raw, index) => {
+    const schema = validateFields(raw, EV_INFO_REQUIRED_FIELDS);
+    if (!schema.valid) {
+      invalid.push({ index, schema });
+      return;
+    }
+
+    valid.push({
+      statNm: field(raw, 'statNm'),
+      statId: field(raw, 'statId'),
+      chgerId: field(raw, 'chgerId'),
+      chgerType: field(raw, 'chgerType'),
+      addr: field(raw, 'addr'),
+      addrDetail: field(raw, 'addrDetail'),
+      location: field(raw, 'location'),
+      lat: field(raw, 'lat'),
+      lng: field(raw, 'lng'),
+      useTime: field(raw, 'useTime'),
+      busiId: field(raw, 'busiId'),
+      bnm: field(raw, 'bnm'),
+      busiNm: field(raw, 'busiNm'),
+      busiCall: field(raw, 'busiCall'),
+      stat: field(raw, 'stat'),
+      statUpdDt: field(raw, 'statUpdDt'),
+      lastTsdt: field(raw, 'lastTsdt'),
+      lastTedt: field(raw, 'lastTedt'),
+      nowTsdt: field(raw, 'nowTsdt'),
+      output: field(raw, 'output'),
+      method: field(raw, 'method'),
+      zcode: field(raw, 'zcode'),
+      zscode: field(raw, 'zscode'),
+      kind: field(raw, 'kind'),
+      kindDetail: field(raw, 'kindDetail'),
+      parkingFree: field(raw, 'parkingFree'),
+      note: field(raw, 'note'),
+      limitYn: field(raw, 'limitYn'),
+      limitDetail: field(raw, 'limitDetail'),
+      delYn: field(raw, 'delYn'),
+      delDetail: field(raw, 'delDetail'),
+      trafficYn: field(raw, 'trafficYn'),
+      year: field(raw, 'year'),
+      floorNum: field(raw, 'floorNum'),
+      floorType: field(raw, 'floorType'),
+      maker: field(raw, 'maker'),
+    });
+  });
+
+  return { valid, invalid };
+}
+
+function parseEvStatusItems(rawItems: RawObject[]) {
+  const valid: EvChargerStatusApiItem[] = [];
+  const invalid: { index: number; schema: SchemaCheck }[] = [];
+
+  rawItems.forEach((raw, index) => {
+    const schema = validateFields(raw, EV_STATUS_REQUIRED_FIELDS);
+    if (!schema.valid) {
+      invalid.push({ index, schema });
+      return;
+    }
+
+    valid.push({
+      busiId: field(raw, 'busiId'),
+      statId: field(raw, 'statId'),
+      chgerId: field(raw, 'chgerId'),
+      stat: field(raw, 'stat'),
+      statUpdDt: field(raw, 'statUpdDt'),
+      lastTsdt: field(raw, 'lastTsdt'),
+      lastTedt: field(raw, 'lastTedt'),
+      nowTsdt: field(raw, 'nowTsdt'),
+    });
+  });
+
+  return { valid, invalid };
+}
+
+function toParkingOnlyPlace(parking: ParkingBase) {
+  return {
+    ...parking,
+    charger: {
+      total: 0,
+      available: 0,
+      charging: 0,
+      fast: 0,
+      slow: 0,
+      stations: [] as string[],
+      nearestDistanceMeters: null as number | null,
+      lastUpdated: null as string | null,
+      matchConfidence: null as 'high' | 'medium' | 'low' | null,
+    },
+    source: 'live' as const,
+  };
+}
+
+/* -------------------------------------------------------------------------- */
+/* Diagnostics                                                                 */
+/* -------------------------------------------------------------------------- */
+
+async function diagnosticsParkingBase(serviceKey: string) {
+  try {
+    const raw = await fetchBaseParkingRaw(serviceKey);
+    const parsed = parseBaseParkingItems(raw.items);
+    return json({
+      ok: parsed.invalid.length === 0,
+      source: 'busan-city-parking',
+      totalCount: raw.totalCount,
+      itemCount: raw.items.length,
+      pageCount: raw.pageCount,
+      fetchSource: raw.source,
+      validCount: parsed.valid.length,
+      invalidCount: parsed.invalid.length,
+      schema: schemaDiagnostic(raw.items[0], BASE_REQUIRED_FIELDS),
+      sample: raw.items[0] || null,
+      invalid: parsed.invalid.slice(0, 5),
+    });
+  } catch (error) {
+    return upstreamError(error);
+  }
+}
+
+async function diagnosticsParkingRealtime(env: Env) {
+  if (!env.BUSAN_REALTIME_PARKING_API_URL) {
+    return json({
+      ok: false,
+      configured: false,
+      message: '실시간 주차 API URL이 아직 설정되지 않았습니다.',
+      expectedFields: REALTIME_REQUIRED_FIELDS,
+    }, 200);
+  }
+
+  try {
+    const raw = await fetchRealtimeParkingRaw(
+      env.BUSAN_PARKING_API_KEY!,
+      env.BUSAN_REALTIME_PARKING_API_URL,
+    );
+    const parsed = parseRealtimeParkingItems(raw.items);
+    return json({
+      ok: parsed.invalid.length === 0 && parsed.valid.length > 0,
+      configured: true,
+      totalCount: raw.totalCount,
+      itemCount: raw.items.length,
+      validCount: parsed.valid.length,
+      invalidCount: parsed.invalid.length,
+      requestMode: raw.requestMode,
+      apiCalls: raw.apiCalls,
+      schema: schemaDiagnostic(raw.items[0], REALTIME_REQUIRED_FIELDS),
+      sample: raw.items[0] || null,
+      invalid: parsed.invalid.slice(0, 5),
+    });
+  } catch (error) {
+    return upstreamError(error);
+  }
+}
+
+async function diagnosticsParkingMatching(env: Env) {
+  try {
+    const parking = await fetchMergedParking(env);
+    return json({
+      ok: true,
+      summary: parking.joinSummary,
+      matchedSamples: parking.joinDetails.filter((item) => ['exact-name', 'contained-name', 'similar-name'].includes(item.type)).slice(0, 20),
+      ambiguous: parking.joinDetails.filter((item) => item.type === 'ambiguous').slice(0, 20),
+      unmatched: parking.joinDetails.filter((item) => item.type === 'unmatched').slice(0, 20),
+    });
+  } catch (error) {
+    return upstreamError(error);
+  }
+}
+
+async function diagnosticsEvInfo(serviceKey: string) {
+  try {
+    const page = await fetchEvInfoPage(serviceKey, 1);
+    return json({
+      ok: page.invalid.length === 0,
+      source: 'getChargerInfo',
+      request: { pageNo: 1, numOfRows: EV_INFO_PAGE_SIZE, zcode: '26', dataType: 'JSON' },
+      totalCountReported: page.totalCount,
+      rawItemCount: page.rawItems.length,
+      busanValidCount: page.validItems.length,
+      regionFilterHonored: page.rawItems.length === 0 ? null : page.validItems.length / page.rawItems.length >= 0.8,
+      schema: schemaDiagnostic(page.rawItems[0], EV_INFO_REQUIRED_FIELDS),
+      sample: page.rawItems[0] || null,
+      invalid: page.invalid.slice(0, 5),
+    });
+  } catch (error) {
+    return upstreamError(error);
+  }
+}
+
+async function diagnosticsEvStatus(serviceKey: string) {
+  try {
+    const url = new URL(EV_STATUS_URL);
+    url.searchParams.set('serviceKey', normalizeServiceKey(serviceKey));
+    url.searchParams.set('pageNo', '1');
+    url.searchParams.set('numOfRows', String(Math.min(EV_STATUS_PAGE_SIZE, 100)));
+    url.searchParams.set('period', '10');
+    url.searchParams.set('zcode', '26');
+    url.searchParams.set('dataType', 'JSON');
+    const payload = await fetchStructuredWithRetry(url, 'EV status diagnostics');
+    ensureNormalResult(payload, 'EV getChargerStatus');
+    const rawItems = extractKnownItems(payload);
+    const parsed = parseEvStatusItems(rawItems);
+    return json({
+      ok: parsed.invalid.length === 0,
+      source: 'getChargerStatus',
+      request: { pageNo: 1, numOfRows: Math.min(EV_STATUS_PAGE_SIZE, 100), period: 10, zcode: '26', dataType: 'JSON' },
+      totalCountReported: readMetaNumber(payload, 'totalCount'),
+      itemCount: rawItems.length,
+      validCount: parsed.valid.length,
+      schema: schemaDiagnostic(rawItems[0], EV_STATUS_REQUIRED_FIELDS),
+      sample: rawItems[0] || null,
+      invalid: parsed.invalid.slice(0, 5),
+    });
+  } catch (error) {
+    return upstreamError(error);
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+/* HTTP / payload parsing                                                      */
+/* -------------------------------------------------------------------------- */
+
+
+/* -------------------------------------------------------------------------- */
+/* v0.5.1 D1 foundation + EV Info ingest                                     */
+/* -------------------------------------------------------------------------- */
+
+function d1ConfigError() {
+  return json({
+    ok: false,
+    error: 'D1 binding DB가 설정되지 않았습니다. v0.5.1 설정 가이드를 적용해주세요.',
+  }, 503);
+}
+
+function validateIngestAdmin(request: Request, env: Env): Response | null {
+  const expected = env.INGEST_ADMIN_TOKEN?.trim();
+  if (!expected) return configError('INGEST_ADMIN_TOKEN');
+  const authorization = request.headers.get('authorization') || '';
+  if (authorization !== `Bearer ${expected}`) {
+    return json({ ok: false, error: 'EV ingest 관리자 인증에 실패했습니다.' }, 401);
+  }
+  return null;
+}
+
+async function getD1EvInfoState(db: D1Database) {
+  const state = await db.prepare(
+    `SELECT job_name, status, next_page, total_pages, reported_total_count,
+            last_success_at, last_error, run_id
+       FROM sync_state
+      WHERE job_name = ?1`,
+  ).bind(D1_EV_INFO_JOB).first<EvInfoSyncStateRow>();
+
+  const counts = await db.prepare(
+    `SELECT COUNT(*) AS charger_count,
+            COUNT(DISTINCT stat_id) AS station_count,
+            SUM(CASE WHEN del_yn = 'Y' THEN 1 ELSE 0 END) AS deleted_count
+       FROM ev_chargers`,
+  ).first<{ charger_count: number; station_count: number; deleted_count: number | null }>();
+
+  return {
+    ok: true,
+    dataLayerVersion: DATA_LAYER_VERSION,
+    job: D1_EV_INFO_JOB,
+    state: state || {
+      job_name: D1_EV_INFO_JOB,
+      status: 'not-started',
+      next_page: 1,
+      total_pages: null,
+      reported_total_count: null,
+      last_success_at: null,
+      last_error: null,
+      run_id: null,
+    },
+    stored: {
+      chargerCount: Number(counts?.charger_count || 0),
+      stationCount: Number(counts?.station_count || 0),
+      deletedCount: Number(counts?.deleted_count || 0),
+    },
+  };
+}
+
+async function getD1EvInfoStateSafe(db: D1Database) {
+  try {
+    return await getD1EvInfoState(db);
+  } catch (error) {
+    return { ok: false, error: safeError(error) };
+  }
+}
+
+async function ingestEvInfoPagesToD1(
+  db: D1Database,
+  serviceKey: string,
+  requestedPages: number,
+) {
+  const existing = await db.prepare(
+    `SELECT job_name, status, next_page, total_pages, reported_total_count,
+            last_success_at, last_error, run_id
+       FROM sync_state
+      WHERE job_name = ?1`,
+  ).bind(D1_EV_INFO_JOB).first<EvInfoSyncStateRow>();
+
+  let pageNo = Math.max(1, Number(existing?.next_page || 1));
+  let totalPages = existing?.total_pages == null ? null : Number(existing.total_pages);
+  let reportedTotalCount =
+    existing?.reported_total_count == null ? null : Number(existing.reported_total_count);
+  const runId = crypto.randomUUID();
+  const startedAt = new Date().toISOString();
+  const pages: Array<{
+    pageNo: number;
+    rawCount: number;
+    storedCount: number;
+    duplicateCount: number;
+    totalCount: number | null;
+  }> = [];
+
+  // Do not mutate the durable checkpoint before a page succeeds.
+  // If Cloudflare terminates this invocation (1102), the last good checkpoint stays intact.
+  try {
+    for (let step = 0; step < requestedPages; step += 1) {
+      if (totalPages != null && pageNo > totalPages) break;
+
+      await incrementApiUsage(db, 'ev_info');
+      const page = await fetchEvInfoPageForD1(serviceKey, pageNo);
+      await upsertEvInfoPage(db, page.items);
+
+      if (page.totalCount != null) {
+        if (reportedTotalCount != null && reportedTotalCount !== page.totalCount) {
+          throw new Error(
+            `EV_TOTAL_COUNT_CHANGED: 기존 ${reportedTotalCount}, page ${pageNo} 응답 ${page.totalCount}`,
+          );
+        }
+        reportedTotalCount = page.totalCount;
+        totalPages = Math.ceil(page.totalCount / EV_INFO_PAGE_SIZE);
+      }
+
+      const completedByShortPage = page.rawCount < EV_INFO_PAGE_SIZE;
+      const nextPage = pageNo + 1;
+      const completedByTotal = totalPages != null && nextPage > totalPages;
+      const complete = completedByShortPage || completedByTotal;
+      const completedAt = new Date().toISOString();
+
+      pages.push({
+        pageNo,
+        rawCount: page.rawCount,
+        storedCount: page.items.length,
+        duplicateCount: page.duplicateCount,
+        totalCount: page.totalCount,
+      });
+
+      pageNo = nextPage;
+      await upsertSyncState(db, {
+        status: complete ? 'complete' : 'running',
+        nextPage: pageNo,
+        totalPages,
+        reportedTotalCount,
+        lastSuccessAt: completedAt,
+        lastError: null,
+        runId,
+      });
+
+      if (complete) break;
+    }
+  } catch (error) {
+    await upsertSyncState(db, {
+      status: 'error',
+      nextPage: pageNo,
+      totalPages,
+      reportedTotalCount,
+      lastSuccessAt: existing?.last_success_at || null,
+      lastError: safeError(error),
+      runId,
+    });
+    throw error;
+  }
+
+  const state = await getD1EvInfoState(db);
+  return {
+    ok: true,
+    runId,
+    startedAt,
+    pagesRequested: requestedPages,
+    pagesProcessed: pages.length,
+    pages,
+    state,
+  };
+}
+
+async function fetchEvInfoPageForD1(
+  serviceKey: string,
+  requestedPageNo: number,
+): Promise<D1EvInfoPage> {
+  const url = new URL(EV_INFO_URL);
+  url.searchParams.set('serviceKey', normalizeServiceKey(serviceKey));
+  url.searchParams.set('pageNo', String(requestedPageNo));
+  url.searchParams.set('numOfRows', String(EV_INFO_PAGE_SIZE));
+  url.searchParams.set('zcode', '26');
+  url.searchParams.set('dataType', 'JSON');
+
+  const payload = await fetchStructuredWithRetry(url, `D1 EV info page ${requestedPageNo}`);
+  ensureNormalResult(payload, 'EV getChargerInfo');
+
+  const responsePageNo = readMetaNumber(payload, 'pageNo');
+  if (responsePageNo == null) {
+    throw new Error(`EV_META_MISSING: pageNo가 없습니다. requested=${requestedPageNo}`);
+  }
+  if (responsePageNo !== requestedPageNo) {
+    throw new Error(
+      `EV_PAGE_MISMATCH: requested=${requestedPageNo}, response=${responsePageNo}`,
+    );
+  }
+
+  const responseNumOfRows = readMetaNumber(payload, 'numOfRows');
+  if (responseNumOfRows != null && responseNumOfRows !== EV_INFO_PAGE_SIZE) {
+    throw new Error(
+      `EV_PAGE_SIZE_MISMATCH: requested=${EV_INFO_PAGE_SIZE}, response=${responseNumOfRows}`,
+    );
+  }
+
+  const rawItems = extractKnownItems(payload);
+  const parsed = parseEvInfoItems(rawItems);
+  if (parsed.invalid.length > 0) {
+    const sample = parsed.invalid.slice(0, 3).map((item) => ({
+      index: item.index,
+      missing: item.schema.missing,
+    }));
+    throw new Error(
+      `EV_SCHEMA_MISMATCH: page=${requestedPageNo}, invalid=${parsed.invalid.length}, sample=${JSON.stringify(sample)}`,
+    );
+  }
+
+  const invalidIdentity = parsed.valid.filter(
+    (item) => !item.statId.trim() || !item.chgerId.trim() || !item.statNm.trim(),
+  );
+  if (invalidIdentity.length > 0) {
+    throw new Error(
+      `EV_IDENTITY_INVALID: page=${requestedPageNo}, count=${invalidIdentity.length}`,
+    );
+  }
+
+  const wrongRegion = parsed.valid.filter((item) => item.zcode !== '26');
+  if (wrongRegion.length > 0) {
+    const sample = wrongRegion.slice(0, 5).map((item) => ({
+      statId: item.statId,
+      chgerId: item.chgerId,
+      stationName: item.statNm,
+      zcode: item.zcode,
+      address: item.addr,
+    }));
+    throw new Error(
+      `EV_REGION_MISMATCH: zcode=26 요청에 타지역 ${wrongRegion.length}건. sample=${JSON.stringify(sample)}`,
+    );
+  }
+
+  const unique = new Map<string, EvChargerInfoApiItem>();
+  for (const item of parsed.valid) {
+    unique.set(evCompositeKey(item.statId, item.chgerId), item);
+  }
+
+  return {
+    items: [...unique.values()],
+    rawCount: rawItems.length,
+    pageNo: responsePageNo,
+    numOfRows: responseNumOfRows,
+    totalCount: readMetaNumber(payload, 'totalCount'),
+    duplicateCount: parsed.valid.length - unique.size,
+  };
+}
+
+async function upsertEvInfoPage(db: D1Database, items: EvChargerInfoApiItem[]) {
+  const syncedAt = new Date().toISOString();
+
+  // Preparing/binding 200 individual 38-column statements was expensive enough to
+  // trigger Worker 1102 on the free CPU budget. D1 supports SQLite JSON functions,
+  // so ship rows as JSON and expand them inside SQLite instead.
+  const rows = items.map((item) => ({
+    stat_id: item.statId,
+    chger_id: item.chgerId,
+    station_name: item.statNm,
+    normalized_station_name: normalizeParkingName(item.statNm),
+    charger_type: nullableText(item.chgerType),
+    address: nullableText(item.addr),
+    address_detail: nullableText(item.addrDetail),
+    location: nullableText(item.location),
+    lat: nullableNumber(item.lat),
+    lng: nullableNumber(item.lng),
+    use_time: nullableText(item.useTime),
+    busi_id: nullableText(item.busiId),
+    bnm: nullableText(item.bnm),
+    busi_name: nullableText(item.busiNm),
+    busi_call: nullableText(item.busiCall),
+    info_status: nullableText(item.stat),
+    info_status_updated_at: nullableText(item.statUpdDt),
+    last_start_at: nullableText(item.lastTsdt),
+    last_end_at: nullableText(item.lastTedt),
+    now_start_at: nullableText(item.nowTsdt),
+    output_kw: nullableNumber(item.output),
+    method: nullableText(item.method),
+    zcode: item.zcode,
+    zscode: nullableText(item.zscode),
+    kind: nullableText(item.kind),
+    kind_detail: nullableText(item.kindDetail),
+    parking_free: nullableText(item.parkingFree),
+    note: nullableText(item.note),
+    limit_yn: nullableText(item.limitYn),
+    limit_detail: nullableText(item.limitDetail),
+    del_yn: nullableText(item.delYn),
+    del_detail: nullableText(item.delDetail),
+    traffic_yn: nullableText(item.trafficYn),
+    year: nullableText(item.year),
+    floor_num: nullableText(item.floorNum),
+    floor_type: nullableText(item.floorType),
+    maker: nullableText(item.maker),
+    synced_at: syncedAt,
+  }));
+
+  const sql = `INSERT INTO ev_chargers (
+      stat_id, chger_id, station_name, normalized_station_name,
+      charger_type, address, address_detail, location, lat, lng,
+      use_time, busi_id, bnm, busi_name, busi_call,
+      info_status, info_status_updated_at,
+      last_start_at, last_end_at, now_start_at,
+      output_kw, method, zcode, zscode, kind, kind_detail,
+      parking_free, note, limit_yn, limit_detail,
+      del_yn, del_detail, traffic_yn, year, floor_num, floor_type, maker,
+      synced_at
+    )
+    SELECT
+      json_extract(j.value, '$.stat_id'),
+      json_extract(j.value, '$.chger_id'),
+      json_extract(j.value, '$.station_name'),
+      json_extract(j.value, '$.normalized_station_name'),
+      json_extract(j.value, '$.charger_type'),
+      json_extract(j.value, '$.address'),
+      json_extract(j.value, '$.address_detail'),
+      json_extract(j.value, '$.location'),
+      json_extract(j.value, '$.lat'),
+      json_extract(j.value, '$.lng'),
+      json_extract(j.value, '$.use_time'),
+      json_extract(j.value, '$.busi_id'),
+      json_extract(j.value, '$.bnm'),
+      json_extract(j.value, '$.busi_name'),
+      json_extract(j.value, '$.busi_call'),
+      json_extract(j.value, '$.info_status'),
+      json_extract(j.value, '$.info_status_updated_at'),
+      json_extract(j.value, '$.last_start_at'),
+      json_extract(j.value, '$.last_end_at'),
+      json_extract(j.value, '$.now_start_at'),
+      json_extract(j.value, '$.output_kw'),
+      json_extract(j.value, '$.method'),
+      json_extract(j.value, '$.zcode'),
+      json_extract(j.value, '$.zscode'),
+      json_extract(j.value, '$.kind'),
+      json_extract(j.value, '$.kind_detail'),
+      json_extract(j.value, '$.parking_free'),
+      json_extract(j.value, '$.note'),
+      json_extract(j.value, '$.limit_yn'),
+      json_extract(j.value, '$.limit_detail'),
+      json_extract(j.value, '$.del_yn'),
+      json_extract(j.value, '$.del_detail'),
+      json_extract(j.value, '$.traffic_yn'),
+      json_extract(j.value, '$.year'),
+      json_extract(j.value, '$.floor_num'),
+      json_extract(j.value, '$.floor_type'),
+      json_extract(j.value, '$.maker'),
+      json_extract(j.value, '$.synced_at')
+    FROM json_each(?1) AS j
+    WHERE 1
+    ON CONFLICT(stat_id, chger_id) DO UPDATE SET
+      station_name=excluded.station_name,
+      normalized_station_name=excluded.normalized_station_name,
+      charger_type=excluded.charger_type,
+      address=excluded.address,
+      address_detail=excluded.address_detail,
+      location=excluded.location,
+      lat=excluded.lat,
+      lng=excluded.lng,
+      use_time=excluded.use_time,
+      busi_id=excluded.busi_id,
+      bnm=excluded.bnm,
+      busi_name=excluded.busi_name,
+      busi_call=excluded.busi_call,
+      info_status=excluded.info_status,
+      info_status_updated_at=excluded.info_status_updated_at,
+      last_start_at=excluded.last_start_at,
+      last_end_at=excluded.last_end_at,
+      now_start_at=excluded.now_start_at,
+      output_kw=excluded.output_kw,
+      method=excluded.method,
+      zcode=excluded.zcode,
+      zscode=excluded.zscode,
+      kind=excluded.kind,
+      kind_detail=excluded.kind_detail,
+      parking_free=excluded.parking_free,
+      note=excluded.note,
+      limit_yn=excluded.limit_yn,
+      limit_detail=excluded.limit_detail,
+      del_yn=excluded.del_yn,
+      del_detail=excluded.del_detail,
+      traffic_yn=excluded.traffic_yn,
+      year=excluded.year,
+      floor_num=excluded.floor_num,
+      floor_type=excluded.floor_type,
+      maker=excluded.maker,
+      synced_at=excluded.synced_at`;
+
+  // Keep each JSON parameter comfortably below D1 row/binding size limits.
+  for (let index = 0; index < rows.length; index += 100) {
+    const chunk = rows.slice(index, index + 100);
+    await db.prepare(sql).bind(JSON.stringify(chunk)).run();
+  }
+}
+
+async function upsertSyncState(
+  db: D1Database,
+  value: {
+    status: string;
+    nextPage: number;
+    totalPages: number | null;
+    reportedTotalCount: number | null;
+    lastSuccessAt: string | null;
+    lastError: string | null;
+    runId: string;
+  },
+) {
+  await db.prepare(
+    `INSERT INTO sync_state (
+       job_name, status, next_page, total_pages, reported_total_count,
+       last_success_at, last_error, run_id
+     ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+     ON CONFLICT(job_name) DO UPDATE SET
+       status=excluded.status,
+       next_page=excluded.next_page,
+       total_pages=excluded.total_pages,
+       reported_total_count=excluded.reported_total_count,
+       last_success_at=excluded.last_success_at,
+       last_error=excluded.last_error,
+       run_id=excluded.run_id`,
+  ).bind(
+    D1_EV_INFO_JOB,
+    value.status,
+    value.nextPage,
+    value.totalPages,
+    value.reportedTotalCount,
+    value.lastSuccessAt,
+    value.lastError,
+    value.runId,
+  ).run();
+}
+
+async function incrementApiUsageBy(db: D1Database, apiName: string, count: number) {
+  const safeCount = Math.max(0, Math.trunc(Number(count || 0)));
+  if (safeCount <= 0) return;
+  const usageDate = new Date().toISOString().slice(0, 10);
+  await db.prepare(
+    `INSERT INTO api_usage_daily (usage_date, api_name, request_count)
+     VALUES (?1, ?2, ?3)
+     ON CONFLICT(usage_date, api_name) DO UPDATE SET
+       request_count = request_count + excluded.request_count`,
+  ).bind(usageDate, apiName, safeCount).run();
+}
+
+async function incrementApiUsage(db: D1Database, apiName: string) {
+  await incrementApiUsageBy(db, apiName, 1);
+}
+
+function nullableText(value: string) {
+  const cleaned = cleanValue(value);
+  return cleaned || null;
+}
+
+function nullableNumber(value: string) {
+  return numberField(value);
+}
+
+async function fetchStructuredWithBackoff(
+  url: URL,
+  label: string,
+  maxAttempts = 3,
+) {
+  let lastError: unknown = null;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      return await fetchStructured(url);
+    } catch (error) {
+      lastError = error;
+      const message = safeError(error);
+      const retryable =
+        message.includes('503') ||
+        message.includes('SERVICETIMEOUT') ||
+        message.includes('서비스 연결실패');
+
+      if (!retryable || attempt >= maxAttempts) {
+        throw new Error(`${label} 실패: ${message}`);
+      }
+
+      await delay(350 * attempt);
+    }
+  }
+
+  throw new Error(`${label} 실패: ${safeError(lastError)}`);
+}
+
+function countedFetchError(label: string, error: unknown, attempts: number) {
+  const wrapped = new Error(`${label}: ${safeError(error)}`) as Error & { apiAttempts?: number };
+  wrapped.apiAttempts = attempts;
+  return wrapped;
+}
+
+function readApiAttempts(error: unknown) {
+  if (error && typeof error === 'object' && 'apiAttempts' in error) {
+    const count = Number((error as { apiAttempts?: number }).apiAttempts || 0);
+    if (Number.isFinite(count) && count > 0) return Math.trunc(count);
+  }
+  return 1;
+}
+
+async function fetchStructuredWithRetryCounted(url: URL, label: string) {
+  let attempts = 0;
+  try {
+    attempts += 1;
+    return { payload: await fetchStructured(url), attempts };
+  } catch (error) {
+    const message = safeError(error);
+    if (!message.includes('503') && !message.includes('SERVICETIMEOUT')) {
+      throw countedFetchError(label, error, attempts);
+    }
+  }
+
+  await delay(400);
+
+  try {
+    attempts += 1;
+    return { payload: await fetchStructured(url), attempts };
+  } catch (error) {
+    throw countedFetchError(`${label} 재시도 실패`, error, attempts);
+  }
+}
+
+async function fetchStructuredWithRetry(url: URL, label: string) {
+  try {
+    return await fetchStructured(url);
+  } catch (error) {
+    const message = safeError(error);
+    if (!message.includes('503') && !message.includes('SERVICETIMEOUT')) throw error;
+    await delay(400);
+    try {
+      return await fetchStructured(url);
+    } catch (retryError) {
+      throw new Error(`${label} 재시도 실패: ${safeError(retryError)}`);
+    }
+  }
+}
+
+async function fetchStructured(url: URL): Promise<RawObject> {
+  const response = await fetch(url.toString(), {
+    headers: { Accept: 'application/json, application/xml;q=0.9, text/xml;q=0.8, */*;q=0.1' },
+  });
+  const contentType = response.headers.get('content-type') || '';
+
+  if (!response.ok) {
+    const raw = await response.text();
+    throw new Error(`Upstream HTTP ${response.status}: ${compact(raw).slice(0, 300)}`);
+  }
+
+  if (contentType.includes('json')) {
+    const parsed = await response.json() as unknown;
+    if (!isObject(parsed)) throw new Error('JSON root가 object가 아닙니다.');
+    return parsed;
+  }
+
+  const raw = await response.text();
+  return parseStructuredPayload(raw, contentType);
+}
+
+function parseStructuredPayload(raw: string, contentType: string): RawObject {
+  const text = raw.trim();
+  if (!text) throw new Error('외부 API가 빈 응답을 반환했습니다.');
+  if (contentType.includes('json') || text.startsWith('{') || text.startsWith('[')) {
+    try {
+      const parsed = JSON.parse(text) as unknown;
+      if (!isObject(parsed)) throw new Error('JSON root가 object가 아닙니다.');
+      return parsed;
+    } catch (error) {
+      throw new Error(`JSON 파싱 실패: ${safeError(error)}`);
+    }
+  }
+  if (text.startsWith('<')) return parseXmlPayload(text);
+  throw new Error(`알 수 없는 응답 형식: ${compact(text).slice(0, 180)}`);
+}
+
+function parseXmlPayload(xml: string): RawObject {
+  const items = [...xml.matchAll(/<item>([\s\S]*?)<\/item>/gi)].map((match) => {
+    const item: RawObject = {};
+    for (const fieldMatch of match[1].matchAll(/<([A-Za-z0-9_]+)(?:\s[^>]*)?>([\s\S]*?)<\/\1>|<([A-Za-z0-9_]+)\s*\/>/g)) {
+      const key = fieldMatch[1] || fieldMatch[3];
+      const value = fieldMatch[2] ?? '';
+      if (key) item[key] = decodeXml(value.trim());
+    }
+    return item;
+  });
+
+  const resultCode = xmlTag(xml, 'resultCode');
+  const resultMsg = xmlTag(xml, 'resultMsg');
+  const returnReasonCode = xmlTag(xml, 'returnReasonCode');
+  const returnAuthMsg = xmlTag(xml, 'returnAuthMsg');
+  const errMsg = xmlTag(xml, 'errMsg');
+  const totalCount = xmlTag(xml, 'totalCount');
+  const pageNo = xmlTag(xml, 'pageNo');
+  const numOfRows = xmlTag(xml, 'numOfRows');
+
+  return {
+    response: {
+      header: {
+        resultCode,
+        resultMsg,
+        returnReasonCode,
+        returnAuthMsg,
+        errMsg,
+        totalCount,
+        pageNo,
+        numOfRows,
+      },
+      body: { items: { item: items }, totalCount, pageNo, numOfRows },
+    },
+  };
+}
+
+function extractKnownItems(payload: RawObject): RawObject[] {
+  const response = objectField(payload, 'response');
+  const body = objectField(response, 'body') || objectField(payload, 'body');
+  const itemsNode = objectField(body, 'items') || objectField(payload, 'items');
+  const item = itemsNode?.item;
+
+  if (Array.isArray(item)) return item.filter(isObject);
+  if (isObject(item)) return [item];
+  if (Array.isArray(itemsNode)) return itemsNode.filter(isObject);
+  return [];
+}
+
+function ensureNormalResult(payload: RawObject, source: string) {
+  const resultCode = readMetaString(payload, 'resultCode');
+  const resultMsg = readMetaString(payload, 'resultMsg');
+  const returnReasonCode = readMetaString(payload, 'returnReasonCode');
+  const returnAuthMsg = readMetaString(payload, 'returnAuthMsg');
+  const errMsg = readMetaString(payload, 'errMsg');
+
+  if (returnReasonCode || returnAuthMsg || errMsg) {
+    throw new Error(
+      `${source} API 오류 ${returnReasonCode || resultCode || 'UNKNOWN'}: ` +
+      `${errMsg || returnAuthMsg || resultMsg || 'unknown'}`,
+    );
+  }
+
+  if (resultCode && resultCode !== '00') {
+    throw new Error(`${source} API 오류 ${resultCode}: ${resultMsg || 'unknown'}`);
+  }
+}
+
+function readMetaString(payload: RawObject, key: string) {
+  const response = objectField(payload, 'response');
+  const header = objectField(response, 'header');
+  const body = objectField(response, 'body');
+  return field(header || {}, key) || field(body || {}, key) || field(payload, key);
+}
+
+function readMetaNumber(payload: RawObject, key: string) {
+  const value = readMetaString(payload, key).trim();
+  if (!value) return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Primitive parsers / validation                                              */
+/* -------------------------------------------------------------------------- */
+
+function validateFields(raw: RawObject, required: readonly string[]): SchemaCheck {
+  const receivedKeys = Object.keys(raw);
+  const missing = required.filter((key) => !receivedKeys.includes(key));
+  return { valid: missing.length === 0, missing: [...missing], receivedKeys };
+}
+
+function schemaDiagnostic(raw: RawObject | undefined, required: readonly string[]) {
+  if (!raw) return { valid: false, missing: [...required], receivedKeys: [] };
+  return validateFields(raw, required);
+}
+
+function field(raw: RawObject, key: string): string {
+  const value = raw[key];
+  if (value == null) return '';
+  return String(value).trim();
+}
+
+function cleanValue(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed || trimmed === '-' || trimmed.toLowerCase() === 'null') return '';
+  return trimmed;
+}
+
+function numberField(value: string) {
+  const cleaned = cleanValue(value).replace(/,/g, '');
+  if (!cleaned) return null;
+  const parsed = Number(cleaned);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function latitudeField(value: string) {
+  const parsed = numberField(value);
+  return parsed != null && parsed >= 34 && parsed <= 36 ? parsed : null;
+}
+
+function longitudeField(value: string) {
+  const parsed = numberField(value);
+  return parsed != null && parsed >= 128 && parsed <= 130 ? parsed : null;
+}
+
+function normalizeParkingName(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/부산광역시|부산시/g, '')
+    .replace(/공영주차장|노외공영주차장|노상공영주차장|공영|주차장/g, '')
+    .replace(/[\s,\.·ㆍ()\[\]{}\-_\/]/g, '')
+    .trim();
+}
+
+function normalizeAddress(value: string) {
+  return cleanValue(value)
+    .toLowerCase()
+    .replace(/부산광역시|부산시/g, '')
+    .replace(/[\s,\.·ㆍ()\[\]{}\-_\/]/g, '')
+    .trim();
+}
+
+function diceSimilarity(a: string, b: string) {
+  if (!a || !b) return 0;
+  if (a === b) return 1;
+  if (a.length < 2 || b.length < 2) return 0;
+
+  const pairs = (value: string) => {
+    const map = new Map<string, number>();
+    for (let i = 0; i < value.length - 1; i += 1) {
+      const pair = value.slice(i, i + 2);
+      map.set(pair, (map.get(pair) || 0) + 1);
+    }
+    return map;
   };
 
-  return { items: output, details, summary };
+  const left = pairs(a);
+  const right = pairs(b);
+  let intersection = 0;
+  let leftCount = 0;
+  let rightCount = 0;
+  for (const count of left.values()) leftCount += count;
+  for (const count of right.values()) rightCount += count;
+  for (const [pair, count] of left) intersection += Math.min(count, right.get(pair) || 0);
+  return (2 * intersection) / (leftCount + rightCount);
+}
+
+function evCompositeKey(statId: string, chgerId: string) {
+  return `${statId}:${chgerId}`;
+}
+
+function haversineMeters(aLat: number, aLng: number, bLat: number, bLng: number) {
+  const radius = 6371000;
+  const rad = (value: number) => (value * Math.PI) / 180;
+  const dLat = rad(bLat - aLat);
+  const dLng = rad(bLng - aLng);
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(rad(aLat)) * Math.cos(rad(bLat)) * Math.sin(dLng / 2) ** 2;
+  return 2 * radius * Math.asin(Math.sqrt(h));
 }
 
 function chunkArray<T>(items: T[], size: number) {
