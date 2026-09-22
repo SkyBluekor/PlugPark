@@ -37,6 +37,9 @@ jobs:
       - name: P2 release gate static verify
         run: npm run verify:release-v072-p2
 
+      - name: P2 D1 read budget verify
+        run: npm run verify:d1-read-budget-v072
+
       - name: P2 release scripts syntax
         run: |
           node --check scripts/preflight-v072-p2.mjs

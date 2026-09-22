@@ -744,7 +744,7 @@ async function handlePlaces(env: Env, _ctx: ExecutionContext) {
        ORDER BY charger_available DESC, available_parking DESC, p.name ASC`,
     ).all<ParkingReadRow>();
 
-    const liveState = await getLiveState(env.DB, env);
+    const liveFreshness = await getLiveFreshnessState(env.DB, env);
     const basePlaces = rows.results.map(readRowToPlace).map((place) => ({
       ...place,
       charger: {
@@ -783,11 +783,25 @@ async function handlePlaces(env: Env, _ctx: ExecutionContext) {
       realtimeParkingFresh: parkingLive.fresh,
       realtimeParkingUpdatedAt: parkingLive.fetchedAt,
       realtimeMessage: parkingLive.message,
-      evStatusFresh: liveState.evStatus.syncFresh,
-      evStatusUpdatedAt: liveState.evStatus.lastIncrementalAt,
-      evStatusCoverageComplete: liveState.evStatus.coverageComplete,
-      evStatusBaselineAt: liveState.evStatus.baselineAt,
-      liveState,
+      evStatusFresh: liveFreshness.evStatusFresh,
+      evStatusUpdatedAt: liveFreshness.evStatusUpdatedAt,
+      evStatusCoverageComplete: liveFreshness.evStatusCoverageComplete,
+      evStatusBaselineAt: liveFreshness.evStatusBaselineAt,
+      liveState: {
+        ok: true,
+        dataLayerVersion: DATA_LAYER_VERSION,
+        userReadUpstreamCalls: 0,
+        evStatus: {
+          status: liveFreshness.evStatusStatus,
+          lastSuccessAt: liveFreshness.evStatusUpdatedAt,
+          lastError: liveFreshness.evStatusLastError,
+          fresh: liveFreshness.evStatusFresh,
+          syncFresh: liveFreshness.evStatusFresh,
+          baselineAt: liveFreshness.evStatusBaselineAt,
+          lastIncrementalAt: liveFreshness.evStatusUpdatedAt,
+          coverageComplete: liveFreshness.evStatusCoverageComplete,
+        },
+      },
       places,
     };
 
@@ -1607,6 +1621,36 @@ async function shouldAttemptFullReconcile(db: D1Database, env: Env) {
   return row?.status === 'pending';
 }
 
+async function getLiveFreshnessState(db: D1Database, env: Env) {
+  const jobs = await db.prepare(
+    `SELECT job_name, status, last_success_at, last_error
+       FROM sync_state
+      WHERE job_name IN ('ev_info','ev_status')
+      ORDER BY job_name`,
+  ).all<{
+    job_name: string;
+    status: string;
+    last_success_at: string | null;
+    last_error: string | null;
+  }>();
+
+  const byName = new Map(jobs.results.map((row) => [row.job_name, row]));
+  const evInfo = byName.get('ev_info');
+  const ev = byName.get('ev_status');
+  const evStatusUpdatedAt = ev?.last_success_at || null;
+
+  return {
+    evStatusStatus: ev?.status || 'not-started',
+    evStatusLastError: ev?.last_error || null,
+    evStatusFresh: isFreshIso(
+      evStatusUpdatedAt,
+      staleMinutes(env.LIVE_STATUS_STALE_MINUTES, DEFAULT_STATUS_STALE_MINUTES),
+    ),
+    evStatusUpdatedAt,
+    evStatusBaselineAt: evInfo?.last_success_at || null,
+    evStatusCoverageComplete: evInfo?.status === 'complete',
+  };
+}
 async function getLiveState(db: D1Database, env: Env) {
   const jobs = await db.prepare(
     `SELECT job_name, status, reported_total_count, last_success_at, last_error
@@ -2152,33 +2196,44 @@ async function markReadModelJob(db: D1Database, jobName: string, runId: string, 
 }
 
 async function getReadModelState(db: D1Database) {
+  const jobs = await db.prepare(
+    `SELECT job_name, status, last_success_at, last_error, reported_total_count
+       FROM sync_state
+      WHERE job_name IN ('ev_info','read_model_ev_stations','read_model_parking','read_model_matches')
+      ORDER BY job_name`,
+  ).all<{
+    job_name: string;
+    status: string;
+    last_success_at: string | null;
+    last_error: string | null;
+    reported_total_count: number | null;
+  }>();
+
+  const jobRows = jobs.results;
+  const jobByName = new Map(jobRows.map((row) => [row.job_name, row]));
+  const evInfoCount = Number(jobByName.get('ev_info')?.reported_total_count || 0);
+
+  // Avoid scanning the large ev_chargers table on every public/read-model request.
+  // Older releases did not persist all read-model counts, so only small derived tables are counted here.
   const counts = await db.prepare(
     `SELECT
        (SELECT COUNT(*) FROM parking_read_model) AS parking_count,
        (SELECT COUNT(*) FROM parking_read_model WHERE parking_realtime = 1) AS realtime_parking_count,
-       (SELECT COUNT(*) FROM ev_chargers WHERE COALESCE(del_yn, '') <> 'Y') AS charger_count,
        (SELECT COUNT(*) FROM ev_stations) AS station_count,
        (SELECT COUNT(DISTINCT parking_id) FROM parking_ev_matches) AS matched_parking_count,
        (SELECT COUNT(*) FROM parking_ev_matches) AS match_count`,
   ).first<{
     parking_count: number;
     realtime_parking_count: number;
-    charger_count: number;
     station_count: number;
     matched_parking_count: number;
     match_count: number;
   }>();
-  const jobs = await db.prepare(
-    `SELECT job_name, status, last_success_at, last_error, reported_total_count
-       FROM sync_state
-      WHERE job_name IN ('ev_info','read_model_ev_stations','read_model_parking','read_model_matches')
-      ORDER BY job_name`,
-  ).all();
+
   const parkingCount = Number(counts?.parking_count || 0);
-  const chargerCount = Number(counts?.charger_count || 0);
+  const chargerCount = evInfoCount;
   const stationCount = Number(counts?.station_count || 0);
   const matchedParkingCount = Number(counts?.matched_parking_count || 0);
-  const jobRows = jobs.results as Array<{ job_name: string; status: string }>;
   const completedJobs = new Set(
     jobRows.filter((row) => row.status === 'complete').map((row) => row.job_name),
   );
@@ -2201,7 +2256,6 @@ async function getReadModelState(db: D1Database) {
     jobs: jobs.results,
   };
 }
-
 function readRowToPlace(row: ParkingReadRow) {
   const score = row.best_match_score == null ? null : Number(row.best_match_score);
   return {

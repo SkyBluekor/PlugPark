@@ -24,6 +24,7 @@ const critical = [
   'scripts/analyze-parking-match-candidates.mjs',
   'scripts/verify-parking-match-v072.mjs',
   'scripts/verify-release-v072-p2.mjs',
+  'scripts/verify-d1-read-budget-v072.mjs',
   'scripts/preflight-v072-p2.mjs',
   'scripts/release-v072-p2.mjs',
   'tests/fixtures/parking-realtime-coverage-v072-replay.json',
