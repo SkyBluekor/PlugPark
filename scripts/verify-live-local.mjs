@@ -111,6 +111,7 @@ const migrationFiles = [
   resolve('migrations', '0002_v0_6_0_read_models.sql'),
   resolve('migrations', '0003_v0_7_0_live_data.sql'),
   resolve('migrations', '0004_v0_7_1_parking_facility_catalog.sql'),
+  resolve('migrations', '0005_v0_7_2_parking_match_rules.sql'),
 ];
 for (const file of migrationFiles) assert(existsSync(file), `migration 없음: ${file}`);
 assert(existsSync(FIXTURE_SQL), `fixture 없음: ${FIXTURE_SQL}`);
@@ -178,7 +179,8 @@ try {
   assert(sync.parking?.apiCalls === 0, `fixture parking apiCalls=${sync.parking?.apiCalls}`);
   assert(Number(sync.ev?.changed || 0) === 1, `EV changed 기대=1, 실제=${sync.ev?.changed}`);
   assert(Number(sync.parking?.matchedCount || 0) === 2, `parking matched 기대=2, 실제=${sync.parking?.matchedCount}`);
-  assert(Number(sync.parking?.invalidNumberCount || 0) === 1, `parking invalid 기대=1, 실제=${sync.parking?.invalidNumberCount}`);
+  assert(Number(sync.parking?.updatedCount || 0) === 3, `parking updated 기대=3, 실제=${sync.parking?.updatedCount}`);
+  assert(Number(sync.parking?.invalidNumberCount || 0) === 2, `parking invalid 기대=2, 실제=${sync.parking?.invalidNumberCount}`);
   console.log('PASS');
 
   process.stdout.write('EV Status idempotence ... ');
@@ -206,9 +208,9 @@ try {
 
   const centum = places.places.find((p) => String(p.name || '').includes('센텀'));
   assert(centum, '센텀 주차장 없음');
-  assert(centum.availableParking === 31, `센텀 availableParking=${centum.availableParking}`);
-  assert(centum.occupiedParking === 49, `센텀 occupiedParking=${centum.occupiedParking}`);
-  assert(centum.capacity === 80, `센텀 capacity=${centum.capacity}`);
+  assert(centum.availableParking === 35, `센텀 aggregate availableParking=${centum.availableParking}`);
+  assert(centum.occupiedParking === 55, `센텀 aggregate occupiedParking=${centum.occupiedParking}`);
+  assert(centum.capacity === 90, `센텀 aggregate capacity=${centum.capacity}`);
   assert(centum.parkingRealtime === true, '센텀 parkingRealtime=true가 아님');
   assert(centum.parkingRealtimeFresh === true, '센텀 realtime fresh=false');
   assert(centum.charger?.total === 2, `센텀 charger total=${centum.charger?.total}`);
