@@ -26,7 +26,9 @@
     "release:live": "node scripts/release-live.mjs",
     "prepare:live": "node scripts/prepare-live-release.mjs",
     "prepare:live:resume": "node scripts/resume-live-release.mjs",
-    "check:parking-endpoint": "node scripts/check-parking-endpoint.mjs"
+    "check:parking-endpoint": "node scripts/check-parking-endpoint.mjs",
+    "audit:parking-coverage": "node scripts/audit-parking-realtime-coverage.mjs --confirm-live-audit",
+    "audit:parking-coverage:self-test": "node scripts/audit-parking-realtime-coverage.mjs --self-test"
   },
   "dependencies": {
     "react": "^19.1.1",
