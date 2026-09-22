@@ -1,0 +1,50 @@
+{
+  "verifiedAt": "2026-09-22T01:23:41.679Z",
+  "dataLayerVersion": "v0.6.2.1",
+  "remoteWrites": 0,
+  "state": {
+    "ok": true,
+    "dataLayerVersion": "v0.6.2.1",
+    "ready": true,
+    "parkingCount": 3,
+    "realtimeParkingCount": 1,
+    "chargerCount": 4,
+    "stationCount": 2,
+    "matchedParkingCount": 2,
+    "matchCount": 2,
+    "matchRadiusMeters": 200,
+    "jobs": [
+      {
+        "job_name": "ev_info",
+        "status": "complete",
+        "last_success_at": "2026-09-22T00:00:00.000Z",
+        "last_error": null,
+        "reported_total_count": 5
+      },
+      {
+        "job_name": "read_model_ev_stations",
+        "status": "complete",
+        "last_success_at": "2026-09-22T01:23:40.345Z",
+        "last_error": null,
+        "reported_total_count": null
+      },
+      {
+        "job_name": "read_model_matches",
+        "status": "complete",
+        "last_success_at": "2026-09-22T01:23:40.850Z",
+        "last_error": null,
+        "reported_total_count": 2
+      },
+      {
+        "job_name": "read_model_parking",
+        "status": "complete",
+        "last_success_at": "2026-09-22T01:23:40.579Z",
+        "last_error": null,
+        "reported_total_count": null
+      }
+    ]
+  },
+  "centumMatches": 1,
+  "places": 3,
+  "upstreamEvCalls": 0
+}

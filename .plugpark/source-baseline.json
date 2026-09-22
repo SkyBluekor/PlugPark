@@ -1,0 +1,19 @@
+{
+  "capturedAt": "2026-09-22T02:09:18.627Z",
+  "cwd": "D:\\Projects\\PlugPark",
+  "gitHead": "d8912001dacc891d7ccc21864786a7306d3d0af3",
+  "gitBranch": "main",
+  "gitStatus": "M APPLY.txt\n M APPLY_V0.6.0.md\n M FIX_V0.5.2.1.md\n M FIX_V0.5.2.2.md\n M FIX_V0.5.2.3.md\n M FIX_V0.5.3.md\n M RUN_V0.5.2.md\n M SETUP_V0.5.1.md\n M migrations/0001_v0_5_1_foundation.sql\n M migrations/0002_v0_6_0_read_models.sql\n M package.json\n M scripts/ev-backfill.mjs\n M scripts/prepare-read-models.mjs\n M scripts/verify-v0.6.mjs\n M src/App.tsx\n M src/styles.css\n M src/types.ts\n M worker/index.ts\n M wrangler.d1.snippet.toml\n M wrangler.toml\n?? .plugpark/live-local-schema.sql\n?? .plugpark/live-local-state/\n?? .plugpark/live-local-verify-result.json\n?? .plugpark/local-schema.sql\n?? .plugpark/local-verify-result.json\n?? .plugpark/local-verify-state/\n?? .plugpark/recovery-backup-v0.6.1/\n?? .plugpark/recovery-backup-v0.6.2.1/\n?? .plugpark/recovery-backup-v0.6.2/\n?? .plugpark/recovery-backup-v0.7.0.1/\n?? .plugpark/recovery-backup-v0.7.0.3/\n?? .plugpark/recovery-backup-v0.7.0/\n?? .plugpark/source-baseline.json\n?? QUOTA_GUARD_V0.6.0.1.md\n?? README_V0.6.1.md\n?? README_V0.6.2.1.md\n?? README_V0.6.2.md\n?? README_V0.7.0.1.md\n?? README_V0.7.0.2.md\n?? README_V0.7.0.3.md\n?? README_V0.7.0.md\n?? VERIFIED_V0.7.0.1.md\n?? VERIFIED_V0.7.0.2.md\n?? VERIFIED_V0.7.0.3.md\n?? VERIFIED_V0.7.0.md\n?? apply_v0_6_1_local_recovery.py\n?? apply_v0_6_2_1_parking_dedupe_hotfix.py\n?? apply_v0_6_2_safe_remote_release.py\n?? apply_v0_7_0_1_type_hotfix.py\n?? apply_v0_7_0_2_verify_version_fix.py\n?? apply_v0_7_0_3_safe_live_remote_release.py\n?? apply_v0_7_0_live_data.py\n?? cloudflare-stubs.d.ts\n?? hotfix_payload/\n?? migrations/0003_v0_7_0_live_data.sql\n?? payload/\n?? scripts/live-remote-preflight.mjs\n?? scripts/live-state-remote.mjs\n?? scripts/local-recovery-verify.mjs\n?? scripts/release-live.mjs\n?? scripts/remote-preflight.mjs\n?? scripts/remote-release.mjs\n?? scripts/remote-resume-parking.mjs\n?? scripts/source-baseline.mjs\n?? scripts/status-remote.mjs\n?? scripts/verify-live-local.mjs\n?? tests/",
+  "files": {
+    "package.json": "3c0ddf4633f113817b5adfa8357bb51be34e88d9b0431d75f2fe04de03eb6b6e",
+    "worker/index.ts": "9e28e7ea6f258e94f0eb3112db29fc0d2f4674aa9bb4a88da24558935ba0fb49",
+    "src/App.tsx": "4c8df8d79c3199e0295a662fc19debb259c424debeaf4bb145da46fe425ed809",
+    "src/types.ts": "c21dbf67c75ca6bee030ec5fdd4f52fc2cb68af8e6882ad33ff019e5f457e74b",
+    "migrations/0001_v0_5_1_foundation.sql": "9c26bc571c2048cf9239d85a6b13aaa42ceda18de6967f358a8bc22893a9c376",
+    "migrations/0002_v0_6_0_read_models.sql": "fac7b0096aefd65ea2245d46b3923e9bcf072006c667d24200cfd7167e2ca87d",
+    "migrations/0003_v0_7_0_live_data.sql": "8ebc2b8e7f6db60bfe11696392be91cf41c7c67475dc46737244ee640775ddb3",
+    "scripts/verify-live-local.mjs": "829a2ff05c525402d95a8ff746afd01290253e1ad2047cce279209a018ce4241",
+    "scripts/live-remote-preflight.mjs": "9b695abe49ba861c354c29f6c6d1f4767f5b286578165cd85bb9d5e91bcf5e7e",
+    "scripts/release-live.mjs": "b02210c370c2001fdf78fb29332e3eb7a232eb9c09ea4a396140dad165a7c6ba"
+  }
+}

@@ -1,0 +1,38 @@
+{
+  "verifiedAt": "2026-09-22T02:09:29.663Z",
+  "dataLayerVersion": "v0.7.0.1",
+  "remoteWrites": 0,
+  "upstreamLiveCalls": 0,
+  "liveState": {
+    "ok": true,
+    "dataLayerVersion": "v0.7.0.1",
+    "userReadUpstreamCalls": 0,
+    "evStatus": {
+      "status": "complete",
+      "lastSuccessAt": "2026-09-22T02:09:28.098Z",
+      "lastError": null,
+      "storedRows": 1,
+      "fresh": true,
+      "reconcileStatus": "complete"
+    },
+    "parkingRealtime": {
+      "configured": true,
+      "status": "complete",
+      "lastSuccessAt": "2026-09-22T02:09:27.655Z",
+      "lastError": null,
+      "chunks": 1,
+      "itemCount": 2,
+      "fetchedAt": "2026-09-22T02:09:27.655Z",
+      "fresh": true
+    },
+    "todayUsage": {
+      "evStatus": 0,
+      "parkingRealtime": 0
+    }
+  },
+  "centum": {
+    "parkingAvailable": 31,
+    "chargerAvailable": 1,
+    "chargerCharging": 1
+  }
+}

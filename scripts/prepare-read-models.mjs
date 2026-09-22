@@ -30,7 +30,21 @@ async function postStage(stage) {
       return data;
     } catch (error) {
       lastError = error;
-      console.log(`실패 (${error instanceof Error ? error.message : String(error)})`);
+      const message = error instanceof Error ? error.message : String(error);
+      console.log(`실패 (${message})`);
+
+      const isDailyD1Quota =
+        message.includes("exceeded D1's free tier daily row write limit") ||
+        message.includes("exceeded D1's free tier daily row read limit");
+
+      if (isDailyD1Quota) {
+        console.error('');
+        console.error('⛔ D1 Free 일일 한도 초과 — 재시도해도 성공하지 않습니다.');
+        console.error('   Cloudflare Free 한도는 00:00 UTC(한국시간 09:00)에 초기화됩니다.');
+        console.error('   이미 배포된 v0.6.0은 그대로 두고, 한도 초기화 후 npm run resume:v0.6 만 실행하세요.');
+        throw error;
+      }
+
       if (attempt < 5) {
         const waitMs = [1000, 2500, 5000, 8000][attempt - 1] ?? 8000;
         console.log(`  ↻ ${Math.round(waitMs / 1000)}초 후 재시도 ${attempt + 1}/5`);

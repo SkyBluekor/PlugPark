@@ -1,0 +1,41 @@
+{
+  "name": "plugpark",
+  "private": true,
+  "version": "0.6.2-1",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "cf:dev": "npm run build && wrangler dev",
+    "deploy": "npm run build && wrangler deploy",
+    "d1:create": "wrangler d1 create plugpark-db",
+    "d1:migrate:local": "wrangler d1 migrations apply plugpark-db --local",
+    "d1:migrate:remote": "wrangler d1 migrations apply plugpark-db --remote",
+    "ev:backfill": "node scripts/ev-backfill.mjs",
+    "data:prepare": "node scripts/prepare-read-models.mjs",
+    "release": "node scripts/remote-release.mjs",
+    "verify:v0.6": "node scripts/verify-v0.6.mjs",
+    "resume:v0.6": "npm run data:prepare && npm run verify:v0.6",
+    "baseline": "node scripts/source-baseline.mjs",
+    "verify:local": "node scripts/local-recovery-verify.mjs",
+    "preflight:remote": "node scripts/remote-preflight.mjs",
+    "status:remote": "node scripts/status-remote.mjs",
+    "verify:remote": "node scripts/verify-v0.6.mjs",
+    "release:remote": "node scripts/remote-release.mjs",
+    "release:resume": "node scripts/remote-resume-parking.mjs"
+  },
+  "dependencies": {
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "5.20260921.1",
+    "@types/react": "^19.1.13",
+    "@types/react-dom": "^19.1.9",
+    "@vitejs/plugin-react": "^5.0.2",
+    "typescript": "^5.9.2",
+    "vite": "^7.1.5",
+    "wrangler": "4.135.0"
+  }
+}
