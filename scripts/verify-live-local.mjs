@@ -110,6 +110,7 @@ const migrationFiles = [
   resolve('migrations', '0001_v0_5_1_foundation.sql'),
   resolve('migrations', '0002_v0_6_0_read_models.sql'),
   resolve('migrations', '0003_v0_7_0_live_data.sql'),
+  resolve('migrations', '0004_v0_7_1_parking_facility_catalog.sql'),
 ];
 for (const file of migrationFiles) assert(existsSync(file), `migration 없음: ${file}`);
 assert(existsSync(FIXTURE_SQL), `fixture 없음: ${FIXTURE_SQL}`);
