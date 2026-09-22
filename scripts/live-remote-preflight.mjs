@@ -9,6 +9,7 @@ const BASE_URL = process.env.PLUGPARK_URL || 'https://plugpark.dtdt4865.workers.
 const LOCAL_RESULT = resolve('.plugpark', 'live-local-verify-result.json');
 const BASELINE_FILE = resolve('.plugpark', 'source-baseline.json');
 const PARKING_PROBE_FILE = resolve('.plugpark', 'parking-api-probe.json');
+const PARKING_CONFIG_FILE = resolve('.plugpark', 'parking-api-config.json');
 
 const critical = [
   'package.json',
@@ -117,6 +118,15 @@ if (parkingProbe.ok !== true || Number(parkingProbe.publicApiCalls || 0) !== 1 |
   fail('Parking API probe 결과가 PASS가 아닙니다. 실제 요청주소/필드 계약을 먼저 확인하세요.');
 }
 console.log('Parking API contract probe ... PASS · 실제 API 1회 · D1 write 0');
+
+if (!existsSync(PARKING_CONFIG_FILE)) {
+  fail('parking-api-config.json이 없습니다. npm run configure:parking-api로 probe한 URL을 Remote Worker에 먼저 설정하세요.');
+}
+const parkingConfig = JSON.parse(await readFile(PARKING_CONFIG_FILE, 'utf8'));
+if (parkingConfig.endpointHash !== parkingProbe.endpointHash || Number(parkingConfig.remoteD1Writes || 0) !== 0) {
+  fail('Parking API remote 설정이 현재 probe 결과와 일치하지 않습니다. npm run configure:parking-api를 다시 실행하세요.');
+}
+console.log('Parking API remote config receipt ... PASS');
 
 if (health.realtimeParkingUrlConfigured) {
   console.log('현재 Remote Worker 실시간 주차 URL ... CONFIGURED');
