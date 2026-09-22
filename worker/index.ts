@@ -810,9 +810,28 @@ function staleMinutes(value: string | undefined, fallback: number) {
   return clamp(Math.trunc(Number(value || fallback)), 1, 240);
 }
 
+function parseSourceTimestampMs(value: string | null | undefined) {
+  const raw = String(value || '').trim();
+  if (!raw) return Number.NaN;
+
+  // 환경공단 EV API의 statUpdDt 계열은 YYYYMMDDHHmmss(한국 표준시) 형식입니다.
+  const compact = /^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})$/.exec(raw);
+  if (compact) {
+    const [, y, m, d, hh, mm, ss] = compact;
+    return Date.parse(`${y}-${m}-${d}T${hh}:${mm}:${ss}+09:00`);
+  }
+
+  const spaced = /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2}):(\d{2})$/.exec(raw);
+  if (spaced) {
+    const [, y, m, d, hh, mm, ss] = spaced;
+    return Date.parse(`${y}-${m}-${d}T${hh}:${mm}:${ss}+09:00`);
+  }
+
+  return Date.parse(raw);
+}
+
 function isFreshIso(value: string | null | undefined, minutes: number) {
-  if (!value) return false;
-  const time = Date.parse(value);
+  const time = parseSourceTimestampMs(value);
   if (!Number.isFinite(time)) return false;
   return Date.now() - time <= minutes * 60_000;
 }
