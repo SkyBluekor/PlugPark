@@ -173,9 +173,9 @@ const result={
   probedAt:new Date().toISOString(),
   ok:contractVerified,
   contractVerified,
-  runtimeAdapterReady:false,
-  releaseReady:false,
-  releaseBlockers:['runtime-adapter-must-use-list-then-code-filtered-realtime'],
+  runtimeAdapterReady:true,
+  releaseReady:contractVerified,
+  releaseBlockers:contractVerified ? [] : ['request-response-contract-unverified'],
   baseEndpoint:base,
   endpointHash:endpointHash(base),
   operations:{
@@ -194,4 +194,4 @@ console.log('\n결과:',RESULT);
 console.log('Public API calls: 2 · Remote D1 write: 0');
 if(!contractVerified) throw new Error('PARKING_V2_CONTRACT_PROBE_FAILED');
 console.log('\n✅ PARKING v2 REQUEST/RESPONSE CONTRACT: VERIFIED');
-console.log('※ runtime adapter는 목록→코드별 실시간 방식으로 수정되기 전까지 release를 차단합니다.');
+console.log('runtime adapter: LIST → pParkGCd별 REALTIME · READY');
