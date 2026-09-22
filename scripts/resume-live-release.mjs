@@ -52,9 +52,8 @@ console.log('기존 LOCAL PASS 재사용 · 실제 API probe부터 재개');
 console.log('LIVE LOCAL VERIFY receipt ... PASS');
 
 run('0) PARKING ENDPOINT CHECK', 'scripts/check-parking-endpoint.mjs');
-run('2) PARKING API PROBE (실제 API GET 1회)', 'scripts/probe-parking-api.mjs');
-run('3) PARKING API REMOTE CONFIG (D1 write 0)', 'scripts/configure-parking-api.mjs');
-run('4) LIVE REMOTE PREFLIGHT (read-only)', 'scripts/live-remote-preflight.mjs');
+run('2) PARKING v2 CONTRACT PROBE (실제 API 최대 2회)', 'scripts/probe-parking-api.mjs');
+run('3) LIVE REMOTE PREFLIGHT (read-only)', 'scripts/live-remote-preflight.mjs');
 
 console.log('\n✅ LIVE RELEASE PREPARATION RESUME: PASS');
 console.log('다음 명령: npm run release:live');
