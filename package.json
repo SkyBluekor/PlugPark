@@ -1,7 +1,7 @@
 {
   "name": "plugpark",
   "private": true,
-  "version": "0.7.1",
+  "version": "0.7.2",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -29,7 +29,10 @@
     "check:parking-endpoint": "node scripts/check-parking-endpoint.mjs",
     "audit:parking-coverage": "node scripts/audit-parking-realtime-coverage.mjs --confirm-live-audit",
     "analyze:parking-match": "node scripts/analyze-parking-match-candidates.mjs",
-    "verify:parking-match-v072": "node scripts/verify-parking-match-v072.mjs"
+    "verify:parking-match-v072": "node scripts/verify-parking-match-v072.mjs",
+    "verify:release-v072-p2": "node scripts/verify-release-v072-p2.mjs",
+    "preflight:v072-p2": "node scripts/preflight-v072-p2.mjs",
+    "release:v072-p2": "node scripts/release-v072-p2.mjs"
   },
   "dependencies": {
     "react": "^19.1.1",

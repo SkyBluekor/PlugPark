@@ -164,6 +164,7 @@ try {
 
   const health = await getJson('/api/health?live=70');
   assert(health.dataLayerVersion === 'v0.7.1', `dataLayerVersion=${health.dataLayerVersion}`);
+  assert(health.parkingMatchVersion === 'v0.7.2-P2', `parkingMatchVersion=${health.parkingMatchVersion}`);
   assert(health.liveSyncEnabled === true, 'liveSyncEnabled=true가 아님');
   console.log('v0.7.1 health ... PASS');
 
@@ -200,6 +201,7 @@ try {
 
   const places = await getJson('/api/places?v=70');
   assert(places.dataLayerVersion === 'v0.7.1', `places version=${places.dataLayerVersion}`);
+  assert(places.parkingMatchVersion === 'v0.7.2-P2', `places parkingMatchVersion=${places.parkingMatchVersion}`);
   assert(places.upstreamEvCalls === 0, `upstreamEvCalls=${places.upstreamEvCalls}`);
   assert(places.upstreamParkingCalls === 0, `upstreamParkingCalls=${places.upstreamParkingCalls}`);
   assert(places.realtimeParkingCount === 3, `realtimeParkingCount=${places.realtimeParkingCount}`);
@@ -235,6 +237,7 @@ try {
   const result = {
     verifiedAt: new Date().toISOString(),
     dataLayerVersion: 'v0.7.1',
+    parkingMatchVersion: 'v0.7.2-P2',
     remoteWrites: 0,
     upstreamLiveCalls: 0,
     liveState,

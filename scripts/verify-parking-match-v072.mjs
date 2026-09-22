@@ -1,8 +1,9 @@
-import { readFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 
 const FIXTURE = resolve('tests', 'fixtures', 'parking-realtime-coverage-v072-replay.json');
 const MIGRATION = resolve('migrations', '0005_v0_7_2_parking_match_rules.sql');
+const RESULT = resolve('.plugpark', 'parking-match-v072-verify-result.json');
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
@@ -260,5 +261,28 @@ console.log('Legacy 25 match regression ... PASS · regression=0');
 console.log('Many-to-one aggregation ... PASS · yacht=229/70/299 · bujeon=17/26/43');
 console.log('Duplicate overwrite ... PASS · 0');
 console.log('Snapshot candidates ... PASS · contributions=34 · parkingIds=32');
+
+await mkdir(resolve('.plugpark'), { recursive: true });
+await writeFile(RESULT, JSON.stringify({
+  verifiedAt: new Date().toISOString(),
+  version: 'v0.7.2-P2',
+  passed: true,
+  publicApiCalls: 0,
+  remoteD1Writes: 0,
+  cloudflareWrites: 0,
+  productionRuleCount: rules.size,
+  aggregateRuleCount: [...rules.values()].filter((rule) => rule.allowAggregate).length,
+  baselineMatched: baselineMatched.length,
+  legacyRegressionCount: legacyRegressions.length,
+  matchedCount,
+  unmatchedCount,
+  ambiguousCount,
+  schemaInvalidCount,
+  numericInvalidCount,
+  duplicateOverwriteCount,
+  validMatchedContributionCount,
+  uniqueSnapshotParkingIds: contributions.size,
+}, null, 2) + '\n', 'utf8');
+
 console.log('\n✅ v0.7.2-P2 PARKING MATCH REPLAY: PASS');
 console.log('Public API calls=0 · Remote D1 writes=0 · Cloudflare writes=0');

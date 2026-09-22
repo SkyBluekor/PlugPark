@@ -10,6 +10,8 @@ const OUT_FILE = resolve(OUT_DIR, 'source-baseline.json');
 
 const critical = [
   'package.json',
+  'wrangler.toml',
+  '.github/workflows/v071-local-verify.yml',
   'worker/index.ts',
   'src/App.tsx',
   'src/types.ts',
@@ -21,7 +23,11 @@ const critical = [
   'scripts/verify-live-local.mjs',
   'scripts/analyze-parking-match-candidates.mjs',
   'scripts/verify-parking-match-v072.mjs',
+  'scripts/verify-release-v072-p2.mjs',
+  'scripts/preflight-v072-p2.mjs',
+  'scripts/release-v072-p2.mjs',
   'tests/fixtures/parking-realtime-coverage-v072-replay.json',
+  'tests/fixtures/local-recovery-seed.sql',
   'scripts/prepare-live-release.mjs',
   'scripts/resume-live-release.mjs',
   'scripts/check-parking-endpoint.mjs',

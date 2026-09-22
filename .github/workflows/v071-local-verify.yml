@@ -1,4 +1,4 @@
-name: v0.7.1 local verify
+name: v0.7.2-P2 verify
 
 on:
   push:
@@ -33,3 +33,11 @@ jobs:
 
       - name: P2 parking match replay verify
         run: npm run verify:parking-match-v072
+
+      - name: P2 release gate static verify
+        run: npm run verify:release-v072-p2
+
+      - name: P2 release scripts syntax
+        run: |
+          node --check scripts/preflight-v072-p2.mjs
+          node --check scripts/release-v072-p2.mjs
