@@ -118,8 +118,13 @@ if (!existsSync(PARKING_PROBE_FILE)) {
   fail('parking-api-probe.json이 없습니다. npm run probe:parking-api를 1회 실행해 실제 API 계약을 확인하세요.');
 }
 const parkingProbe = JSON.parse(await readFile(PARKING_PROBE_FILE, 'utf8'));
-if (parkingProbe.ok !== true || Number(parkingProbe.publicApiCalls || 0) !== 1 || Number(parkingProbe.remoteD1Writes || 0) !== 0) {
-  fail('Parking API probe 결과가 PASS가 아닙니다. 실제 요청주소/필드 계약을 먼저 확인하세요.');
+if (
+  parkingProbe.ok !== true ||
+  parkingProbe.releaseReady !== true ||
+  Number(parkingProbe.publicApiCalls || 0) !== 1 ||
+  Number(parkingProbe.remoteD1Writes || 0) !== 0
+) {
+  fail('Parking API probe가 release-ready PASS가 아닙니다. 단건 필터/부분 페이지 여부를 먼저 해결하세요.');
 }
 console.log('Parking API contract probe ... PASS · 실제 API 1회 · D1 write 0');
 
