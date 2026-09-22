@@ -161,7 +161,7 @@ try {
   console.log('PASS');
 
   const health = await getJson('/api/health?live=70');
-  assert(health.dataLayerVersion === 'v0.7.0.1', `dataLayerVersion=${health.dataLayerVersion}`);
+  assert(health.dataLayerVersion === 'v0.7.1', `dataLayerVersion=${health.dataLayerVersion}`);
   assert(health.liveSyncEnabled === true, 'liveSyncEnabled=true가 아님');
   console.log('v0.7.0 health ... PASS');
 
@@ -177,7 +177,7 @@ try {
   assert(sync.parking?.apiCalls === 0, `fixture parking apiCalls=${sync.parking?.apiCalls}`);
   assert(Number(sync.ev?.changed || 0) === 1, `EV changed 기대=1, 실제=${sync.ev?.changed}`);
   assert(Number(sync.parking?.matchedCount || 0) === 2, `parking matched 기대=2, 실제=${sync.parking?.matchedCount}`);
-  assert(Number(sync.parking?.invalidNumberCount || 0) === 0, `parking invalid=${sync.parking?.invalidNumberCount}`);
+  assert(Number(sync.parking?.invalidNumberCount || 0) === 1, `parking invalid 기대=1, 실제=${sync.parking?.invalidNumberCount}`);
   console.log('PASS');
 
   process.stdout.write('EV Status idempotence ... ');
@@ -188,6 +188,7 @@ try {
   const liveState = await getJson('/api/d1/live-state?v=70');
   assert(liveState.userReadUpstreamCalls === 0, 'userReadUpstreamCalls가 0이 아님');
   assert(liveState.evStatus.status === 'complete', `ev status=${liveState.evStatus.status}`);
+  assert(liveState.evStatus.coverageComplete === true, 'EV baseline coverageComplete=true가 아님');
   assert(liveState.parkingRealtime.status === 'complete', `parking status=${liveState.parkingRealtime.status}`);
   assert(liveState.parkingRealtime.itemCount === 2, `parking itemCount=${liveState.parkingRealtime.itemCount}`);
   assert(liveState.todayUsage.evStatus === 0, `fixture ev API usage=${liveState.todayUsage.evStatus}`);
@@ -195,7 +196,7 @@ try {
   console.log('Live state ... PASS · upstream fixture calls=0');
 
   const places = await getJson('/api/places?v=70');
-  assert(places.dataLayerVersion === 'v0.7.0.1', `places version=${places.dataLayerVersion}`);
+  assert(places.dataLayerVersion === 'v0.7.1', `places version=${places.dataLayerVersion}`);
   assert(places.upstreamEvCalls === 0, `upstreamEvCalls=${places.upstreamEvCalls}`);
   assert(places.upstreamParkingCalls === 0, `upstreamParkingCalls=${places.upstreamParkingCalls}`);
   assert(places.realtimeParkingCount === 2, `realtimeParkingCount=${places.realtimeParkingCount}`);
@@ -222,7 +223,7 @@ try {
 
   const result = {
     verifiedAt: new Date().toISOString(),
-    dataLayerVersion: 'v0.7.0.1',
+    dataLayerVersion: 'v0.7.1',
     remoteWrites: 0,
     upstreamLiveCalls: 0,
     liveState,
