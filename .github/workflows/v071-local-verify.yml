@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - fix/v0.7.1-live-stabilization-clean
+      - feat/v0.7.2-p2-parking-match-stabilization
   pull_request:
     branches:
       - main
@@ -30,3 +31,56 @@ jobs:
 
       - name: LIVE local verify
         run: npm run verify:live
+
+      - name: Temporary P2 production candidate analysis
+        shell: bash
+        run: |
+          node <<'NODE'
+          const targets = [
+            ['A03','수변어린이공원',149],['A04','장산역 1번',87],['A05','장산역 2번',104],
+            ['A07','노포역',394],['A14','동대신동',24],['A15','신선3동',84],
+            ['A16','영선대로 지하 공영',122],['A18','중동이마트 옆',78],['A21','화명역',37],
+            ['A23','수변공원',102],['A24','중동역',167],['A26','온천장역(남측)',247],
+            ['A27','구서역',272],['A28','중앙공원',101],['A29','장전역',190],
+            ['A32','남산역',210],['A33','하단역',151],['A34','명륜역',185],
+            ['A35','동래역',400],['A36','해운대광장',164],['A37','롯데 광복점 뒤(2)',22],
+            ['A48','대연고가밑',46],['A268','주례역주변복개',86],['A433','구남역',122],
+            ['A435','예비',100]
+          ];
+          function clean(s){return String(s||'').trim().toLowerCase();}
+          function norm(s){
+            return clean(s)
+              .replace(/부산광역시|부산시/g,'')
+              .replace(/도시철도|국철|지하철/g,'')
+              .replace(/공영주차장|노외공영주차장|노상공영주차장|공영|주차장/g,'')
+              .replace(/주변|앞|뒤/g,'')
+              .replace(/[\s,.·ㆍ()[\]{}\-_\/]/g,'')
+              .trim();
+          }
+          function dice(a,b){
+            if(!a||!b) return 0;if(a===b) return 1;if(a.length<2||b.length<2) return 0;
+            const pairs=v=>{const m=new Map();for(let i=0;i<v.length-1;i++){const p=v.slice(i,i+2);m.set(p,(m.get(p)||0)+1);}return m;};
+            const L=pairs(a),R=pairs(b);let inter=0,lc=0,rc=0;
+            for(const n of L.values())lc+=n;for(const n of R.values())rc+=n;
+            for(const [p,n] of L)inter+=Math.min(n,R.get(p)||0);
+            return 2*inter/(lc+rc);
+          }
+          const r=await fetch('https://plugpark.dtdt4865.workers.dev/api/places?p2-candidates=1',{headers:{accept:'application/json','cache-control':'no-cache'}});
+          const j=await r.json();
+          if(!r.ok || j?.ok===false) throw new Error(JSON.stringify(j));
+          if(j.upstreamEvCalls!==0 || j.upstreamParkingCalls!==0) throw new Error('upstream calls detected');
+          const bases=j.places||[];
+          console.log('BASE_COUNT='+bases.length);
+          for(const [code,name,cap] of targets){
+            const n=norm(name);
+            const ranked=bases.map(p=>{
+              const pn=norm(p.name);
+              const nameScore=dice(n,pn);
+              const pcap=Number(p.capacity);
+              const capScore=Number.isFinite(pcap)&&cap>0 ? Math.max(0,1-Math.abs(pcap-cap)/Math.max(cap,pcap,1)) : 0;
+              const total=nameScore*0.85+capScore*0.15;
+              return {id:p.id,name:p.name,capacity:p.capacity,address:p.address,score:Number(total.toFixed(3)),nameScore:Number(nameScore.toFixed(3)),capScore:Number(capScore.toFixed(3))};
+            }).sort((a,b)=>b.score-a.score).slice(0,5);
+            console.log('TARGET='+JSON.stringify({code,name,capacity:cap,candidates:ranked}));
+          }
+          NODE
