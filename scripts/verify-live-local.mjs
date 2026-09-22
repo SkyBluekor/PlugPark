@@ -93,7 +93,7 @@ async function waitForServer(child, timeoutMs = 60000) {
   throw new Error(`Local Worker 시작 시간 초과: ${last || 'unknown'}`);
 }
 
-console.log('\nPlugPark v0.7.0 LIVE DATA LOCAL VERIFY');
+console.log('\nPlugPark v0.7.1 LIVE DATA LOCAL VERIFY');
 console.log('원칙: Remote Cloudflare write 0 · 실제 공공 API call 0 · fixture만 사용\n');
 
 runNodeScript('현재 소스 baseline 저장', resolve('scripts', 'source-baseline.mjs'));
@@ -163,7 +163,7 @@ try {
   const health = await getJson('/api/health?live=70');
   assert(health.dataLayerVersion === 'v0.7.1', `dataLayerVersion=${health.dataLayerVersion}`);
   assert(health.liveSyncEnabled === true, 'liveSyncEnabled=true가 아님');
-  console.log('v0.7.0 health ... PASS');
+  console.log('v0.7.1 health ... PASS');
 
   for (const stage of ['stations', 'parking', 'matches']) {
     process.stdout.write(`Read model ${stage} ... `);
