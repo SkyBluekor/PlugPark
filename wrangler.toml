@@ -8,6 +8,7 @@ binding = "ASSETS"
 
 [vars]
 MATCH_RADIUS_METERS = "200"
+BUSAN_REALTIME_PARKING_API_URL = "https://apis.data.go.kr/B552587/ParkingInfoService_v2"
 
 [[d1_databases]]
 binding = "DB"
