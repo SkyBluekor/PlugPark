@@ -2201,7 +2201,12 @@ async function fetchRealtimeParkingRaw(serviceKey: string, endpoint: string) {
     url,
     '부산시설공단 실시간 주차',
   );
-  ensureNormalResult(counted.payload, '부산시설공단 실시간 주차');
+
+  try {
+    ensureNormalResult(counted.payload, '부산시설공단 실시간 주차');
+  } catch (error) {
+    throw countedFetchError('부산시설공단 실시간 주차 응답 오류', error, counted.attempts);
+  }
 
   return {
     items: extractKnownItems(counted.payload),
