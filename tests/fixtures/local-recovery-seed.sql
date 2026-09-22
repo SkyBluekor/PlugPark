@@ -10,6 +10,8 @@ DELETE FROM parking_lots;
 DELETE FROM ev_chargers;
 DELETE FROM sync_state;
 DELETE FROM api_usage_daily;
+DELETE FROM parking_realtime_snapshot_chunks;
+DELETE FROM parking_match_rules;
 
 INSERT INTO sync_state (
   job_name, status, next_page, total_pages, reported_total_count,
@@ -71,10 +73,24 @@ INSERT INTO ev_status (
 ('STPARK01', '02', '2', '20260922090500', '2026-09-22T00:00:00.000Z');
 
 
--- v0.7.2-P2: code rule aggregation fixture.
+-- v0.7.2-P2: code rule aggregation + invalid-overwrite protection fixtures.
 INSERT OR REPLACE INTO parking_match_rules (
   parking_code, parking_id, match_type, confidence, allow_aggregate, note, updated_at
-) VALUES (
+) VALUES
+(
   'A-CENTUM-2', '2019000008', 'CODE_RULE', 1.0, 1,
   'local aggregation fixture', '2026-09-22T00:00:00.000Z'
+),
+(
+  'A-NEGATIVE', 'PARK003', 'CODE_RULE', 1.0, 0,
+  'invalid update must not overwrite prior good snapshot', '2026-09-22T00:00:00.000Z'
+);
+
+INSERT OR REPLACE INTO parking_realtime_snapshot_chunks (
+  chunk_no, fetched_at, item_count, payload_json
+) VALUES (
+  1,
+  '2026-09-22T00:00:00.000Z',
+  1,
+  '[{"parkingId":"PARK003","parkingCode":"A-NEGATIVE","parkingName":"음수테스트","available":7,"occupied":23,"capacity":30,"sourceUpdatedAt":"2026-09-22 08:00:00","fetchedAt":"2026-09-22T00:00:00.000Z","components":[{"parkingCode":"A-NEGATIVE","parkingName":"음수테스트","available":7,"occupied":23,"capacity":30,"sourceUpdatedAt":"2026-09-22 08:00:00","fetchedAt":"2026-09-22T00:00:00.000Z"}]}]'
 );

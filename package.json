@@ -28,7 +28,8 @@
     "prepare:live:resume": "node scripts/resume-live-release.mjs",
     "check:parking-endpoint": "node scripts/check-parking-endpoint.mjs",
     "audit:parking-coverage": "node scripts/audit-parking-realtime-coverage.mjs --confirm-live-audit",
-    "analyze:parking-match": "node scripts/analyze-parking-match-candidates.mjs"
+    "analyze:parking-match": "node scripts/analyze-parking-match-candidates.mjs",
+    "verify:parking-match-v072": "node scripts/verify-parking-match-v072.mjs"
   },
   "dependencies": {
     "react": "^19.1.1",

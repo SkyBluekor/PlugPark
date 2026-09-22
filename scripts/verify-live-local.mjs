@@ -178,7 +178,7 @@ try {
   assert(sync.ev?.apiCalls === 0, `fixture EV apiCalls=${sync.ev?.apiCalls}`);
   assert(sync.parking?.apiCalls === 0, `fixture parking apiCalls=${sync.parking?.apiCalls}`);
   assert(Number(sync.ev?.changed || 0) === 1, `EV changed 기대=1, 실제=${sync.ev?.changed}`);
-  assert(Number(sync.parking?.matchedCount || 0) === 2, `parking matched 기대=2, 실제=${sync.parking?.matchedCount}`);
+  assert(Number(sync.parking?.matchedCount || 0) === 3, `parking matched 기대=3, 실제=${sync.parking?.matchedCount}`);
   assert(Number(sync.parking?.updatedCount || 0) === 3, `parking updated 기대=3, 실제=${sync.parking?.updatedCount}`);
   assert(Number(sync.parking?.invalidNumberCount || 0) === 2, `parking invalid 기대=2, 실제=${sync.parking?.invalidNumberCount}`);
   console.log('PASS');
@@ -193,7 +193,7 @@ try {
   assert(liveState.evStatus.status === 'complete', `ev status=${liveState.evStatus.status}`);
   assert(liveState.evStatus.coverageComplete === true, 'EV baseline coverageComplete=true가 아님');
   assert(liveState.parkingRealtime.status === 'complete', `parking status=${liveState.parkingRealtime.status}`);
-  assert(liveState.parkingRealtime.itemCount === 2, `parking itemCount=${liveState.parkingRealtime.itemCount}`);
+  assert(liveState.parkingRealtime.itemCount === 3, `parking itemCount=${liveState.parkingRealtime.itemCount}`);
   assert(liveState.todayUsage.evStatus === 0, `fixture ev API usage=${liveState.todayUsage.evStatus}`);
   assert(liveState.todayUsage.parkingRealtime === 0, `fixture parking API usage=${liveState.todayUsage.parkingRealtime}`);
   console.log('Live state ... PASS · upstream fixture calls=0');
@@ -202,7 +202,7 @@ try {
   assert(places.dataLayerVersion === 'v0.7.1', `places version=${places.dataLayerVersion}`);
   assert(places.upstreamEvCalls === 0, `upstreamEvCalls=${places.upstreamEvCalls}`);
   assert(places.upstreamParkingCalls === 0, `upstreamParkingCalls=${places.upstreamParkingCalls}`);
-  assert(places.realtimeParkingCount === 2, `realtimeParkingCount=${places.realtimeParkingCount}`);
+  assert(places.realtimeParkingCount === 3, `realtimeParkingCount=${places.realtimeParkingCount}`);
   assert(places.realtimeParkingFresh === true, 'realtimeParkingFresh=true가 아님');
   assert(places.evStatusFresh === true, 'evStatusFresh=true가 아님');
 
@@ -211,6 +211,7 @@ try {
   assert(centum.availableParking === 35, `센텀 aggregate availableParking=${centum.availableParking}`);
   assert(centum.occupiedParking === 55, `센텀 aggregate occupiedParking=${centum.occupiedParking}`);
   assert(centum.capacity === 90, `센텀 aggregate capacity=${centum.capacity}`);
+  assert(centum.parkingUpdatedAt === '2026-09-22 09:04:00', `센텀 conservative freshness=${centum.parkingUpdatedAt}`);
   assert(centum.parkingRealtime === true, '센텀 parkingRealtime=true가 아님');
   assert(centum.parkingRealtimeFresh === true, '센텀 realtime fresh=false');
   assert(centum.charger?.total === 2, `센텀 charger total=${centum.charger?.total}`);
@@ -222,6 +223,13 @@ try {
   assert(citizen.availableParking === 15, `시민공원 availableParking=${citizen.availableParking}`);
   assert(citizen.charger?.available === 1, `시민공원 available charger=${citizen.charger?.available}`);
   assert(citizen.charger?.unavailable === 1, `시민공원 unavailable=${citizen.charger?.unavailable}`);
+
+  const invalidProtected = places.places.find((p) => p.id === 'PARK003');
+  assert(invalidProtected, 'invalid overwrite 보호 fixture PARK003 없음');
+  assert(invalidProtected.availableParking === 7, `invalid overwrite available=${invalidProtected.availableParking}`);
+  assert(invalidProtected.occupiedParking === 23, `invalid overwrite occupied=${invalidProtected.occupiedParking}`);
+  assert(invalidProtected.capacity === 30, `invalid overwrite capacity=${invalidProtected.capacity}`);
+  assert(invalidProtected.parkingUpdatedAt === '2026-09-22 08:00:00', `invalid overwrite timestamp=${invalidProtected.parkingUpdatedAt}`);
   console.log('/api/places D1-only live overlay ... PASS');
 
   const result = {

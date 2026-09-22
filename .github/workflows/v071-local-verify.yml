@@ -30,3 +30,6 @@ jobs:
 
       - name: LIVE local verify
         run: npm run verify:live
+
+      - name: P2 parking match replay verify
+        run: npm run verify:parking-match-v072
