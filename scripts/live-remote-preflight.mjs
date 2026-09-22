@@ -21,6 +21,8 @@ const critical = [
   'migrations/0004_v0_7_1_parking_facility_catalog.sql',
   'scripts/verify-live-local.mjs',
   'scripts/prepare-live-release.mjs',
+  'scripts/resume-live-release.mjs',
+  'scripts/check-parking-endpoint.mjs',
   'scripts/probe-parking-api.mjs',
   'scripts/live-remote-preflight.mjs',
   'scripts/release-live.mjs',
