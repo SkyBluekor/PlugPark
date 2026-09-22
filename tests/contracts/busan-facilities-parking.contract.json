@@ -31,5 +31,11 @@
   "pagination": {
     "status": "unknown",
     "policy": "do not paginate until the authenticated API specification confirms request parameter names"
+  },
+  "releaseReadiness": {
+    "singleParkingFilter": "must be absent",
+    "minimumItems": 2,
+    "paginationRule": "if totalCount is present, the one-call probe must return itemCount >= totalCount; otherwise release is blocked until pagination parameters are documented",
+    "reason": "PlugPark cron must build a complete realtime snapshot, not silently publish a single parking lot or partial page"
   }
 }
