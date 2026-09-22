@@ -1,11 +1,12 @@
 import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
-import { readFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
 const ROOT = process.cwd();
 const PROBE_FILE = resolve('.plugpark', 'parking-api-probe.json');
+const CONFIG_FILE = resolve('.plugpark', 'parking-api-config.json');
 
 function parseEnvText(text) {
   const out = {};
@@ -93,6 +94,15 @@ if (result.status !== 0) {
   throw new Error('Cloudflare BUSAN_REALTIME_PARKING_API_URL 설정 실패');
 }
 
+await mkdir(resolve('.plugpark'), { recursive: true });
+await writeFile(CONFIG_FILE, JSON.stringify({
+  configuredAt: new Date().toISOString(),
+  endpointHash: endpointHash(cleanEndpoint),
+  remoteConfigWrites: 1,
+  remoteD1Writes: 0,
+}, null, 2) + '\n', 'utf8');
+
 console.log('✅ Remote BUSAN_REALTIME_PARKING_API_URL 설정 완료');
 console.log('serviceKey는 URL에서 제거했고 기존 BUSAN_PARKING_API_KEY secret을 사용합니다.');
+console.log('config receipt:', CONFIG_FILE);
 console.log('Remote D1 write: 0');
