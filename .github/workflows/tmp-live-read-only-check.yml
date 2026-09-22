@@ -1,0 +1,54 @@
+name: temporary live read-only check
+
+on:
+  push:
+    branches:
+      - fix/v0.7.1-live-stabilization-clean
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Query production read-only endpoints
+        shell: bash
+        run: |
+          node <<'NODE'
+          const base = 'https://plugpark.dtdt4865.workers.dev';
+          async function get(path) {
+            const r = await fetch(base + path, { headers: { accept: 'application/json', 'cache-control': 'no-cache' }});
+            const t = await r.text();
+            let j;
+            try { j = JSON.parse(t); } catch { throw new Error(path + ' non-json HTTP ' + r.status + ' ' + t.slice(0,200)); }
+            if (!r.ok || j?.ok === false) throw new Error(path + ' failed: ' + (j?.error || j?.message || r.status));
+            return j;
+          }
+          const health = await get('/api/health?audit=1');
+          const live = await get('/api/d1/live-state?audit=1');
+          const places = await get('/api/places?audit=1');
+          const out = {
+            checkedAt: new Date().toISOString(),
+            health: {
+              dataLayerVersion: health.dataLayerVersion,
+              realtimeParkingUrlConfigured: health.realtimeParkingUrlConfigured,
+              liveSyncEnabled: health.liveSyncEnabled,
+              d1Configured: health.d1Configured
+            },
+            evStatus: live.evStatus,
+            parkingRealtime: live.parkingRealtime,
+            todayUsage: live.todayUsage,
+            places: {
+              count: places.places?.length ?? null,
+              upstreamEvCalls: places.upstreamEvCalls,
+              upstreamParkingCalls: places.upstreamParkingCalls,
+              realtimeParkingCount: places.realtimeParkingCount,
+              realtimeParkingFresh: places.realtimeParkingFresh,
+              evStatusFresh: places.evStatusFresh,
+              evStatusCoverageComplete: places.evStatusCoverageComplete
+            }
+          };
+          console.log('PLUGPARK_READ_ONLY_CHECK=' + JSON.stringify(out));
+          NODE
