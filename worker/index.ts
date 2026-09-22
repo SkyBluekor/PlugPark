@@ -174,8 +174,8 @@ const PARKING_BASE_URL =
 const EV_INFO_URL = 'https://apis.data.go.kr/B552584/EvCharger/getChargerInfo';
 const EV_STATUS_URL = 'https://apis.data.go.kr/B552584/EvCharger/getChargerStatus';
 
-const CACHE_VERSION = 'v7.0.1';
-const DATA_LAYER_VERSION = 'v0.7.0.1';
+const CACHE_VERSION = 'v7.1.0';
+const DATA_LAYER_VERSION = 'v0.7.1';
 const D1_EV_INFO_JOB = 'ev_info';
 const D1_INGEST_MAX_PAGES_PER_REQUEST = 1;
 const PARKING_BASE_PAGE_SIZE = 100;
@@ -725,7 +725,16 @@ async function handlePlaces(env: Env, _ctx: ExecutionContext) {
     const liveState = await getLiveState(env.DB, env);
     const basePlaces = rows.results.map(readRowToPlace).map((place) => ({
       ...place,
-      charger: { ...place.charger, statusFresh: liveState.evStatus.fresh },
+      charger: {
+        ...place.charger,
+        statusFresh:
+          place.charger.total <= 0 || !place.charger.lastUpdated
+            ? null
+            : isFreshIso(
+                place.charger.lastUpdated,
+                staleMinutes(env.LIVE_STATUS_STALE_MINUTES, DEFAULT_STATUS_STALE_MINUTES),
+              ),
+      },
     }));
     const parkingLive = await getParkingRealtimeOverlay(env.DB, env);
     const places = applyParkingRealtimeOverlay(basePlaces, parkingLive);
@@ -751,8 +760,10 @@ async function handlePlaces(env: Env, _ctx: ExecutionContext) {
       realtimeParkingFresh: parkingLive.fresh,
       realtimeParkingUpdatedAt: parkingLive.fetchedAt,
       realtimeMessage: parkingLive.message,
-      evStatusFresh: liveState.evStatus.fresh,
-      evStatusUpdatedAt: liveState.evStatus.lastSuccessAt,
+      evStatusFresh: liveState.evStatus.syncFresh,
+      evStatusUpdatedAt: liveState.evStatus.lastIncrementalAt,
+      evStatusCoverageComplete: liveState.evStatus.coverageComplete,
+      evStatusBaselineAt: liveState.evStatus.baselineAt,
       liveState,
       places,
     };
@@ -904,9 +915,18 @@ async function fetchEvStatusPages(env: Env, mode: LiveSyncMode) {
     url.searchParams.set('zcode', '26');
     url.searchParams.set('dataType', 'JSON');
 
-    const payload = await fetchStructuredWithRetry(url, `EV status ${mode} page ${pageNo}`);
-    apiCalls += 1;
-    await incrementApiUsage(env.DB, 'ev_status');
+    let counted: Awaited<ReturnType<typeof fetchStructuredWithRetryCounted>>;
+    try {
+      counted = await fetchStructuredWithRetryCounted(url, `EV status ${mode} page ${pageNo}`);
+    } catch (error) {
+      const attempts = readApiAttempts(error);
+      apiCalls += attempts;
+      await incrementApiUsageBy(env.DB, 'ev_status', attempts);
+      throw error;
+    }
+    const payload = counted.payload;
+    apiCalls += counted.attempts;
+    await incrementApiUsageBy(env.DB, 'ev_status', counted.attempts);
     ensureNormalResult(payload, 'EV getChargerStatus');
 
     const raw = extractKnownItems(payload);
@@ -1069,6 +1089,7 @@ function localParkingRealtimeFixture(): BusanRealtimeParkingApiItem[] {
     { parkgcd: 'A-CENTUM', parknm: '해운대센텀시티 공영주차장', curravacnt: '31', parkingcnt: '49', maxcnt: '80', lastupdatetime: '2026-09-22 09:05:00' },
     { parkgcd: 'A-PARK02', parknm: '부산시민공원 공영주차장', curravacnt: '15', parkingcnt: '35', maxcnt: '50', lastupdatetime: '2026-09-22 09:05:00' },
     { parkgcd: 'A-UNKNOWN', parknm: '연결되지않는주차장', curravacnt: '3', parkingcnt: '7', maxcnt: '10', lastupdatetime: '2026-09-22 09:05:00' },
+    { parkgcd: 'A-BAD-NUMBERS', parknm: '숫자불일치주차장', curravacnt: '40', parkingcnt: '70', maxcnt: '100', lastupdatetime: '2026-09-22 09:05:00' },
   ];
 }
 
@@ -1090,12 +1111,19 @@ async function syncParkingRealtime(env: Env) {
     if (isLocalFixtureMode(env)) {
       valid = localParkingRealtimeFixture();
     } else {
-      const raw = await fetchRealtimeParkingRaw(
-        env.BUSAN_PARKING_API_KEY!,
-        env.BUSAN_REALTIME_PARKING_API_URL!,
-      );
-      apiCalls = Number(raw.apiCalls || 1);
-      for (let i = 0; i < apiCalls; i += 1) await incrementApiUsage(env.DB, 'parking_realtime');
+      let raw: Awaited<ReturnType<typeof fetchRealtimeParkingRaw>>;
+      try {
+        raw = await fetchRealtimeParkingRaw(
+          env.BUSAN_PARKING_API_KEY!,
+          env.BUSAN_REALTIME_PARKING_API_URL!,
+        );
+        apiCalls = Number(raw.apiCalls || 1);
+      } catch (error) {
+        apiCalls = readApiAttempts(error);
+        await incrementApiUsageBy(env.DB, 'parking_realtime', apiCalls);
+        throw error;
+      }
+      await incrementApiUsageBy(env.DB, 'parking_realtime', apiCalls);
       const parsed = parseRealtimeParkingItems(raw.items);
       if (parsed.invalid.length > 0) {
         throw new Error(`PARKING_REALTIME_SCHEMA_MISMATCH: invalid=${parsed.invalid.length}`);
@@ -1153,12 +1181,7 @@ async function syncParkingRealtime(env: Env) {
       const name = cleanValue(item.parknm);
       const detail = detailByKey.get(`${code}|${normalizeParkingName(name)}`);
       const numbers = normalizeRealtimeNumbers(item);
-      const numericallyValid =
-        numbers.capacity == null ||
-        numbers.available == null ||
-        numbers.occupied == null ||
-        numbers.available + numbers.occupied === numbers.capacity;
-      if (!numericallyValid) {
+      if (!numbers.consistent) {
         invalidNumberCount += 1;
         continue;
       }
@@ -1367,7 +1390,7 @@ async function getLiveState(db: D1Database, env: Env) {
   const jobs = await db.prepare(
     `SELECT job_name, status, reported_total_count, last_success_at, last_error
        FROM sync_state
-      WHERE job_name IN ('ev_status','ev_status_reconcile','parking_realtime')
+      WHERE job_name IN ('ev_info','ev_status','ev_status_reconcile','parking_realtime')
       ORDER BY job_name`,
   ).all<{
     job_name: string;
@@ -1378,6 +1401,7 @@ async function getLiveState(db: D1Database, env: Env) {
   }>();
 
   const byName = new Map(jobs.results.map((row) => [row.job_name, row]));
+  const evInfo = byName.get('ev_info');
   const ev = byName.get('ev_status');
   const parking = byName.get('parking_realtime');
   const snapshot = await db.prepare(
@@ -1388,8 +1412,13 @@ async function getLiveState(db: D1Database, env: Env) {
   const statusCount = await db.prepare(
     `SELECT COUNT(*) AS n FROM ev_status`,
   ).first<{ n: number }>();
+  const activeChargerCount = await db.prepare(
+    `SELECT COUNT(*) AS n
+       FROM ev_chargers
+      WHERE COALESCE(del_yn, '') <> 'Y'`,
+  ).first<{ n: number }>();
 
-  const evFresh = isFreshIso(
+  const evSyncFresh = isFreshIso(
     ev?.last_success_at,
     staleMinutes(env.LIVE_STATUS_STALE_MINUTES, DEFAULT_STATUS_STALE_MINUTES),
   );
@@ -1407,7 +1436,13 @@ async function getLiveState(db: D1Database, env: Env) {
       lastSuccessAt: ev?.last_success_at || null,
       lastError: ev?.last_error || null,
       storedRows: Number(statusCount?.n || 0),
-      fresh: evFresh,
+      fresh: evSyncFresh,
+      syncFresh: evSyncFresh,
+      baselineAt: evInfo?.last_success_at || null,
+      lastIncrementalAt: ev?.last_success_at || null,
+      coverageComplete: evInfo?.status === 'complete',
+      coverageCount: Number(activeChargerCount?.n || 0),
+      overlayRows: Number(statusCount?.n || 0),
       reconcileStatus: byName.get('ev_status_reconcile')?.status || 'not-started',
     },
     parkingRealtime: {
@@ -2135,63 +2170,26 @@ async function fetchBaseParkingRaw(serviceKey: string) {
 }
 
 async function fetchRealtimeParkingRaw(serviceKey: string, endpoint: string) {
-  const original = new URL(endpoint.trim());
-  const listTemplate = new URL(original.toString());
-  let apiCalls = 0;
+  const url = new URL(endpoint.trim());
 
-  if (!listTemplate.searchParams.has('serviceKey') && !listTemplate.searchParams.has('ServiceKey')) {
-    listTemplate.searchParams.set('serviceKey', normalizeServiceKey(serviceKey));
+  // 계약이 확인되기 전에는 pageNo/numOfRows/주차장코드 파라미터를 추측해서
+  // 추가하거나 제거하지 않습니다. 포털의 실제 상세기능 요청주소를 그대로 사용합니다.
+  if (!url.searchParams.has('serviceKey') && !url.searchParams.has('ServiceKey')) {
+    url.searchParams.set('serviceKey', normalizeServiceKey(serviceKey));
   }
 
-  // 공공데이터포털 테스트 URL에 A01 같은 단일 주차장 예제가 붙어 있어도
-  // PlugPark에서는 전체 목록 조회를 먼저 시도합니다.
-  const removedFilters: string[] = [];
-  for (const key of ['parkgcd', 'parkcd', 'pParkGCd']) {
-    if (listTemplate.searchParams.has(key)) {
-      listTemplate.searchParams.delete(key);
-      removedFilters.push(key);
-    }
-  }
+  const counted = await fetchStructuredWithRetryCounted(
+    url,
+    '부산시설공단 실시간 주차',
+  );
+  ensureNormalResult(counted.payload, '부산시설공단 실시간 주차');
 
-  const pageSize = 100;
-  const collected: RawObject[] = [];
-  let totalCount: number | null = null;
-
-  for (let pageNo = 1; pageNo <= 20; pageNo += 1) {
-    const pageUrl = new URL(listTemplate.toString());
-    pageUrl.searchParams.set('pageNo', String(pageNo));
-    pageUrl.searchParams.set('numOfRows', String(pageSize));
-
-    try {
-      apiCalls += 1;
-      const payload = await fetchStructuredWithRetry(pageUrl, `부산시설공단 실시간 주차 page ${pageNo}`);
-      ensureNormalResult(payload, '부산시설공단 실시간 주차');
-      const items = extractKnownItems(payload);
-      if (pageNo === 1) totalCount = readMetaNumber(payload, 'totalCount');
-      collected.push(...items);
-      if (items.length < pageSize || items.length === 0) break;
-    } catch (error) {
-      if (pageNo === 1 && removedFilters.length > 0) {
-        const fallback = new URL(original.toString());
-        if (!fallback.searchParams.has('serviceKey') && !fallback.searchParams.has('ServiceKey')) {
-          fallback.searchParams.set('serviceKey', normalizeServiceKey(serviceKey));
-        }
-        apiCalls += 1;
-        const payload = await fetchStructuredWithRetry(fallback, '부산시설공단 실시간 주차 단일 조회');
-        ensureNormalResult(payload, '부산시설공단 실시간 주차');
-        return {
-          items: extractKnownItems(payload),
-          totalCount: readMetaNumber(payload, 'totalCount'),
-          removedFilters,
-          listMode: false,
-          apiCalls,
-        };
-      }
-      throw error;
-    }
-  }
-
-  return { items: collected, totalCount, removedFilters, listMode: true, apiCalls };
+  return {
+    items: extractKnownItems(counted.payload),
+    totalCount: readMetaNumber(counted.payload, 'totalCount'),
+    requestMode: 'exact-contract-url' as const,
+    apiCalls: counted.attempts,
+  };
 }
 
 function parseBaseParkingItems(rawItems: RawObject[]) {
@@ -2294,24 +2292,50 @@ function normalizeBaseParking(item: BusanParkingApiItem): ParkingBase {
 }
 
 function normalizeRealtimeNumbers(item: BusanRealtimeParkingApiItem) {
-  let available = numberField(item.curravacnt);
-  let occupied = numberField(item.parkingcnt);
-  let capacity = numberField(item.maxcnt);
+  const rawAvailable = numberField(item.curravacnt);
+  const rawOccupied = numberField(item.parkingcnt);
+  const rawCapacity = numberField(item.maxcnt);
 
-  if (capacity == null && available != null && occupied != null) capacity = available + occupied;
-  if (available == null && capacity != null && occupied != null) available = Math.max(0, capacity - occupied);
-  if (occupied == null && capacity != null && available != null) occupied = Math.max(0, capacity - available);
+  let available = rawAvailable;
+  let occupied = rawOccupied;
+  let capacity = rawCapacity;
+  let derived = false;
 
-  if (
-    capacity != null &&
-    available != null &&
-    occupied != null &&
-    Math.abs(capacity - (available + occupied)) > 1
-  ) {
-    available = Math.max(0, capacity - occupied);
+  const missingCount = [available, occupied, capacity].filter((value) => value == null).length;
+
+  // 정확히 한 값만 누락된 경우에만 나머지 두 값으로 파생합니다.
+  // 세 원본 값이 모두 존재하면서 불일치하면 임의 보정하지 않습니다.
+  if (missingCount === 1) {
+    if (capacity == null && available != null && occupied != null) {
+      capacity = available + occupied;
+      derived = true;
+    } else if (available == null && capacity != null && occupied != null) {
+      available = Math.max(0, capacity - occupied);
+      derived = true;
+    } else if (occupied == null && capacity != null && available != null) {
+      occupied = Math.max(0, capacity - available);
+      derived = true;
+    }
   }
 
-  return { available, occupied, capacity };
+  const consistent =
+    capacity == null ||
+    available == null ||
+    occupied == null ||
+    Math.abs(capacity - (available + occupied)) <= 1;
+
+  return {
+    available,
+    occupied,
+    capacity,
+    derived,
+    consistent,
+    raw: {
+      available: rawAvailable,
+      occupied: rawOccupied,
+      capacity: rawCapacity,
+    },
+  };
 }
 
 function joinRealtimeParkingByName(baseItems: ParkingBase[], realtimeItems: BusanRealtimeParkingApiItem[]): ParkingJoinResult {
@@ -2409,12 +2433,14 @@ function joinRealtimeParkingByName(baseItems: ParkingBase[], realtimeItems: Busa
     const numbers = normalizeRealtimeNumbers(realtime);
     output[chosen.index] = {
       ...current,
-      capacity: numbers.capacity ?? current.capacity,
-      availableParking: numbers.available,
-      occupiedParking: numbers.occupied,
-      parkingUpdatedAt: cleanValue(realtime.lastupdatetime) || current.parkingUpdatedAt,
-      parkingRealtime: numbers.available != null,
-      parkingSource: 'merged',
+      capacity: numbers.consistent ? (numbers.capacity ?? current.capacity) : current.capacity,
+      availableParking: numbers.consistent ? numbers.available : current.availableParking,
+      occupiedParking: numbers.consistent ? numbers.occupied : current.occupiedParking,
+      parkingUpdatedAt: numbers.consistent
+        ? (cleanValue(realtime.lastupdatetime) || current.parkingUpdatedAt)
+        : current.parkingUpdatedAt,
+      parkingRealtime: numbers.consistent && numbers.available != null,
+      parkingSource: numbers.consistent ? 'merged' : current.parkingSource,
       realtimeMatch: {
         matched: true,
         type,
@@ -3205,14 +3231,20 @@ async function upsertSyncState(
   ).run();
 }
 
-async function incrementApiUsage(db: D1Database, apiName: string) {
+async function incrementApiUsageBy(db: D1Database, apiName: string, count: number) {
+  const safeCount = Math.max(0, Math.trunc(Number(count || 0)));
+  if (safeCount <= 0) return;
   const usageDate = new Date().toISOString().slice(0, 10);
   await db.prepare(
     `INSERT INTO api_usage_daily (usage_date, api_name, request_count)
-     VALUES (?1, ?2, 1)
+     VALUES (?1, ?2, ?3)
      ON CONFLICT(usage_date, api_name) DO UPDATE SET
-       request_count = request_count + 1`,
-  ).bind(usageDate, apiName).run();
+       request_count = request_count + excluded.request_count`,
+  ).bind(usageDate, apiName, safeCount).run();
+}
+
+async function incrementApiUsage(db: D1Database, apiName: string) {
+  await incrementApiUsageBy(db, apiName, 1);
 }
 
 function nullableText(value: string) {
@@ -3251,6 +3283,42 @@ async function fetchStructuredWithBackoff(
   }
 
   throw new Error(`${label} 실패: ${safeError(lastError)}`);
+}
+
+function countedFetchError(label: string, error: unknown, attempts: number) {
+  const wrapped = new Error(`${label}: ${safeError(error)}`) as Error & { apiAttempts?: number };
+  wrapped.apiAttempts = attempts;
+  return wrapped;
+}
+
+function readApiAttempts(error: unknown) {
+  if (error && typeof error === 'object' && 'apiAttempts' in error) {
+    const count = Number((error as { apiAttempts?: number }).apiAttempts || 0);
+    if (Number.isFinite(count) && count > 0) return Math.trunc(count);
+  }
+  return 1;
+}
+
+async function fetchStructuredWithRetryCounted(url: URL, label: string) {
+  let attempts = 0;
+  try {
+    attempts += 1;
+    return { payload: await fetchStructured(url), attempts };
+  } catch (error) {
+    const message = safeError(error);
+    if (!message.includes('503') && !message.includes('SERVICETIMEOUT')) {
+      throw countedFetchError(label, error, attempts);
+    }
+  }
+
+  await delay(400);
+
+  try {
+    attempts += 1;
+    return { payload: await fetchStructured(url), attempts };
+  } catch (error) {
+    throw countedFetchError(`${label} 재시도 실패`, error, attempts);
+  }
 }
 
 async function fetchStructuredWithRetry(url: URL, label: string) {
