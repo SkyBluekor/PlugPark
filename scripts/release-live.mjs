@@ -69,7 +69,7 @@ async function postOnce(path, token, label) {
   return data;
 }
 
-console.log('\nPlugPark v0.7.0.3 LIVE SAFE RELEASE');
+console.log('\nPlugPark v0.7.1 LIVE SAFE RELEASE');
 console.log('Local PASS → read-only preflight → migration 1회 → deploy 1회 → live sync 각 1회 → smoke\n');
 
 runNode('1) LIVE LOCAL VERIFY', resolve('scripts', 'verify-live-local.mjs'));
@@ -87,8 +87,8 @@ runWrangler('3) D1 migration remote (1회)', ['d1', 'migrations', 'apply', 'plug
 runWrangler('4) Worker deploy + 5분 Cron 활성화 (1회)', ['deploy']);
 
 const health = await getJson('/api/health?live-release=70');
-if (health.dataLayerVersion !== 'v0.7.0.1') throw new Error(`배포 버전=${health.dataLayerVersion}`);
-console.log('배포 확인 ... PASS · v0.7.0.1');
+if (health.dataLayerVersion !== 'v0.7.1') throw new Error(`배포 버전=${health.dataLayerVersion}`);
+console.log('배포 확인 ... PASS · v0.7.1');
 
 if (!health.realtimeParkingUrlConfigured) {
   throw new Error('배포 후 BUSAN_REALTIME_PARKING_API_URL이 사라졌습니다. live sync write 전에 중단합니다.');
@@ -108,7 +108,7 @@ if (live.parkingRealtime.status !== 'complete') {
 
 const result = {
   releasedAt: new Date().toISOString(),
-  version: 'v0.7.0.1',
+  version: 'v0.7.1',
   remoteMigrationCalls: 1,
   deployCalls: 1,
   evSyncCalls: 1,
@@ -127,9 +127,5 @@ await writeFile(RESULT_FILE, JSON.stringify(result, null, 2) + '\n', 'utf8');
 
 console.log('\n✅ LIVE REMOTE RELEASE: PASS');
 console.log(`EV Status rows=${live.evStatus.storedRows} · fresh=${live.evStatus.fresh}`);
-if (health.realtimeParkingUrlConfigured) {
-  console.log(`Parking realtime=${live.parkingRealtime.itemCount}곳 · fresh=${live.parkingRealtime.fresh}`);
-} else {
-  console.log('Parking realtime=URL 미설정으로 SKIP');
-}
+console.log(`Parking realtime=${live.parkingRealtime.itemCount}곳 · fresh=${live.parkingRealtime.fresh}`);
 console.log('사용자 /api/places upstream call=0');
