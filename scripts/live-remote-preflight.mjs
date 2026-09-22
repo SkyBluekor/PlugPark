@@ -8,6 +8,7 @@ const ROOT = process.cwd();
 const BASE_URL = process.env.PLUGPARK_URL || 'https://plugpark.dtdt4865.workers.dev';
 const LOCAL_RESULT = resolve('.plugpark', 'live-local-verify-result.json');
 const BASELINE_FILE = resolve('.plugpark', 'source-baseline.json');
+const PARKING_PROBE_FILE = resolve('.plugpark', 'parking-api-probe.json');
 
 const critical = [
   'package.json',
@@ -66,14 +67,14 @@ function wranglerWhoami() {
   }
 }
 
-console.log('\nPlugPark v0.7.0.3 LIVE REMOTE PREFLIGHT');
+console.log('\nPlugPark v0.7.1 LIVE REMOTE PREFLIGHT');
 console.log('※ read-only 검사입니다. Remote D1 write/API sync를 수행하지 않습니다.\n');
 
 if (!existsSync(LOCAL_RESULT)) fail('live-local-verify-result.json이 없습니다. npm run verify:live-local을 먼저 통과하세요.');
 if (!existsSync(BASELINE_FILE)) fail('source-baseline.json이 없습니다. npm run verify:live-local을 먼저 통과하세요.');
 
 const local = JSON.parse(await readFile(LOCAL_RESULT, 'utf8'));
-if (local.dataLayerVersion !== 'v0.7.0.1') fail(`local version=${local.dataLayerVersion}`);
+if (local.dataLayerVersion !== 'v0.7.1') fail(`local version=${local.dataLayerVersion}`);
 if (local.remoteWrites !== 0) fail(`local remoteWrites=${local.remoteWrites}`);
 if (local.upstreamLiveCalls !== 0) fail(`local upstreamLiveCalls=${local.upstreamLiveCalls}`);
 console.log('LIVE LOCAL VERIFY 결과 ... PASS');
@@ -108,14 +109,21 @@ const readModel = await getJson('/api/d1/read-model-state?live-preflight=70');
 if (readModel.ready !== true) fail('기존 v0.6 read model ready=true가 아닙니다.');
 console.log(`v0.6 read model ... PASS · parking=${readModel.parkingCount} · stations=${readModel.stationCount}`);
 
-if (!health.realtimeParkingUrlConfigured) {
-  fail(
-    'BUSAN_REALTIME_PARKING_API_URL이 Remote Worker에 설정되지 않았습니다.\n' +
-    'v0.7 LIVE FINAL release는 Parking live까지 포함하므로 write/deploy 전에 중단했습니다.\n' +
-    '공공데이터포털 활용신청 화면의 실제 요청 URL을 설정한 뒤 같은 preflight를 다시 실행하세요.'
-  );
+if (!existsSync(PARKING_PROBE_FILE)) {
+  fail('parking-api-probe.json이 없습니다. npm run probe:parking-api를 1회 실행해 실제 API 계약을 확인하세요.');
 }
-console.log('부산 실시간 주차 URL ... CONFIGURED');
+const parkingProbe = JSON.parse(await readFile(PARKING_PROBE_FILE, 'utf8'));
+if (parkingProbe.ok !== true || Number(parkingProbe.publicApiCalls || 0) !== 1 || Number(parkingProbe.remoteD1Writes || 0) !== 0) {
+  fail('Parking API probe 결과가 PASS가 아닙니다. 실제 요청주소/필드 계약을 먼저 확인하세요.');
+}
+console.log('Parking API contract probe ... PASS · 실제 API 1회 · D1 write 0');
+
+if (health.realtimeParkingUrlConfigured) {
+  console.log('현재 Remote Worker 실시간 주차 URL ... CONFIGURED');
+} else {
+  console.log('현재 Remote Worker 실시간 주차 URL ... NOT CONFIGURED');
+  console.log('  → probe는 통과했지만 release 전에 Cloudflare Worker 변수/secret 설정이 필요합니다.');
+}
 
 console.log('\n✅ LIVE REMOTE PREFLIGHT: PASS');
 console.log('Remote write: 0');
