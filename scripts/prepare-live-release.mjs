@@ -20,13 +20,12 @@ function run(label, relativePath) {
 }
 
 console.log('\nPlugPark v0.7.1 LIVE RELEASE PREPARATION');
-console.log('Endpoint check → Local verify → 실제 Parking API 1회 probe → Remote URL 설정 → read-only preflight');
+console.log('Endpoint check → Local verify → Parking v2 contract probe → read-only preflight');
 
 run('0) PARKING ENDPOINT CHECK', 'scripts/check-parking-endpoint.mjs');
 run('1) LIVE LOCAL VERIFY', 'scripts/verify-live-local.mjs');
-run('2) PARKING API PROBE (실제 API GET 1회)', 'scripts/probe-parking-api.mjs');
-run('3) PARKING API REMOTE CONFIG (D1 write 0)', 'scripts/configure-parking-api.mjs');
-run('4) LIVE REMOTE PREFLIGHT (read-only)', 'scripts/live-remote-preflight.mjs');
+run('2) PARKING v2 CONTRACT PROBE (실제 API 최대 2회)', 'scripts/probe-parking-api.mjs');
+run('3) LIVE REMOTE PREFLIGHT (read-only)', 'scripts/live-remote-preflight.mjs');
 
 console.log('\n✅ LIVE RELEASE PREPARATION: PASS');
 console.log('다음 명령: npm run release:live');
