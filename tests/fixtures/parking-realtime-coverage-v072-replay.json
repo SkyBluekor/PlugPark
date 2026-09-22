@@ -1,0 +1,922 @@
+{
+  "version": "v0.7.2-P2-replay-fixture",
+  "sourceAuditVersion": "v0.7.2-P1",
+  "sourceAuditedAt": "2026-09-22T08:08:22.512Z",
+  "sourceSummary": {
+    "parkingCount": 50,
+    "liveOk": 49,
+    "liveEmpty": 0,
+    "schemaInvalid": 1,
+    "numericInvalid": 0,
+    "apiError": 0,
+    "httpError": 0,
+    "networkError": 0,
+    "matched": 25,
+    "unmatched": 25,
+    "ambiguous": 0,
+    "usable": 25,
+    "coveragePercent": 50
+  },
+  "items": [
+    {
+      "parkingCode": "A01",
+      "listName": "반송1, 3동 공영",
+      "realtimeName": "반송1, 3동 공영",
+      "apiStatus": "LIVE_OK",
+      "available": 51,
+      "occupied": 101,
+      "capacity": 152,
+      "sourceUpdatedAt": "2026-09-22 17:05:00",
+      "baseMatch": {
+        "status": "BASE_MATCHED",
+        "matched": true,
+        "parkingId": "2019000011",
+        "parkingName": "반송1,3동 공영주차장",
+        "method": "exact-name",
+        "score": 1
+      }
+    },
+    {
+      "parkingCode": "A02",
+      "listName": "삼락재첩거리",
+      "realtimeName": "삼락재첩거리",
+      "apiStatus": "LIVE_OK",
+      "available": 14,
+      "occupied": 112,
+      "capacity": 126,
+      "sourceUpdatedAt": "2026-09-22 17:05:00",
+      "baseMatch": {
+        "status": "BASE_MATCHED",
+        "matched": true,
+        "parkingId": "2012000005",
+        "parkingName": "삼락재첩거리주변",
+        "method": "contained-name",
+        "score": 0.94
+      }
+    },
+    {
+      "parkingCode": "A03",
+      "listName": "수변어린이공원",
+      "realtimeName": "수변어린이공원",
+      "apiStatus": "LIVE_OK",
+      "available": 112,
+      "occupied": 37,
+      "capacity": 149,
+      "sourceUpdatedAt": "2026-09-22 17:05:00",
+      "baseMatch": {
+        "status": "BASE_UNMATCHED",
+        "matched": false,
+        "parkingId": null,
+        "parkingName": null,
+        "method": "unmatched",
+        "score": 0.222
+      }
+    },
+    {
+      "parkingCode": "A04",
+      "listName": "장산역 1번",
+      "realtimeName": "장산역 1번",
+      "apiStatus": "LIVE_OK",
+      "available": 11,
+      "occupied": 76,
+      "capacity": 87,
+      "sourceUpdatedAt": "2026-09-22 17:05:00",
+      "baseMatch": {
+        "status": "BASE_UNMATCHED",
+        "matched": false,
+        "parkingId": null,
+        "parkingName": null,
+        "method": "unmatched",
+        "score": 0.2
+      }
+    },
+    {
+      "parkingCode": "A05",
+      "listName": "장산역 2번",
+      "realtimeName": "장산역 2번",
+      "apiStatus": "LIVE_OK",
+      "available": 4,
+      "occupied": 100,
+      "capacity": 104,
+      "sourceUpdatedAt": "2026-09-22 17:05:00",
+      "baseMatch": {
+        "status": "BASE_UNMATCHED",
+        "matched": false,
+        "parkingId": null,
+        "parkingName": null,
+        "method": "unmatched",
+        "score": 0.2
+      }
+    },
+    {
+      "parkingCode": "A06",
+      "listName": "좌1동",
+      "realtimeName": "좌1동",
+      "apiStatus": "LIVE_OK",
+      "available": 4,
+      "occupied": 64,
+      "capacity": 68,
+      "sourceUpdatedAt": "2026-09-22 17:05:00",
+      "baseMatch": {
+        "status": "BASE_MATCHED",
+        "matched": true,
+        "parkingId": "2019000020",
+        "parkingName": "좌1동공영주차장",
+        "method": "exact-name",
+        "score": 1
+      }
+    },
+    {
+      "parkingCode": "A07",
+      "listName": "노포역",
+      "realtimeName": "노포역",
+      "apiStatus": "LIVE_OK",
+      "available": 106,
+      "occupied": 288,
+      "capacity": 394,
+      "sourceUpdatedAt": "2026-09-22 17:05:00",
+      "baseMatch": {
+        "status": "BASE_UNMATCHED",
+        "matched": false,
+        "parkingId": null,
+        "parkingName": null,
+        "method": "unmatched",
+        "score": 0.5
+      }
+    },
+    {
+      "parkingCode": "A09",
+      "listName": "두산위브 뒤",
+      "realtimeName": "두산위브 뒤",
+      "apiStatus": "LIVE_OK",
+      "available": 1,
+      "occupied": 44,
+      "capacity": 45,
+      "sourceUpdatedAt": "2026-09-22 17:05:00",
+      "baseMatch": {
+        "status": "BASE_MATCHED",
+        "matched": true,
+        "parkingId": "2019000023",
+        "parkingName": "두산위브뒤공영주차장",
+        "method": "exact-name",
+        "score": 1
+      }
+    },
+    {
+      "parkingCode": "A10",
+      "listName": "대우1차아파트 앞",
+      "realtimeName": "대우1차아파트 앞",
+      "apiStatus": "LIVE_OK",
+      "available": 23,
+      "occupied": 53,
+      "capacity": 76,
+      "sourceUpdatedAt": "2026-09-22 17:05:00",
+      "baseMatch": {
+        "status": "BASE_MATCHED",
+        "matched": true,
+        "parkingId": "2019000022",
+        "parkingName": "대우1차아파트앞공영주차장",
+        "method": "exact-name",
+        "score": 1
+      }
+    },
+    {
+      "parkingCode": "A11",
+      "listName": "부산기계공고 후문",
+      "realtimeName": "부산기계공고 후문",
+      "apiStatus": "LIVE_OK",
+      "available": 26,
+      "occupied": 52,
+      "capacity": 78,
+      "sourceUpdatedAt": "2026-09-22 17:05:00",
+      "baseMatch": {
+        "status": "BASE_MATCHED",
+        "matched": true,
+        "parkingId": "2019000009",
+        "parkingName": "부산기계공고 공영주차장",
+        "method": "contained-name",
+        "score": 0.94
+      }
+    },
+    {
+      "parkingCode": "A12",
+      "listName": "해운대 센텀시티",
+      "realtimeName": "해운대 센텀시티",
+      "apiStatus": "LIVE_OK",
+      "available": 18,
+      "occupied": 65,
+      "capacity": 83,
+      "sourceUpdatedAt": "2026-09-22 17:05:00",
+      "baseMatch": {
+        "status": "BASE_MATCHED",
+        "matched": true,
+        "parkingId": "2019000008",
+        "parkingName": "해운대센텀시티 공영주차장",
+        "method": "exact-name",
+        "score": 1
+      }
+    },
+    {
+      "parkingCode": "A13",
+      "listName": "반여도서관 앞",
+      "realtimeName": "반여도서관 앞",
+      "apiStatus": "LIVE_OK",
+      "available": 101,
+      "occupied": 211,
+      "capacity": 312,
+      "sourceUpdatedAt": "2026-09-22 17:05:00",
+      "baseMatch": {
+        "status": "BASE_MATCHED",
+        "matched": true,
+        "parkingId": "2019000007",
+        "parkingName": "반여도서관 앞 공영주차장",
+        "method": "exact-name",
+        "score": 1
+      }
+    },
+    {
+      "parkingCode": "A14",
+      "listName": "동대신동",
+      "realtimeName": "동대신동",
+      "apiStatus": "LIVE_OK",
+      "available": 2,
+      "occupied": 22,
+      "capacity": 24,
+      "sourceUpdatedAt": "2026-09-22 17:05:00",
+      "baseMatch": {
+        "status": "BASE_UNMATCHED",
+        "matched": false,
+        "parkingId": null,
+        "parkingName": null,
+        "method": "unmatched",
+        "score": 0.444
+      }
+    },
+    {
+      "parkingCode": "A15",
+      "listName": "신선3동",
+      "realtimeName": "신선3동",
+      "apiStatus": "LIVE_OK",
+      "available": 50,
+      "occupied": 34,
+      "capacity": 84,
+      "sourceUpdatedAt": "2026-09-22 17:05:00",
+      "baseMatch": {
+        "status": "BASE_UNMATCHED",
+        "matched": false,
+        "parkingId": null,
+        "parkingName": null,
+        "method": "unmatched",
+        "score": 0.333
+      }
+    },
+    {
+      "parkingCode": "A16",
+      "listName": "영선대로 지하 공영",
+      "realtimeName": "영선대로 지하 공영",
+      "apiStatus": "LIVE_OK",
+      "available": 5,
+      "occupied": 117,
+      "capacity": 122,
+      "sourceUpdatedAt": "2026-09-22 17:05:00",
+      "baseMatch": {
+        "status": "BASE_UNMATCHED",
+        "matched": false,
+        "parkingId": null,
+        "parkingName": null,
+        "method": "unmatched",
+        "score": 0.2
+      }
+    },
+    {
+      "parkingCode": "A17",
+      "listName": "동백사거리",
+      "realtimeName": "동백사거리",
+      "apiStatus": "LIVE_OK",
+      "available": 19,
+      "occupied": 17,
+      "capacity": 36,
+      "sourceUpdatedAt": "2026-09-22 17:05:00",
+      "baseMatch": {
+        "status": "BASE_MATCHED",
+        "matched": true,
+        "parkingId": "2019000006",
+        "parkingName": "동백사거리 공영주차장",
+        "method": "exact-name",
+        "score": 1
+      }
+    },
+    {
+      "parkingCode": "A18",
+      "listName": "중동이마트 옆",
+      "realtimeName": "중동이마트 옆",
+      "apiStatus": "LIVE_OK",
+      "available": -1,
+      "occupied": 79,
+      "capacity": 78,
+      "sourceUpdatedAt": "2026-09-22 17:05:00",
+      "baseMatch": {
+        "status": "BASE_UNMATCHED",
+        "matched": false,
+        "parkingId": null,
+        "parkingName": null,
+        "method": "unmatched",
+        "score": 0.222
+      }
+    },
+    {
+      "parkingCode": "A19",
+      "listName": "부산대역(남측)",
+      "realtimeName": "부산대역(남측)",
+      "apiStatus": "LIVE_OK",
+      "available": 24,
+      "occupied": 200,
+      "capacity": 224,
+      "sourceUpdatedAt": "2026-09-22 17:05:00",
+      "baseMatch": {
+        "status": "BASE_MATCHED",
+        "matched": true,
+        "parkingId": "2007011338",
+        "parkingName": "도시철도 부산대역(남측)",
+        "method": "contained-name",
+        "score": 0.94
+      }
+    },
+    {
+      "parkingCode": "A20",
+      "listName": "부산대역(북측)",
+      "realtimeName": "부산대역(북측)",
+      "apiStatus": "LIVE_OK",
+      "available": 73,
+      "occupied": 176,
+      "capacity": 249,
+      "sourceUpdatedAt": "2026-09-22 17:05:00",
+      "baseMatch": {
+        "status": "BASE_MATCHED",
+        "matched": true,
+        "parkingId": "2007011088",
+        "parkingName": "도시철도 부산대역(북측)",
+        "method": "contained-name",
+        "score": 0.94
+      }
+    },
+    {
+      "parkingCode": "A21",
+      "listName": "화명역",
+      "realtimeName": "화명역",
+      "apiStatus": "LIVE_OK",
+      "available": 0,
+      "occupied": 37,
+      "capacity": 37,
+      "sourceUpdatedAt": "2026-09-22 17:05:00",
+      "baseMatch": {
+        "status": "BASE_UNMATCHED",
+        "matched": false,
+        "parkingId": null,
+        "parkingName": null,
+        "method": "unmatched",
+        "score": 0.667
+      }
+    },
+    {
+      "parkingCode": "A22",
+      "listName": "학장천 복개",
+      "realtimeName": "학장천 복개",
+      "apiStatus": "LIVE_OK",
+      "available": 104,
+      "occupied": 166,
+      "capacity": 270,
+      "sourceUpdatedAt": "2026-09-22 17:05:00",
+      "baseMatch": {
+        "status": "BASE_MATCHED",
+        "matched": true,
+        "parkingId": "2007001468",
+        "parkingName": "학장천복개",
+        "method": "exact-name",
+        "score": 1
+      }
+    },
+    {
+      "parkingCode": "A23",
+      "listName": "수변공원",
+      "realtimeName": "수변공원",
+      "apiStatus": "LIVE_OK",
+      "available": 28,
+      "occupied": 74,
+      "capacity": 102,
+      "sourceUpdatedAt": "2026-09-22 17:05:00",
+      "baseMatch": {
+        "status": "BASE_UNMATCHED",
+        "matched": false,
+        "parkingId": null,
+        "parkingName": null,
+        "method": "unmatched",
+        "score": 0.333
+      }
+    },
+    {
+      "parkingCode": "A24",
+      "listName": "중동역",
+      "realtimeName": "중동역",
+      "apiStatus": "LIVE_OK",
+      "available": 89,
+      "occupied": 78,
+      "capacity": 167,
+      "sourceUpdatedAt": "2026-09-22 17:05:00",
+      "baseMatch": {
+        "status": "BASE_UNMATCHED",
+        "matched": false,
+        "parkingId": null,
+        "parkingName": null,
+        "method": "unmatched",
+        "score": 0
+      }
+    },
+    {
+      "parkingCode": "A25",
+      "listName": "미포공영",
+      "realtimeName": "미포공영",
+      "apiStatus": "LIVE_OK",
+      "available": 50,
+      "occupied": 47,
+      "capacity": 97,
+      "sourceUpdatedAt": "2026-09-22 17:05:00",
+      "baseMatch": {
+        "status": "BASE_MATCHED",
+        "matched": true,
+        "parkingId": "2019000013",
+        "parkingName": "미포공영주차장",
+        "method": "exact-name",
+        "score": 1
+      }
+    },
+    {
+      "parkingCode": "A26",
+      "listName": "온천장역(남측)",
+      "realtimeName": "온천장역(남측)",
+      "apiStatus": "LIVE_OK",
+      "available": 100,
+      "occupied": 147,
+      "capacity": 247,
+      "sourceUpdatedAt": "2026-09-22 17:05:00",
+      "baseMatch": {
+        "status": "BASE_UNMATCHED",
+        "matched": false,
+        "parkingId": null,
+        "parkingName": null,
+        "method": "unmatched",
+        "score": 0.5
+      }
+    },
+    {
+      "parkingCode": "A27",
+      "listName": "구서역",
+      "realtimeName": "구서역",
+      "apiStatus": "LIVE_OK",
+      "available": 50,
+      "occupied": 222,
+      "capacity": 272,
+      "sourceUpdatedAt": "2026-09-22 17:05:00",
+      "baseMatch": {
+        "status": "BASE_UNMATCHED",
+        "matched": false,
+        "parkingId": null,
+        "parkingName": null,
+        "method": "unmatched",
+        "score": 0.5
+      }
+    },
+    {
+      "parkingCode": "A28",
+      "listName": "중앙공원",
+      "realtimeName": "중앙공원",
+      "apiStatus": "LIVE_OK",
+      "available": 33,
+      "occupied": 68,
+      "capacity": 101,
+      "sourceUpdatedAt": "2026-09-22 17:05:00",
+      "baseMatch": {
+        "status": "BASE_UNMATCHED",
+        "matched": false,
+        "parkingId": null,
+        "parkingName": null,
+        "method": "unmatched",
+        "score": 0.333
+      }
+    },
+    {
+      "parkingCode": "A29",
+      "listName": "장전역",
+      "realtimeName": "장전역",
+      "apiStatus": "LIVE_OK",
+      "available": 94,
+      "occupied": 96,
+      "capacity": 190,
+      "sourceUpdatedAt": "2026-09-22 17:05:00",
+      "baseMatch": {
+        "status": "BASE_UNMATCHED",
+        "matched": false,
+        "parkingId": null,
+        "parkingName": null,
+        "method": "unmatched",
+        "score": 0.5
+      }
+    },
+    {
+      "parkingCode": "A30",
+      "listName": "사상역 광장",
+      "realtimeName": "사상역 광장",
+      "apiStatus": "LIVE_OK",
+      "available": 91,
+      "occupied": -91,
+      "capacity": 0,
+      "sourceUpdatedAt": "2026-09-22 17:05:00",
+      "baseMatch": {
+        "status": "BASE_MATCHED",
+        "matched": true,
+        "parkingId": "2007001793",
+        "parkingName": "사상역광장",
+        "method": "exact-name",
+        "score": 1
+      }
+    },
+    {
+      "parkingCode": "A32",
+      "listName": "남산역",
+      "realtimeName": "남산역",
+      "apiStatus": "LIVE_OK",
+      "available": 64,
+      "occupied": 146,
+      "capacity": 210,
+      "sourceUpdatedAt": "2026-09-22 17:05:00",
+      "baseMatch": {
+        "status": "BASE_UNMATCHED",
+        "matched": false,
+        "parkingId": null,
+        "parkingName": null,
+        "method": "unmatched",
+        "score": 0.5
+      }
+    },
+    {
+      "parkingCode": "A33",
+      "listName": "하단역",
+      "realtimeName": "하단역",
+      "apiStatus": "LIVE_OK",
+      "available": 9,
+      "occupied": 142,
+      "capacity": 151,
+      "sourceUpdatedAt": "2026-09-22 17:05:00",
+      "baseMatch": {
+        "status": "BASE_UNMATCHED",
+        "matched": false,
+        "parkingId": null,
+        "parkingName": null,
+        "method": "unmatched",
+        "score": 0.5
+      }
+    },
+    {
+      "parkingCode": "A34",
+      "listName": "명륜역",
+      "realtimeName": "명륜역",
+      "apiStatus": "LIVE_OK",
+      "available": 97,
+      "occupied": 88,
+      "capacity": 185,
+      "sourceUpdatedAt": "2026-09-22 17:05:00",
+      "baseMatch": {
+        "status": "BASE_UNMATCHED",
+        "matched": false,
+        "parkingId": null,
+        "parkingName": null,
+        "method": "unmatched",
+        "score": 0.5
+      }
+    },
+    {
+      "parkingCode": "A35",
+      "listName": "동래역",
+      "realtimeName": "동래역",
+      "apiStatus": "LIVE_OK",
+      "available": 66,
+      "occupied": 334,
+      "capacity": 400,
+      "sourceUpdatedAt": "2026-09-22 17:05:00",
+      "baseMatch": {
+        "status": "BASE_UNMATCHED",
+        "matched": false,
+        "parkingId": null,
+        "parkingName": null,
+        "method": "unmatched",
+        "score": 0.5
+      }
+    },
+    {
+      "parkingCode": "A36",
+      "listName": "해운대광장",
+      "realtimeName": "해운대광장",
+      "apiStatus": "LIVE_OK",
+      "available": 76,
+      "occupied": 88,
+      "capacity": 164,
+      "sourceUpdatedAt": "2026-09-22 17:05:00",
+      "baseMatch": {
+        "status": "BASE_UNMATCHED",
+        "matched": false,
+        "parkingId": null,
+        "parkingName": null,
+        "method": "unmatched",
+        "score": 0.4
+      }
+    },
+    {
+      "parkingCode": "A37",
+      "listName": "롯데 광복점 뒤(2)",
+      "realtimeName": "롯데 광복점 뒤(2)",
+      "apiStatus": "LIVE_OK",
+      "available": 10,
+      "occupied": 12,
+      "capacity": 22,
+      "sourceUpdatedAt": "2026-09-22 17:05:00",
+      "baseMatch": {
+        "status": "BASE_UNMATCHED",
+        "matched": false,
+        "parkingId": null,
+        "parkingName": null,
+        "method": "unmatched",
+        "score": 0.154
+      }
+    },
+    {
+      "parkingCode": "A40",
+      "listName": "반여2배수지",
+      "realtimeName": "반여2배수지",
+      "apiStatus": "LIVE_OK",
+      "available": 64,
+      "occupied": 47,
+      "capacity": 111,
+      "sourceUpdatedAt": "2026-09-22 17:05:00",
+      "baseMatch": {
+        "status": "BASE_MATCHED",
+        "matched": true,
+        "parkingId": "2019000014",
+        "parkingName": "반여2배수지 공영주차장",
+        "method": "exact-name",
+        "score": 1
+      }
+    },
+    {
+      "parkingCode": "A41",
+      "listName": "요트경기장 앞 1구역",
+      "realtimeName": "요트경기장 앞 1구역",
+      "apiStatus": "LIVE_OK",
+      "available": 182,
+      "occupied": 49,
+      "capacity": 231,
+      "sourceUpdatedAt": "2026-09-22 17:05:00",
+      "baseMatch": {
+        "status": "BASE_MATCHED",
+        "matched": true,
+        "parkingId": "2019000002",
+        "parkingName": "요트경기장 앞 공영주차장",
+        "method": "contained-name",
+        "score": 0.94
+      }
+    },
+    {
+      "parkingCode": "A42",
+      "listName": "삼락천로",
+      "realtimeName": "삼락천로",
+      "apiStatus": "LIVE_OK",
+      "available": 20,
+      "occupied": 104,
+      "capacity": 124,
+      "sourceUpdatedAt": "2026-09-22 17:05:00",
+      "baseMatch": {
+        "status": "BASE_MATCHED",
+        "matched": true,
+        "parkingId": "2014000006",
+        "parkingName": "삼락천로 공영주차장",
+        "method": "exact-name",
+        "score": 1
+      }
+    },
+    {
+      "parkingCode": "A43",
+      "listName": "부전복개도로1",
+      "realtimeName": "부전복개도로1",
+      "apiStatus": "LIVE_OK",
+      "available": 9,
+      "occupied": 11,
+      "capacity": 20,
+      "sourceUpdatedAt": "2026-09-22 17:05:00",
+      "baseMatch": {
+        "status": "BASE_MATCHED",
+        "matched": true,
+        "parkingId": "2008011648",
+        "parkingName": "부전복개도로",
+        "method": "contained-name",
+        "score": 0.94
+      }
+    },
+    {
+      "parkingCode": "A44",
+      "listName": "부전복개도로2",
+      "realtimeName": "부전복개도로2",
+      "apiStatus": "LIVE_OK",
+      "available": 8,
+      "occupied": 15,
+      "capacity": 23,
+      "sourceUpdatedAt": "2026-09-22 17:05:00",
+      "baseMatch": {
+        "status": "BASE_MATCHED",
+        "matched": true,
+        "parkingId": "2008011648",
+        "parkingName": "부전복개도로",
+        "method": "contained-name",
+        "score": 0.94
+      }
+    },
+    {
+      "parkingCode": "A45",
+      "listName": "적십자회관",
+      "realtimeName": "적십자회관",
+      "apiStatus": "LIVE_OK",
+      "available": 31,
+      "occupied": 0,
+      "capacity": 31,
+      "sourceUpdatedAt": "2026-09-22 17:05:00",
+      "baseMatch": {
+        "status": "BASE_MATCHED",
+        "matched": true,
+        "parkingId": "2008011649",
+        "parkingName": "적십자회관",
+        "method": "exact-name",
+        "score": 1
+      }
+    },
+    {
+      "parkingCode": "A48",
+      "listName": "대연고가밑",
+      "realtimeName": "대연고가밑",
+      "apiStatus": "LIVE_OK",
+      "available": 41,
+      "occupied": 5,
+      "capacity": 46,
+      "sourceUpdatedAt": "2026-09-22 17:05:00",
+      "baseMatch": {
+        "status": "BASE_UNMATCHED",
+        "matched": false,
+        "parkingId": null,
+        "parkingName": null,
+        "method": "unmatched",
+        "score": 0.6
+      }
+    },
+    {
+      "parkingCode": "A49",
+      "listName": "골드테마거리",
+      "realtimeName": "골드테마거리",
+      "apiStatus": "LIVE_OK",
+      "available": 5,
+      "occupied": 11,
+      "capacity": 16,
+      "sourceUpdatedAt": "2026-09-22 17:05:00",
+      "baseMatch": {
+        "status": "BASE_MATCHED",
+        "matched": true,
+        "parkingId": "2008011652",
+        "parkingName": "골드테마거리",
+        "method": "exact-name",
+        "score": 1
+      }
+    },
+    {
+      "parkingCode": "A50",
+      "listName": "요트경기장 앞 2구역(대형)",
+      "realtimeName": "요트경기장 앞 2구역(대형)",
+      "apiStatus": "LIVE_OK",
+      "available": 47,
+      "occupied": 21,
+      "capacity": 68,
+      "sourceUpdatedAt": "2026-09-22 17:05:00",
+      "baseMatch": {
+        "status": "BASE_MATCHED",
+        "matched": true,
+        "parkingId": "2019000002",
+        "parkingName": "요트경기장 앞 공영주차장",
+        "method": "contained-name",
+        "score": 0.94
+      }
+    },
+    {
+      "parkingCode": "A251",
+      "listName": "구포대교밑",
+      "realtimeName": "구포대교밑",
+      "apiStatus": "LIVE_OK",
+      "available": 25,
+      "occupied": 51,
+      "capacity": 76,
+      "sourceUpdatedAt": "2026-09-22 17:05:00",
+      "baseMatch": {
+        "status": "BASE_MATCHED",
+        "matched": true,
+        "parkingId": "2007001674",
+        "parkingName": "구포대교밑",
+        "method": "exact-name",
+        "score": 1
+      }
+    },
+    {
+      "parkingCode": "A268",
+      "listName": "주례역주변복개",
+      "realtimeName": "주례역주변복개",
+      "apiStatus": "LIVE_OK",
+      "available": 67,
+      "occupied": 19,
+      "capacity": 86,
+      "sourceUpdatedAt": "2026-09-22 17:05:00",
+      "baseMatch": {
+        "status": "BASE_UNMATCHED",
+        "matched": false,
+        "parkingId": null,
+        "parkingName": null,
+        "method": "unmatched",
+        "score": 0.5
+      }
+    },
+    {
+      "parkingCode": "A432",
+      "listName": "수안동주차빌딩",
+      "realtimeName": "수안동주차빌딩",
+      "apiStatus": "LIVE_OK",
+      "available": 11,
+      "occupied": 49,
+      "capacity": 60,
+      "sourceUpdatedAt": "2026-09-22 17:05:00",
+      "baseMatch": {
+        "status": "BASE_MATCHED",
+        "matched": true,
+        "parkingId": "2007011013",
+        "parkingName": "수안동 주차빌딩",
+        "method": "exact-name",
+        "score": 1
+      }
+    },
+    {
+      "parkingCode": "A433",
+      "listName": "구남역",
+      "realtimeName": "구남역",
+      "apiStatus": "LIVE_OK",
+      "available": 66,
+      "occupied": 56,
+      "capacity": 122,
+      "sourceUpdatedAt": "2026-09-22 17:05:00",
+      "baseMatch": {
+        "status": "BASE_UNMATCHED",
+        "matched": false,
+        "parkingId": null,
+        "parkingName": null,
+        "method": "unmatched",
+        "score": 0.5
+      }
+    },
+    {
+      "parkingCode": "A434",
+      "listName": "만덕2동사앞복개",
+      "realtimeName": "만덕2동사앞복개",
+      "apiStatus": "LIVE_OK",
+      "available": 9,
+      "occupied": 64,
+      "capacity": 73,
+      "sourceUpdatedAt": "2026-09-22 17:05:00",
+      "baseMatch": {
+        "status": "BASE_MATCHED",
+        "matched": true,
+        "parkingId": "2007011209",
+        "parkingName": "만덕2동사 앞",
+        "method": "contained-name",
+        "score": 0.94
+      }
+    },
+    {
+      "parkingCode": "A435",
+      "listName": "예비",
+      "realtimeName": "예비",
+      "apiStatus": "LIVE_SCHEMA_INVALID",
+      "available": null,
+      "occupied": null,
+      "capacity": 100,
+      "sourceUpdatedAt": "2026-09-22 17:05:00",
+      "baseMatch": {
+        "status": "BASE_UNMATCHED",
+        "matched": false,
+        "parkingId": null,
+        "parkingName": null,
+        "method": "unmatched",
+        "score": 0
+      }
+    }
+  ]
+}
