@@ -17,7 +17,6 @@
     "verify:live-local": "node scripts/verify-live-local.mjs",
     "verify:live": "node scripts/verify-live-local.mjs",
     "probe:parking-api": "node scripts/probe-parking-api.mjs",
-    "configure:parking-api": "node scripts/configure-parking-api.mjs",
     "preflight:remote": "node scripts/live-remote-preflight.mjs",
     "live:preflight": "node scripts/live-remote-preflight.mjs",
     "status:remote": "node scripts/live-state-remote.mjs",
