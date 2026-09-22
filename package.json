@@ -24,7 +24,8 @@
     "live:state": "node scripts/live-state-remote.mjs",
     "release": "node scripts/release-live.mjs",
     "release:remote": "node scripts/release-live.mjs",
-    "release:live": "node scripts/release-live.mjs"
+    "release:live": "node scripts/release-live.mjs",
+    "prepare:live": "node scripts/prepare-live-release.mjs"
   },
   "dependencies": {
     "react": "^19.1.1",
