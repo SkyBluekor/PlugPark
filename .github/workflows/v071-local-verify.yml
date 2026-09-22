@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - fix/v0.7.1-live-stabilization-clean
+      - feat/v0.7.2-p1-parking-coverage-audit
   pull_request:
     branches:
       - main
@@ -30,3 +31,16 @@ jobs:
 
       - name: LIVE local verify
         run: npm run verify:live
+
+      - name: v0.7.2-P1 audit syntax
+        run: node --check scripts/audit-parking-realtime-coverage.mjs
+
+      - name: v0.7.2-P1 audit safety guard
+        shell: bash
+        run: |
+          set +e
+          node scripts/audit-parking-realtime-coverage.mjs > guard.log 2>&1
+          code=$?
+          cat guard.log
+          test "$code" -eq 2
+          grep -q "명시적 확인" guard.log
