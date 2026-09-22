@@ -4,6 +4,11 @@ interface Env {
   BUSAN_REALTIME_PARKING_API_URL?: string;
   INGEST_ADMIN_TOKEN?: string;
   MATCH_RADIUS_METERS?: string;
+  LOCAL_FIXTURE_MODE?: string;
+  LIVE_SYNC_ENABLED?: string;
+  LIVE_ALLOW_FULL_RECONCILE?: string;
+  LIVE_PARKING_STALE_MINUTES?: string;
+  LIVE_STATUS_STALE_MINUTES?: string;
   DB?: D1Database;
   ASSETS: Fetcher;
 }
@@ -169,15 +174,25 @@ const PARKING_BASE_URL =
 const EV_INFO_URL = 'https://apis.data.go.kr/B552584/EvCharger/getChargerInfo';
 const EV_STATUS_URL = 'https://apis.data.go.kr/B552584/EvCharger/getChargerStatus';
 
-const CACHE_VERSION = 'v6.0';
-const DATA_LAYER_VERSION = 'v0.6.0';
+const CACHE_VERSION = 'v7.1.0';
+const DATA_LAYER_VERSION = 'v0.7.1';
 const D1_EV_INFO_JOB = 'ev_info';
 const D1_INGEST_MAX_PAGES_PER_REQUEST = 1;
 const PARKING_BASE_PAGE_SIZE = 100;
 const PARKING_BASE_MAX_PAGES = 20;
 const PARKING_BASE_CACHE_SECONDS = 24 * 60 * 60;
 const EV_INFO_PAGE_SIZE = 200;
-const EV_STATUS_PAGE_SIZE = 500;
+const EV_STATUS_PAGE_SIZE = 9999;
+const EV_STATUS_MAX_PAGES = 4;
+const EV_STATUS_DAILY_SAFETY_BUDGET = 500;
+const PARKING_REALTIME_DAILY_SAFETY_BUDGET = 900;
+const PARKING_CATALOG_DAILY_SAFETY_BUDGET = 100;
+const PARKING_REALTIME_BATCH_SIZE = 3;
+const PARKING_CATALOG_PAGE_SIZE = 100;
+const PARKING_CATALOG_MAX_PAGES = 10;
+const PARKING_REALTIME_CHUNK_SIZE = 100;
+const DEFAULT_PARKING_STALE_MINUTES = 60;
+const DEFAULT_STATUS_STALE_MINUTES = 20;
 const PLACES_CACHE_SECONDS = 5;
 
 const BASE_REQUIRED_FIELDS = ['pkNam'] as const;
@@ -217,6 +232,8 @@ export default {
         realtimeParkingUrlConfigured: Boolean(env.BUSAN_REALTIME_PARKING_API_URL),
         d1Configured: Boolean(env.DB),
         ingestAdminTokenConfigured: Boolean(env.INGEST_ADMIN_TOKEN),
+        liveSyncEnabled: liveSyncEnabled(env),
+        liveFullReconcileEnabled: String(env.LIVE_ALLOW_FULL_RECONCILE || '').toLowerCase() === 'true',
       });
     }
 
@@ -412,6 +429,50 @@ export default {
     }
 
 
+
+    if (url.pathname === '/api/admin/live-sync') {
+      if (request.method !== 'POST') {
+        return json({ ok: false, error: 'POST 요청만 허용됩니다.' }, 405);
+      }
+      if (!env.DB) return d1ConfigError();
+      const authError = validateIngestAdmin(request, env);
+      if (authError) return authError;
+
+      const kind = (url.searchParams.get('kind') || 'all').trim().toLowerCase();
+      const mode = (url.searchParams.get('mode') || 'incremental').trim().toLowerCase();
+      if (!['all', 'ev', 'parking'].includes(kind)) {
+        return json({ ok: false, error: 'kind는 all/ev/parking 중 하나여야 합니다.' }, 400);
+      }
+      if (!['incremental', 'full'].includes(mode)) {
+        return json({ ok: false, error: 'mode는 incremental/full 중 하나여야 합니다.' }, 400);
+      }
+      if (mode === 'full' && String(env.LIVE_ALLOW_FULL_RECONCILE || '').toLowerCase() !== 'true' && !isLocalFixtureMode(env)) {
+        return json({
+          ok: false,
+          error: 'FULL_RECONCILE_DISABLED',
+          message: '대량 D1 write 보호를 위해 full reconcile은 기본 비활성입니다.',
+        }, 409);
+      }
+
+      try {
+        await ensureLiveSchema(env.DB);
+        const result = await runLiveSync(env, kind as LiveSyncKind, mode as LiveSyncMode);
+        return json(result);
+      } catch (error) {
+        return json({ ok: false, error: safeError(error) }, 500);
+      }
+    }
+
+    if (url.pathname === '/api/d1/live-state') {
+      if (!env.DB) return d1ConfigError();
+      try {
+        await ensureLiveSchema(env.DB);
+        return json(await getLiveState(env.DB, env), 200, 5);
+      } catch (error) {
+        return json({ ok: false, error: safeError(error) }, 500);
+      }
+    }
+
     if (url.pathname === '/api/admin/d1/prepare-read-models') {
       if (request.method !== 'POST') {
         return json({ ok: false, error: 'POST 요청만 허용됩니다.' }, 405);
@@ -591,6 +652,34 @@ export default {
 
     return env.ASSETS.fetch(request);
   },
+
+  async scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
+    if (!liveSyncEnabled(env) || !env.DB) return;
+
+    ctx.waitUntil((async () => {
+      await ensureLiveSchema(env.DB!);
+
+      // Parking runs every 5 minutes, but only a quota-safe batch of facility codes is polled.
+      // EV status remains limited to every 10 minutes.
+      const scheduledAt = new Date(controller.scheduledTime);
+      try {
+        if (isLocalFixtureMode(env) || env.BUSAN_REALTIME_PARKING_API_URL) {
+          await syncParkingRealtime(env);
+        }
+      } catch (error) {
+        await markLiveSyncError(env.DB!, 'parking_realtime', error);
+      }
+
+      if (scheduledAt.getUTCMinutes() % 10 === 0) {
+        try {
+          const reconcile = await shouldAttemptFullReconcile(env.DB!, env);
+          await syncEvStatus(env, reconcile ? 'full' : 'incremental');
+        } catch (error) {
+          await markLiveSyncError(env.DB!, 'ev_status', error);
+        }
+      }
+    })());
+  },
 };
 
 async function handlePlaces(env: Env, _ctx: ExecutionContext) {
@@ -621,31 +710,49 @@ async function handlePlaces(env: Env, _ctx: ExecutionContext) {
          p.parking_updated_at, p.parking_realtime, p.parking_source,
          p.realtime_match_type, p.realtime_name,
          COALESCE(SUM(s.charger_count), 0) AS charger_total,
-         COALESCE(SUM(s.available_count), 0) AS charger_available,
-         COALESCE(SUM(s.charging_count), 0) AS charger_charging,
+         COALESCE(SUM(COALESCE(ls.available_count, s.available_count)), 0) AS charger_available,
+         COALESCE(SUM(COALESCE(ls.charging_count, s.charging_count)), 0) AS charger_charging,
+         COALESCE(SUM(COALESCE(ls.unavailable_count, 0)), 0) AS charger_unavailable,
          COALESCE(SUM(s.fast_count), 0) AS charger_fast,
          COALESCE(SUM(s.slow_count), 0) AS charger_slow,
          GROUP_CONCAT(DISTINCT s.station_name) AS station_names,
          MIN(m.distance_m) AS nearest_distance_m,
-         MAX(s.last_updated_at) AS charger_last_updated,
+         MAX(COALESCE(ls.status_updated_at, s.last_updated_at)) AS charger_last_updated,
          MAX(m.match_score) AS best_match_score
        FROM parking_read_model p
        LEFT JOIN parking_ev_matches m ON m.parking_id = p.parking_id
        LEFT JOIN ev_stations s ON s.stat_id = m.stat_id
+       LEFT JOIN ev_station_live_status ls ON ls.stat_id = s.stat_id
        GROUP BY p.parking_id
        ORDER BY charger_available DESC, available_parking DESC, p.name ASC`,
     ).all<ParkingReadRow>();
 
-    const places = rows.results.map(readRowToPlace);
+    const liveState = await getLiveState(env.DB, env);
+    const basePlaces = rows.results.map(readRowToPlace).map((place) => ({
+      ...place,
+      charger: {
+        ...place.charger,
+        statusFresh:
+          place.charger.total <= 0 || !place.charger.lastUpdated
+            ? null
+            : isFreshIso(
+                place.charger.lastUpdated,
+                staleMinutes(env.LIVE_STATUS_STALE_MINUTES, DEFAULT_STATUS_STALE_MINUTES),
+              ),
+      },
+    }));
+    const parkingLive = await getParkingRealtimeOverlay(env.DB, env);
+    const places = applyParkingRealtimeOverlay(basePlaces, parkingLive);
     const payload = {
       ok: true,
       generatedAt: new Date().toISOString(),
       dataLayerVersion: DATA_LAYER_VERSION,
       dataSource: 'd1-read-model',
       upstreamEvCalls: 0,
+      upstreamParkingCalls: 0,
       matchRadiusMeters: state.matchRadiusMeters,
       parkingCount: state.parkingCount,
-      realtimeParkingCount: state.realtimeParkingCount,
+      realtimeParkingCount: parkingLive.matchedCount,
       chargerCount: state.chargerCount,
       chargerStationCount: state.stationCount,
       matchedCount: state.matchedParkingCount,
@@ -653,9 +760,16 @@ async function handlePlaces(env: Env, _ctx: ExecutionContext) {
       evSnapshotSource: 'd1-read-model',
       evProgress: null,
       readModelReady: true,
-      realtimeParking: state.realtimeParkingCount > 0,
-      realtimeParkingConfigured: Boolean(env.BUSAN_REALTIME_PARKING_API_URL),
-      realtimeMessage: env.BUSAN_REALTIME_PARKING_API_URL ? '' : '실시간 주차정보 연동 전입니다.',
+      realtimeParking: parkingLive.matchedCount > 0,
+      realtimeParkingConfigured: isLocalFixtureMode(env) || Boolean(env.BUSAN_REALTIME_PARKING_API_URL),
+      realtimeParkingFresh: parkingLive.fresh,
+      realtimeParkingUpdatedAt: parkingLive.fetchedAt,
+      realtimeMessage: parkingLive.message,
+      evStatusFresh: liveState.evStatus.syncFresh,
+      evStatusUpdatedAt: liveState.evStatus.lastIncrementalAt,
+      evStatusCoverageComplete: liveState.evStatus.coverageComplete,
+      evStatusBaselineAt: liveState.evStatus.baselineAt,
+      liveState,
       places,
     };
 
@@ -665,6 +779,787 @@ async function handlePlaces(env: Env, _ctx: ExecutionContext) {
   } catch (error) {
     return json({ ok: false, dataLayerVersion: DATA_LAYER_VERSION, error: safeError(error) }, 500);
   }
+}
+
+
+/* -------------------------------------------------------------------------- */
+/* v0.7.0 live data sync                                                       */
+/* -------------------------------------------------------------------------- */
+
+type LiveSyncKind = 'all' | 'ev' | 'parking';
+type LiveSyncMode = 'incremental' | 'full';
+
+type ParkingRealtimeSnapshotItem = {
+  parkingId: string;
+  parkingCode: string;
+  parkingName: string;
+  available: number | null;
+  occupied: number | null;
+  capacity: number | null;
+  sourceUpdatedAt: string | null;
+  fetchedAt?: string | null;
+};
+
+type ParkingRealtimeOverlay = {
+  fetchedAt: string | null;
+  fresh: boolean;
+  staleMinutes: number;
+  matchedCount: number;
+  items: Map<string, ParkingRealtimeSnapshotItem>;
+  message: string;
+};
+
+function liveSyncEnabled(env: Env) {
+  return String(env.LIVE_SYNC_ENABLED ?? 'true').toLowerCase() !== 'false';
+}
+
+function staleMinutes(value: string | undefined, fallback: number) {
+  return clamp(Math.trunc(Number(value || fallback)), 1, 240);
+}
+
+function parseSourceTimestampMs(value: string | null | undefined) {
+  const raw = String(value || '').trim();
+  if (!raw) return Number.NaN;
+
+  // 환경공단 EV API의 statUpdDt 계열은 YYYYMMDDHHmmss(한국 표준시) 형식입니다.
+  const compact = /^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})$/.exec(raw);
+  if (compact) {
+    const [, y, m, d, hh, mm, ss] = compact;
+    return Date.parse(`${y}-${m}-${d}T${hh}:${mm}:${ss}+09:00`);
+  }
+
+  const spaced = /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2}):(\d{2})$/.exec(raw);
+  if (spaced) {
+    const [, y, m, d, hh, mm, ss] = spaced;
+    return Date.parse(`${y}-${m}-${d}T${hh}:${mm}:${ss}+09:00`);
+  }
+
+  return Date.parse(raw);
+}
+
+function isFreshIso(value: string | null | undefined, minutes: number) {
+  const time = parseSourceTimestampMs(value);
+  if (!Number.isFinite(time)) return false;
+  return Date.now() - time <= minutes * 60_000;
+}
+
+async function ensureLiveSchema(db: D1Database) {
+  await db.batch([
+    db.prepare(`CREATE TABLE IF NOT EXISTS ev_station_live_status (
+      stat_id TEXT PRIMARY KEY,
+      available_count INTEGER NOT NULL DEFAULT 0,
+      charging_count INTEGER NOT NULL DEFAULT 0,
+      unavailable_count INTEGER NOT NULL DEFAULT 0,
+      status_updated_at TEXT,
+      synced_at TEXT NOT NULL
+    )`),
+    db.prepare(`CREATE TABLE IF NOT EXISTS parking_realtime_snapshot_chunks (
+      chunk_no INTEGER PRIMARY KEY,
+      fetched_at TEXT NOT NULL,
+      item_count INTEGER NOT NULL,
+      payload_json TEXT NOT NULL
+    )`),
+    db.prepare(`CREATE TABLE IF NOT EXISTS parking_realtime_links (
+      parking_code TEXT PRIMARY KEY,
+      realtime_name TEXT NOT NULL,
+      parking_id TEXT,
+      match_method TEXT NOT NULL,
+      match_score REAL,
+      updated_at TEXT NOT NULL
+    )`),
+    db.prepare(`CREATE INDEX IF NOT EXISTS idx_parking_realtime_links_parking_id
+      ON parking_realtime_links(parking_id)`),
+    db.prepare(`CREATE TABLE IF NOT EXISTS parking_facility_catalog (
+      parking_code TEXT PRIMARY KEY,
+      parking_name TEXT,
+      refreshed_at TEXT NOT NULL,
+      last_polled_at TEXT
+    )`),
+    db.prepare(`CREATE INDEX IF NOT EXISTS idx_parking_facility_catalog_poll
+      ON parking_facility_catalog(last_polled_at, parking_code)`),
+  ]);
+}
+
+async function runLiveSync(env: Env, kind: LiveSyncKind, mode: LiveSyncMode) {
+  if (!env.DB) throw new Error('D1 binding DB가 없습니다.');
+  await ensureLiveSchema(env.DB);
+
+  const result: Record<string, unknown> = {
+    ok: true,
+    dataLayerVersion: DATA_LAYER_VERSION,
+    kind,
+    mode,
+    upstreamOnUserRead: 0,
+  };
+
+  if (kind === 'all' || kind === 'ev') {
+    result.ev = await syncEvStatus(env, mode);
+  }
+  if (kind === 'all' || kind === 'parking') {
+    result.parking = await syncParkingRealtime(env);
+  }
+
+  result.state = await getLiveState(env.DB, env);
+  return result;
+}
+
+async function getTodayApiUsage(db: D1Database, apiName: string) {
+  const date = new Date().toISOString().slice(0, 10);
+  const row = await db.prepare(
+    `SELECT request_count FROM api_usage_daily WHERE usage_date=?1 AND api_name=?2`,
+  ).bind(date, apiName).first<{ request_count: number }>();
+  return Number(row?.request_count || 0);
+}
+
+async function assertApiSafetyBudget(db: D1Database, apiName: string, max: number) {
+  const used = await getTodayApiUsage(db, apiName);
+  if (used >= max) {
+    throw new Error(`SYNC_SKIPPED_SAFETY_BUDGET: ${apiName} today=${used}, budget=${max}`);
+  }
+}
+
+function localEvStatusFixture(): EvChargerStatusApiItem[] {
+  return [
+    { busiId: 'ME', statId: 'STCENT01', chgerId: '01', stat: '2', statUpdDt: '20260922090000', lastTsdt: '', lastTedt: '', nowTsdt: '' },
+    { busiId: 'ME', statId: 'STCENT01', chgerId: '02', stat: '3', statUpdDt: '20260922090100', lastTsdt: '', lastTedt: '', nowTsdt: '20260922090100' },
+    { busiId: 'ME', statId: 'STPARK01', chgerId: '02', stat: '5', statUpdDt: '20260922090200', lastTsdt: '', lastTedt: '', nowTsdt: '' },
+  ];
+}
+
+async function fetchEvStatusPages(env: Env, mode: LiveSyncMode) {
+  if (isLocalFixtureMode(env)) {
+    return { items: localEvStatusFixture(), apiCalls: 0, totalCount: 3, pages: 1 };
+  }
+  if (!env.EV_CHARGER_API_KEY) throw new Error('EV_CHARGER_API_KEY가 설정되지 않았습니다.');
+  if (!env.DB) throw new Error('D1 binding DB가 없습니다.');
+
+  await assertApiSafetyBudget(env.DB, 'ev_status', EV_STATUS_DAILY_SAFETY_BUDGET);
+
+  const collected: EvChargerStatusApiItem[] = [];
+  let totalCount: number | null = null;
+  let apiCalls = 0;
+  let pages = 0;
+
+  for (let pageNo = 1; pageNo <= EV_STATUS_MAX_PAGES; pageNo += 1) {
+    const url = new URL(EV_STATUS_URL);
+    url.searchParams.set('serviceKey', normalizeServiceKey(env.EV_CHARGER_API_KEY));
+    url.searchParams.set('pageNo', String(pageNo));
+    url.searchParams.set('numOfRows', String(EV_STATUS_PAGE_SIZE));
+    if (mode === 'incremental') url.searchParams.set('period', '10');
+    url.searchParams.set('zcode', '26');
+    url.searchParams.set('dataType', 'JSON');
+
+    let counted: Awaited<ReturnType<typeof fetchStructuredWithRetryCounted>>;
+    try {
+      counted = await fetchStructuredWithRetryCounted(url, `EV status ${mode} page ${pageNo}`);
+    } catch (error) {
+      const attempts = readApiAttempts(error);
+      apiCalls += attempts;
+      await incrementApiUsageBy(env.DB, 'ev_status', attempts);
+      throw error;
+    }
+    const payload = counted.payload;
+    apiCalls += counted.attempts;
+    await incrementApiUsageBy(env.DB, 'ev_status', counted.attempts);
+    ensureNormalResult(payload, 'EV getChargerStatus');
+
+    const raw = extractKnownItems(payload);
+    const parsed = parseEvStatusItems(raw);
+    if (parsed.invalid.length > 0) {
+      throw new Error(`EV_STATUS_SCHEMA_MISMATCH: invalid=${parsed.invalid.length}`);
+    }
+    collected.push(...parsed.valid);
+    pages = pageNo;
+    if (pageNo === 1) totalCount = readMetaNumber(payload, 'totalCount');
+
+    if (raw.length < EV_STATUS_PAGE_SIZE || raw.length === 0) break;
+    if (totalCount != null && collected.length >= totalCount) break;
+  }
+
+  if (totalCount != null && totalCount > EV_STATUS_PAGE_SIZE * EV_STATUS_MAX_PAGES) {
+    throw new Error(`STATUS_TOTALCOUNT_ANOMALY: totalCount=${totalCount}`);
+  }
+
+  return { items: collected, apiCalls, totalCount, pages };
+}
+
+async function syncEvStatus(env: Env, mode: LiveSyncMode) {
+  if (!env.DB) throw new Error('D1 binding DB가 없습니다.');
+  await ensureLiveSchema(env.DB);
+  const fetchedAt = new Date().toISOString();
+
+  try {
+    const fetched = await fetchEvStatusPages(env, mode);
+    const unique = new Map<string, EvChargerStatusApiItem>();
+    for (const item of fetched.items) {
+      if (!item.statId.trim() || !item.chgerId.trim()) continue;
+      unique.set(evCompositeKey(item.statId, item.chgerId), item);
+    }
+
+    const items = [...unique.values()];
+    const changed: EvChargerStatusApiItem[] = [];
+    const affectedStatIds = new Set<string>();
+
+    for (let offset = 0; offset < items.length; offset += 500) {
+      const chunk = items.slice(offset, offset + 500);
+      const current = await env.DB.prepare(
+        `WITH incoming AS (
+           SELECT
+             json_extract(j.value, '$.statId') AS stat_id,
+             json_extract(j.value, '$.chgerId') AS chger_id
+           FROM json_each(?1) j
+         )
+         SELECT i.stat_id, i.chger_id,
+                COALESCE(s.status, c.info_status) AS current_status,
+                COALESCE(s.status_updated_at, c.info_status_updated_at) AS current_updated_at
+           FROM incoming i
+           LEFT JOIN ev_status s ON s.stat_id=i.stat_id AND s.chger_id=i.chger_id
+           LEFT JOIN ev_chargers c ON c.stat_id=i.stat_id AND c.chger_id=i.chger_id`,
+      ).bind(JSON.stringify(chunk)).all<{
+        stat_id: string;
+        chger_id: string;
+        current_status: string | null;
+        current_updated_at: string | null;
+      }>();
+
+      const byKey = new Map(current.results.map((row) => [evCompositeKey(row.stat_id, row.chger_id), row]));
+      for (const item of chunk) {
+        const row = byKey.get(evCompositeKey(item.statId, item.chgerId));
+        const sameStatus = String(row?.current_status || '') === cleanValue(item.stat);
+        const sameUpdated = String(row?.current_updated_at || '') === cleanValue(item.statUpdDt);
+        if (!sameStatus || !sameUpdated) {
+          changed.push(item);
+          affectedStatIds.add(item.statId);
+        }
+      }
+    }
+
+    if (changed.length > 0) {
+      const upsertSql = `INSERT INTO ev_status (
+          stat_id, chger_id, status, status_updated_at,
+          last_start_at, last_end_at, now_start_at, synced_at
+        )
+        SELECT
+          json_extract(j.value, '$.statId'),
+          json_extract(j.value, '$.chgerId'),
+          json_extract(j.value, '$.stat'),
+          NULLIF(json_extract(j.value, '$.statUpdDt'), ''),
+          NULLIF(json_extract(j.value, '$.lastTsdt'), ''),
+          NULLIF(json_extract(j.value, '$.lastTedt'), ''),
+          NULLIF(json_extract(j.value, '$.nowTsdt'), ''),
+          ?2
+        FROM json_each(?1) j
+        WHERE true
+        ON CONFLICT(stat_id, chger_id) DO UPDATE SET
+          status=excluded.status,
+          status_updated_at=excluded.status_updated_at,
+          last_start_at=excluded.last_start_at,
+          last_end_at=excluded.last_end_at,
+          now_start_at=excluded.now_start_at,
+          synced_at=excluded.synced_at`;
+
+      const statements: D1PreparedStatement[] = [];
+      for (let offset = 0; offset < changed.length; offset += 100) {
+        statements.push(env.DB.prepare(upsertSql).bind(JSON.stringify(changed.slice(offset, offset + 100)), fetchedAt));
+      }
+      await env.DB.batch(statements);
+      await refreshStationLiveSummaries(env.DB, [...affectedStatIds], fetchedAt);
+    }
+
+    await upsertLiveSyncState(env.DB, 'ev_status', 'complete', fetchedAt, null, changed.length);
+    await upsertLiveSyncState(env.DB, 'ev_status_reconcile', 'complete', fetchedAt, null, null);
+
+    return {
+      ok: true,
+      mode,
+      fetched: items.length,
+      changed: changed.length,
+      affectedStations: affectedStatIds.size,
+      apiCalls: fetched.apiCalls,
+      pages: fetched.pages,
+      totalCount: fetched.totalCount,
+    };
+  } catch (error) {
+    await upsertLiveSyncState(env.DB, 'ev_status', 'error', null, safeError(error), null);
+    await upsertLiveSyncState(env.DB, 'ev_status_reconcile', 'pending', null, safeError(error), null);
+    throw error;
+  }
+}
+
+async function refreshStationLiveSummaries(db: D1Database, statIds: string[], syncedAt: string) {
+  if (statIds.length === 0) return;
+
+  for (let offset = 0; offset < statIds.length; offset += 100) {
+    const chunk = statIds.slice(offset, offset + 100);
+    await db.prepare(
+      `INSERT INTO ev_station_live_status (
+         stat_id, available_count, charging_count, unavailable_count,
+         status_updated_at, synced_at
+       )
+       SELECT
+         c.stat_id,
+         SUM(CASE WHEN COALESCE(s.status, c.info_status)='2' THEN 1 ELSE 0 END),
+         SUM(CASE WHEN COALESCE(s.status, c.info_status)='3' THEN 1 ELSE 0 END),
+         SUM(CASE WHEN COALESCE(s.status, c.info_status) IN ('1','4','5') THEN 1 ELSE 0 END),
+         MAX(COALESCE(s.status_updated_at, c.info_status_updated_at)),
+         ?2
+       FROM ev_chargers c
+       LEFT JOIN ev_status s USING(stat_id, chger_id)
+       WHERE COALESCE(c.del_yn, '') <> 'Y'
+         AND c.stat_id IN (SELECT value FROM json_each(?1))
+       GROUP BY c.stat_id
+       ON CONFLICT(stat_id) DO UPDATE SET
+         available_count=excluded.available_count,
+         charging_count=excluded.charging_count,
+         unavailable_count=excluded.unavailable_count,
+         status_updated_at=excluded.status_updated_at,
+         synced_at=excluded.synced_at`,
+    ).bind(JSON.stringify(chunk), syncedAt).run();
+  }
+}
+
+function localParkingRealtimeFixture(): BusanRealtimeParkingApiItem[] {
+  return [
+    { parkgcd: 'A-CENTUM', parknm: '해운대센텀시티 공영주차장', curravacnt: '31', parkingcnt: '49', maxcnt: '80', lastupdatetime: '2026-09-22 09:05:00' },
+    { parkgcd: 'A-PARK02', parknm: '부산시민공원 공영주차장', curravacnt: '15', parkingcnt: '35', maxcnt: '50', lastupdatetime: '2026-09-22 09:05:00' },
+    { parkgcd: 'A-UNKNOWN', parknm: '연결되지않는주차장', curravacnt: '3', parkingcnt: '7', maxcnt: '10', lastupdatetime: '2026-09-22 09:05:00' },
+    { parkgcd: 'A-BAD-NUMBERS', parknm: '숫자불일치주차장', curravacnt: '40', parkingcnt: '70', maxcnt: '100', lastupdatetime: '2026-09-22 09:05:00' },
+  ];
+}
+
+async function syncParkingRealtime(env: Env) {
+  if (!env.DB) throw new Error('D1 binding DB가 없습니다.');
+  await ensureLiveSchema(env.DB);
+
+  if (!isLocalFixtureMode(env)) {
+    if (!env.BUSAN_PARKING_API_KEY) throw new Error('BUSAN_PARKING_API_KEY가 설정되지 않았습니다.');
+    if (!env.BUSAN_REALTIME_PARKING_API_URL) {
+      return { ok: true, skipped: true, reason: 'REALTIME_PARKING_URL_NOT_CONFIGURED', apiCalls: 0 };
+    }
+  }
+
+  try {
+    let valid: BusanRealtimeParkingApiItem[] = [];
+    let apiCalls = 0;
+    let catalogCalls = 0;
+    let catalogCount = 0;
+    const fetchedAt = new Date().toISOString();
+
+    if (isLocalFixtureMode(env)) {
+      valid = localParkingRealtimeFixture();
+    } else {
+      const catalog = await ensureParkingFacilityCatalog(
+        env.DB,
+        env.BUSAN_PARKING_API_KEY!,
+        env.BUSAN_REALTIME_PARKING_API_URL!,
+      );
+      catalogCalls = catalog.apiCalls;
+      catalogCount = catalog.count;
+
+      const targets = await env.DB.prepare(
+        `SELECT parking_code, parking_name
+           FROM parking_facility_catalog
+          ORDER BY CASE WHEN last_polled_at IS NULL THEN 0 ELSE 1 END,
+                   last_polled_at ASC,
+                   parking_code ASC
+          LIMIT ?1`,
+      ).bind(PARKING_REALTIME_BATCH_SIZE).all<{ parking_code: string; parking_name: string | null }>();
+
+      for (const target of targets.results) {
+        // One logical request may retry once, so reserve two calls before starting it.
+        const used = await getTodayApiUsage(env.DB, 'parking_realtime');
+        if (used + 2 > PARKING_REALTIME_DAILY_SAFETY_BUDGET) break;
+
+        try {
+          const raw = await fetchRealtimeParkingByCode(
+            env.BUSAN_PARKING_API_KEY!,
+            env.BUSAN_REALTIME_PARKING_API_URL!,
+            target.parking_code,
+          );
+          apiCalls += raw.apiCalls;
+          await incrementApiUsageBy(env.DB, 'parking_realtime', raw.apiCalls);
+
+          const parsed = parseRealtimeParkingItems(raw.items);
+          if (parsed.invalid.length > 0) {
+            throw new Error(
+              `PARKING_REALTIME_SCHEMA_MISMATCH: code=${target.parking_code} invalid=${parsed.invalid.length}`,
+            );
+          }
+          valid.push(...parsed.valid);
+
+          await env.DB.prepare(
+            `UPDATE parking_facility_catalog
+                SET last_polled_at=?2
+              WHERE parking_code=?1`,
+          ).bind(target.parking_code, fetchedAt).run();
+        } catch (error) {
+          const attempts = readApiAttempts(error);
+          apiCalls += attempts;
+          await incrementApiUsageBy(env.DB, 'parking_realtime', attempts);
+          throw error;
+        }
+      }
+    }
+
+    if (valid.length === 0) {
+      throw new Error('PARKING_REALTIME_EMPTY_SUCCESS: 기존 정상 snapshot을 유지합니다.');
+    }
+
+    const parkingRows = await env.DB.prepare(
+      `SELECT parking_id, name, normalized_name, address, agency, lat, lng, capacity,
+              available_parking, occupied_parking, fee_text, operation_text,
+              parking_updated_at, parking_realtime, parking_source,
+              realtime_match_type, realtime_name
+         FROM parking_read_model
+        ORDER BY parking_id`,
+    ).all<ParkingReadRow>();
+
+    const parkingBases: ParkingBase[] = parkingRows.results.map((row) => ({
+      id: row.parking_id,
+      name: row.name,
+      address: row.address || '주소 정보 없음',
+      agency: row.agency || '',
+      lat: row.lat == null ? null : Number(row.lat),
+      lng: row.lng == null ? null : Number(row.lng),
+      capacity: row.capacity == null ? null : Number(row.capacity),
+      availableParking: row.available_parking == null ? null : Number(row.available_parking),
+      occupiedParking: row.occupied_parking == null ? null : Number(row.occupied_parking),
+      feeText: row.fee_text || '',
+      operationText: row.operation_text || '',
+      parkingUpdatedAt: row.parking_updated_at || null,
+      parkingRealtime: false,
+      parkingSource: 'busan-city',
+      realtimeMatch: { matched: false, type: 'unmatched', realtimeName: null },
+    }));
+
+    const joined = joinRealtimeParkingByName(parkingBases, valid);
+    const detailByKey = new Map(joined.details.map((d) => [`${d.realtimeCode}|${d.normalizedRealtimeName}`, d]));
+    const existing = await getParkingRealtimeOverlay(env.DB, env);
+    const snapshotByParkingId = new Map(existing.items);
+    const linkRows: Array<{
+      parking_code: string;
+      realtime_name: string;
+      parking_id: string | null;
+      match_method: string;
+      match_score: number | null;
+      updated_at: string;
+    }> = [];
+
+    let invalidNumberCount = 0;
+    let updatedCount = 0;
+    for (const item of valid) {
+      const code = cleanValue(item.parkgcd);
+      const name = cleanValue(item.parknm);
+      const detail = detailByKey.get(`${code}|${normalizeParkingName(name)}`);
+      const numbers = normalizeRealtimeNumbers(item);
+      if (!numbers.consistent) {
+        invalidNumberCount += 1;
+        continue;
+      }
+
+      linkRows.push({
+        parking_code: code || `name:${normalizeParkingName(name)}`,
+        realtime_name: name,
+        parking_id: detail?.baseId || null,
+        match_method: detail?.type || 'unmatched',
+        match_score: detail?.score ?? null,
+        updated_at: fetchedAt,
+      });
+
+      if (!detail?.baseId) continue;
+      snapshotByParkingId.set(detail.baseId, {
+        parkingId: detail.baseId,
+        parkingCode: code,
+        parkingName: name,
+        available: numbers.available,
+        occupied: numbers.occupied,
+        capacity: numbers.capacity,
+        sourceUpdatedAt: cleanValue(item.lastupdatetime) || null,
+        fetchedAt,
+      });
+      updatedCount += 1;
+    }
+
+    await upsertParkingRealtimeLinks(env.DB, linkRows);
+
+    const snapshot = [...snapshotByParkingId.values()];
+    const chunkStatements: D1PreparedStatement[] = [
+      env.DB.prepare('DELETE FROM parking_realtime_snapshot_chunks'),
+    ];
+    for (let offset = 0, chunkNo = 1; offset < snapshot.length; offset += PARKING_REALTIME_CHUNK_SIZE, chunkNo += 1) {
+      const chunk = snapshot.slice(offset, offset + PARKING_REALTIME_CHUNK_SIZE);
+      chunkStatements.push(
+        env.DB.prepare(
+          `INSERT INTO parking_realtime_snapshot_chunks (chunk_no, fetched_at, item_count, payload_json)
+           VALUES (?1, ?2, ?3, ?4)`,
+        ).bind(chunkNo, fetchedAt, chunk.length, JSON.stringify(chunk)),
+      );
+    }
+    await env.DB.batch(chunkStatements);
+    await upsertLiveSyncState(env.DB, 'parking_realtime', 'complete', fetchedAt, null, snapshot.length);
+
+    return {
+      ok: true,
+      inputCount: valid.length,
+      updatedCount,
+      matchedCount: snapshot.length,
+      unmatchedCount: valid.length - updatedCount - invalidNumberCount,
+      invalidNumberCount,
+      chunks: Math.ceil(snapshot.length / PARKING_REALTIME_CHUNK_SIZE),
+      apiCalls,
+      catalogCalls,
+      catalogCount,
+      pollBatchSize: isLocalFixtureMode(env) ? valid.length : PARKING_REALTIME_BATCH_SIZE,
+      fetchedAt,
+    };
+  } catch (error) {
+    await upsertLiveSyncState(env.DB, 'parking_realtime', 'error', null, safeError(error), null);
+    throw error;
+  }
+}
+
+async function upsertParkingRealtimeLinks(
+  db: D1Database,
+  rows: Array<{
+    parking_code: string;
+    realtime_name: string;
+    parking_id: string | null;
+    match_method: string;
+    match_score: number | null;
+    updated_at: string;
+  }>,
+) {
+  if (rows.length === 0) return;
+  const sql = `INSERT INTO parking_realtime_links (
+      parking_code, realtime_name, parking_id, match_method, match_score, updated_at
+    )
+    SELECT
+      json_extract(j.value, '$.parking_code'),
+      json_extract(j.value, '$.realtime_name'),
+      json_extract(j.value, '$.parking_id'),
+      json_extract(j.value, '$.match_method'),
+      json_extract(j.value, '$.match_score'),
+      json_extract(j.value, '$.updated_at')
+    FROM json_each(?1) j
+    WHERE true
+    ON CONFLICT(parking_code) DO UPDATE SET
+      realtime_name=excluded.realtime_name,
+      parking_id=excluded.parking_id,
+      match_method=excluded.match_method,
+      match_score=excluded.match_score,
+      updated_at=excluded.updated_at
+    WHERE parking_realtime_links.realtime_name IS NOT excluded.realtime_name
+       OR parking_realtime_links.parking_id IS NOT excluded.parking_id
+       OR parking_realtime_links.match_method IS NOT excluded.match_method
+       OR parking_realtime_links.match_score IS NOT excluded.match_score`;
+
+  for (let offset = 0; offset < rows.length; offset += 100) {
+    await db.prepare(sql).bind(JSON.stringify(rows.slice(offset, offset + 100))).run();
+  }
+}
+
+async function getParkingRealtimeOverlay(db: D1Database, env: Env): Promise<ParkingRealtimeOverlay> {
+  await ensureLiveSchema(db);
+  const rows = await db.prepare(
+    `SELECT chunk_no, fetched_at, payload_json
+       FROM parking_realtime_snapshot_chunks
+      ORDER BY chunk_no`,
+  ).all<{ chunk_no: number; fetched_at: string; payload_json: string }>();
+  const catalog = await db.prepare(
+    `SELECT COUNT(*) AS n FROM parking_facility_catalog`,
+  ).first<{ n: number }>();
+
+  const catalogCount = Number(catalog?.n || 0);
+  const expectedCycleMinutes = catalogCount > 0
+    ? Math.ceil(catalogCount / PARKING_REALTIME_BATCH_SIZE) * 5 + 10
+    : DEFAULT_PARKING_STALE_MINUTES;
+  const effectiveStaleMinutes = staleMinutes(
+    env.LIVE_PARKING_STALE_MINUTES,
+    Math.min(240, Math.max(DEFAULT_PARKING_STALE_MINUTES, expectedCycleMinutes)),
+  );
+
+  if (rows.results.length === 0) {
+    return {
+      fetchedAt: null,
+      fresh: false,
+      staleMinutes: effectiveStaleMinutes,
+      matchedCount: 0,
+      items: new Map(),
+      message: (isLocalFixtureMode(env) || env.BUSAN_REALTIME_PARKING_API_URL)
+        ? '실시간 주차정보가 아직 수집되지 않았습니다.'
+        : '실시간 주차정보 연동 전입니다.',
+    };
+  }
+
+  const items = new Map<string, ParkingRealtimeSnapshotItem>();
+  let fetchedAt: string | null = null;
+  for (const row of rows.results) {
+    if (!fetchedAt || row.fetched_at > fetchedAt) fetchedAt = row.fetched_at;
+    try {
+      const parsed = JSON.parse(row.payload_json) as ParkingRealtimeSnapshotItem[];
+      for (const item of parsed) {
+        if (!item?.parkingId) continue;
+        items.set(item.parkingId, {
+          ...item,
+          fetchedAt: item.fetchedAt || row.fetched_at,
+        });
+      }
+    } catch {
+      // A corrupt chunk is ignored; the other chunks remain usable.
+    }
+  }
+
+  const fresh = [...items.values()].some((item) =>
+    isFreshIso(item.fetchedAt || item.sourceUpdatedAt, effectiveStaleMinutes),
+  );
+
+  return {
+    fetchedAt,
+    fresh,
+    staleMinutes: effectiveStaleMinutes,
+    matchedCount: items.size,
+    items,
+    message: fresh ? '' : '실시간 주차정보 갱신이 지연되고 있습니다.',
+  };
+}
+
+function applyParkingRealtimeOverlay(
+  places: ReturnType<typeof readRowToPlace>[],
+  overlay: ParkingRealtimeOverlay,
+) {
+  return places.map((place) => {
+    const live = overlay.items.get(place.id);
+    if (!live) {
+      return {
+        ...place,
+        parkingRealtimeFresh: false,
+      };
+    }
+    return {
+      ...place,
+      capacity: live.capacity ?? place.capacity,
+      availableParking: live.available,
+      occupiedParking: live.occupied,
+      parkingUpdatedAt: live.sourceUpdatedAt || overlay.fetchedAt || place.parkingUpdatedAt,
+      parkingRealtime: true,
+      parkingRealtimeFresh: isFreshIso(
+        live.fetchedAt || live.sourceUpdatedAt,
+        overlay.staleMinutes,
+      ),
+      parkingSource: 'merged' as const,
+    };
+  });
+}
+
+async function upsertLiveSyncState(
+  db: D1Database,
+  jobName: string,
+  status: string,
+  lastSuccessAt: string | null,
+  lastError: string | null,
+  count: number | null,
+) {
+  await db.prepare(
+    `INSERT INTO sync_state (
+       job_name, status, next_page, total_pages, reported_total_count,
+       last_success_at, last_error, run_id
+     ) VALUES (?1, ?2, NULL, NULL, ?3, ?4, ?5, ?6)
+     ON CONFLICT(job_name) DO UPDATE SET
+       status=excluded.status,
+       reported_total_count=excluded.reported_total_count,
+       last_success_at=COALESCE(excluded.last_success_at, sync_state.last_success_at),
+       last_error=excluded.last_error,
+       run_id=excluded.run_id`,
+  ).bind(jobName, status, count, lastSuccessAt, lastError, `live-${crypto.randomUUID()}`).run();
+}
+
+async function markLiveSyncError(db: D1Database, jobName: string, error: unknown) {
+  await upsertLiveSyncState(db, jobName, 'error', null, safeError(error), null);
+}
+
+async function shouldAttemptFullReconcile(db: D1Database, env: Env) {
+  if (String(env.LIVE_ALLOW_FULL_RECONCILE || '').toLowerCase() !== 'true') return false;
+  const row = await db.prepare(
+    `SELECT status FROM sync_state WHERE job_name='ev_status_reconcile'`,
+  ).first<{ status: string }>();
+  return row?.status === 'pending';
+}
+
+async function getLiveState(db: D1Database, env: Env) {
+  const jobs = await db.prepare(
+    `SELECT job_name, status, reported_total_count, last_success_at, last_error
+       FROM sync_state
+      WHERE job_name IN ('ev_info','ev_status','ev_status_reconcile','parking_realtime')
+      ORDER BY job_name`,
+  ).all<{
+    job_name: string;
+    status: string;
+    reported_total_count: number | null;
+    last_success_at: string | null;
+    last_error: string | null;
+  }>();
+
+  const byName = new Map(jobs.results.map((row) => [row.job_name, row]));
+  const evInfo = byName.get('ev_info');
+  const ev = byName.get('ev_status');
+  const parking = byName.get('parking_realtime');
+  const snapshot = await db.prepare(
+    `SELECT COUNT(*) AS chunk_count, COALESCE(SUM(item_count),0) AS item_count,
+            MAX(fetched_at) AS fetched_at
+       FROM parking_realtime_snapshot_chunks`,
+  ).first<{ chunk_count: number; item_count: number; fetched_at: string | null }>();
+  const statusCount = await db.prepare(
+    `SELECT COUNT(*) AS n FROM ev_status`,
+  ).first<{ n: number }>();
+  const activeChargerCount = await db.prepare(
+    `SELECT COUNT(*) AS n
+       FROM ev_chargers
+      WHERE COALESCE(del_yn, '') <> 'Y'`,
+  ).first<{ n: number }>();
+
+  const evSyncFresh = isFreshIso(
+    ev?.last_success_at,
+    staleMinutes(env.LIVE_STATUS_STALE_MINUTES, DEFAULT_STATUS_STALE_MINUTES),
+  );
+  const parkingFresh = isFreshIso(
+    snapshot?.fetched_at,
+    staleMinutes(env.LIVE_PARKING_STALE_MINUTES, DEFAULT_PARKING_STALE_MINUTES),
+  );
+
+  return {
+    ok: true,
+    dataLayerVersion: DATA_LAYER_VERSION,
+    userReadUpstreamCalls: 0,
+    evStatus: {
+      status: ev?.status || 'not-started',
+      lastSuccessAt: ev?.last_success_at || null,
+      lastError: ev?.last_error || null,
+      storedRows: Number(statusCount?.n || 0),
+      fresh: evSyncFresh,
+      syncFresh: evSyncFresh,
+      baselineAt: evInfo?.last_success_at || null,
+      lastIncrementalAt: ev?.last_success_at || null,
+      coverageComplete: evInfo?.status === 'complete',
+      coverageCount: Number(activeChargerCount?.n || 0),
+      overlayRows: Number(statusCount?.n || 0),
+      reconcileStatus: byName.get('ev_status_reconcile')?.status || 'not-started',
+    },
+    parkingRealtime: {
+      configured: isLocalFixtureMode(env) || Boolean(env.BUSAN_REALTIME_PARKING_API_URL),
+      contract: 'ParkingInfoService_v2:list->pParkGCd->realtime',
+      status: parking?.status || 'not-started',
+      lastSuccessAt: parking?.last_success_at || null,
+      lastError: parking?.last_error || null,
+      chunks: Number(snapshot?.chunk_count || 0),
+      itemCount: Number(snapshot?.item_count || 0),
+      fetchedAt: snapshot?.fetched_at || null,
+      fresh: parkingFresh,
+    },
+    todayUsage: {
+      evStatus: await getTodayApiUsage(db, 'ev_status'),
+      parkingRealtime: await getTodayApiUsage(db, 'parking_realtime'),
+    },
+  };
 }
 
 /* -------------------------------------------------------------------------- */
@@ -693,6 +1588,7 @@ type ParkingReadRow = {
   charger_total: number;
   charger_available: number;
   charger_charging: number;
+  charger_unavailable: number;
   charger_fast: number;
   charger_slow: number;
   station_names: string | null;
@@ -769,6 +1665,7 @@ async function ensureReadModelSchema(db: D1Database) {
     )`),
     db.prepare(`CREATE INDEX IF NOT EXISTS idx_parking_ev_matches_stat_id ON parking_ev_matches(stat_id)`),
   ]);
+  await ensureLiveSchema(db);
 }
 
 async function prepareD1ReadModels(env: Env, stage: ReadModelPrepareStage) {
@@ -777,6 +1674,7 @@ async function prepareD1ReadModels(env: Env, stage: ReadModelPrepareStage) {
   const runId = `read-model-${crypto.randomUUID()}`;
   const radius = clamp(Number(env.MATCH_RADIUS_METERS || '200'), 50, 500);
   const completed: string[] = [];
+  const metrics: Record<string, unknown> = {};
 
   if (stage === 'all' || stage === 'stations') {
     const evInfoState = await env.DB.prepare(
@@ -791,9 +1689,16 @@ async function prepareD1ReadModels(env: Env, stage: ReadModelPrepareStage) {
   }
 
   if (stage === 'all' || stage === 'parking') {
-    if (!env.BUSAN_PARKING_API_KEY) throw new Error('BUSAN_PARKING_API_KEY가 설정되지 않았습니다.');
-    const parking = await fetchMergedParking(env);
-    await replaceParkingReadModel(env.DB, parking.items);
+    const parking = isLocalFixtureMode(env)
+      ? await loadLocalParkingFixtureFromD1(env.DB)
+      : await (async () => {
+          if (!env.BUSAN_PARKING_API_KEY) {
+            throw new Error('BUSAN_PARKING_API_KEY가 설정되지 않았습니다.');
+          }
+          return fetchMergedParking(env);
+        })();
+    const parkingMetrics = await replaceParkingReadModel(env.DB, parking.items);
+    metrics.parking = parkingMetrics;
     await markReadModelJob(env.DB, 'read_model_parking', runId);
     completed.push('parking');
   }
@@ -805,13 +1710,89 @@ async function prepareD1ReadModels(env: Env, stage: ReadModelPrepareStage) {
   }
 
   const state = await getReadModelState(env.DB);
-  return { ok: true, dataLayerVersion: DATA_LAYER_VERSION, stage, completed, state };
+  return { ok: true, dataLayerVersion: DATA_LAYER_VERSION, stage, completed, metrics, state };
+}
+
+function isLocalFixtureMode(env: Env) {
+  return String(env.LOCAL_FIXTURE_MODE || '').toLowerCase() === 'true';
+}
+
+async function loadLocalParkingFixtureFromD1(db: D1Database): Promise<ParkingJoinResult> {
+  const rows = await db.prepare(
+    `SELECT
+       p.parking_id, p.name,
+       COALESCE(NULLIF(p.road_address, ''), NULLIF(p.jibun_address, ''), '주소 정보 없음') AS address,
+       COALESCE(p.district, '') AS agency,
+       p.lat, p.lng, p.capacity, p.fee_text, p.operation_text,
+       r.parking_name AS realtime_name,
+       r.available_count, r.occupied_count, r.max_count, r.source_updated_at
+     FROM parking_lots p
+     LEFT JOIN parking_realtime r
+       ON r.normalized_name = p.normalized_name
+     ORDER BY p.parking_id`,
+  ).all<{
+    parking_id: string;
+    name: string;
+    address: string;
+    agency: string;
+    lat: number | null;
+    lng: number | null;
+    capacity: number | null;
+    fee_text: string | null;
+    operation_text: string | null;
+    realtime_name: string | null;
+    available_count: number | null;
+    occupied_count: number | null;
+    max_count: number | null;
+    source_updated_at: string | null;
+  }>();
+
+  const items: ParkingBase[] = rows.results.map((row) => {
+    const hasRealtime = Boolean(row.realtime_name);
+    return {
+      id: row.parking_id,
+      name: row.name,
+      address: row.address,
+      agency: row.agency,
+      lat: row.lat == null ? null : Number(row.lat),
+      lng: row.lng == null ? null : Number(row.lng),
+      capacity: row.max_count == null
+        ? (row.capacity == null ? null : Number(row.capacity))
+        : Number(row.max_count),
+      availableParking: row.available_count == null ? null : Number(row.available_count),
+      occupiedParking: row.occupied_count == null ? null : Number(row.occupied_count),
+      feeText: row.fee_text || '요금 정보 확인 필요',
+      operationText: row.operation_text || '운영시간 확인 필요',
+      parkingUpdatedAt: row.source_updated_at || null,
+      parkingRealtime: hasRealtime,
+      parkingSource: hasRealtime ? 'merged' : 'busan-city',
+      realtimeMatch: {
+        matched: hasRealtime,
+        type: hasRealtime ? 'exact-name' : 'unmatched',
+        realtimeName: row.realtime_name || null,
+      },
+    };
+  });
+
+  const realtimeCount = items.filter((item) => item.parkingRealtime).length;
+  return {
+    items,
+    details: [],
+    summary: {
+      realtimeCount,
+      matched: realtimeCount,
+      exact: realtimeCount,
+      contained: 0,
+      similar: 0,
+      ambiguous: 0,
+      unmatched: items.length - realtimeCount,
+    },
+  };
 }
 
 async function rebuildEvStations(db: D1Database) {
   const now = new Date().toISOString();
-  await db.prepare('DELETE FROM ev_stations').run();
-  await db.prepare(
+  const insert = db.prepare(
     `INSERT INTO ev_stations (
        stat_id, station_name, normalized_station_name, address, lat, lng,
        charger_count, available_count, charging_count, fast_count, slow_count,
@@ -843,13 +1824,19 @@ async function rebuildEvStations(db: D1Database) {
      LEFT JOIN ev_status s USING(stat_id, chger_id)
      WHERE COALESCE(c.del_yn, '') <> 'Y'
      GROUP BY c.stat_id`,
-  ).bind(now).run();
+  ).bind(now);
+
+  // DELETE + INSERT를 하나의 D1 batch로 묶어 quota/network 실패 시 기존 read model을 보존합니다.
+  await db.batch([
+    db.prepare('DELETE FROM ev_stations'),
+    insert,
+  ]);
 }
 
 async function replaceParkingReadModel(db: D1Database, items: ParkingBase[]) {
-  await db.prepare('DELETE FROM parking_read_model').run();
   const syncedAt = new Date().toISOString();
-  const rows = items.map((item) => ({
+  const deduped = dedupeParkingById(items);
+  const rows = deduped.items.map((item) => ({
     parking_id: item.id,
     name: item.name,
     normalized_name: normalizeParkingName(item.name),
@@ -897,9 +1884,18 @@ async function replaceParkingReadModel(db: D1Database, items: ParkingBase[]) {
       json_extract(j.value, '$.synced_at')
     FROM json_each(?1) AS j`;
 
+  const statements: D1PreparedStatement[] = [
+    db.prepare('DELETE FROM parking_read_model'),
+  ];
   for (let offset = 0; offset < rows.length; offset += 100) {
-    await db.prepare(sql).bind(JSON.stringify(rows.slice(offset, offset + 100))).run();
+    statements.push(db.prepare(sql).bind(JSON.stringify(rows.slice(offset, offset + 100))));
   }
+  await db.batch(statements);
+  return {
+    inputCount: deduped.inputCount,
+    uniqueCount: deduped.uniqueCount,
+    duplicateCount: deduped.duplicateCount,
+  };
 }
 
 async function rebuildParkingEvMatches(db: D1Database, radius: number) {
@@ -998,7 +1994,6 @@ async function rebuildParkingEvMatches(db: D1Database, radius: number) {
     if (!current || candidate.match_score > current.match_score) matches.set(key, candidate);
   }
 
-  await db.prepare('DELETE FROM parking_ev_matches').run();
   const rows = [...matches.values()];
   const sql = `INSERT INTO parking_ev_matches (
       parking_id, stat_id, match_type, match_score, distance_m, reviewed, matched_at
@@ -1012,9 +2007,13 @@ async function rebuildParkingEvMatches(db: D1Database, radius: number) {
       json_extract(j.value, '$.reviewed'),
       json_extract(j.value, '$.matched_at')
     FROM json_each(?1) AS j`;
+  const statements: D1PreparedStatement[] = [
+    db.prepare('DELETE FROM parking_ev_matches'),
+  ];
   for (let offset = 0; offset < rows.length; offset += 100) {
-    await db.prepare(sql).bind(JSON.stringify(rows.slice(offset, offset + 100))).run();
+    statements.push(db.prepare(sql).bind(JSON.stringify(rows.slice(offset, offset + 100))));
   }
+  await db.batch(statements);
   return rows.length;
 }
 
@@ -1107,11 +2106,13 @@ function readRowToPlace(row: ParkingReadRow) {
       total: Number(row.charger_total || 0),
       available: Number(row.charger_available || 0),
       charging: Number(row.charger_charging || 0),
+      unavailable: Number(row.charger_unavailable || 0),
       fast: Number(row.charger_fast || 0),
       slow: Number(row.charger_slow || 0),
       stations: row.station_names ? row.station_names.split(',').filter(Boolean) : [],
       nearestDistanceMeters: row.nearest_distance_m == null ? null : Math.round(Number(row.nearest_distance_m)),
       lastUpdated: row.charger_last_updated || null,
+      statusFresh: null as boolean | null,
       matchConfidence: score == null ? null : score >= 94 ? 'high' : score >= 82 ? 'medium' : 'low',
     },
     source: 'live' as const,
@@ -1132,7 +2133,9 @@ async function fetchMergedParking(env: Env): Promise<{
 }> {
   const baseRaw = await fetchBaseParkingRaw(env.BUSAN_PARKING_API_KEY!);
   const baseParsed = parseBaseParkingItems(baseRaw.items);
-  const baseItems = baseParsed.valid.map(normalizeBaseParking);
+  // 부산 공영주차장 원본 API가 페이지 경계/관리번호 중복을 반환해도
+  // read model PK(parking_id)를 깨지 않도록 여기서 1차 정리합니다.
+  const baseItems = dedupeParkingById(baseParsed.valid.map(normalizeBaseParking)).items;
 
   if (!env.BUSAN_REALTIME_PARKING_API_URL) {
     return {
@@ -1266,60 +2269,175 @@ async function fetchBaseParkingRaw(serviceKey: string) {
   return result;
 }
 
-async function fetchRealtimeParkingRaw(serviceKey: string, endpoint: string) {
-  const original = new URL(endpoint.trim());
-  const listTemplate = new URL(original.toString());
+function parkingFacilityBaseEndpoint(endpoint: string) {
+  const url = new URL(endpoint.trim());
+  url.search = '';
+  url.hash = '';
+  url.pathname = url.pathname
+    .replace(/\/(?:getParkingList_v2|getParkingInfoList_v2)\/?$/i, '')
+    .replace(/\/$/, '');
+  return url.toString().replace(/\/$/, '');
+}
 
-  if (!listTemplate.searchParams.has('serviceKey') && !listTemplate.searchParams.has('ServiceKey')) {
-    listTemplate.searchParams.set('serviceKey', normalizeServiceKey(serviceKey));
-  }
-
-  // 공공데이터포털 테스트 URL에 A01 같은 단일 주차장 예제가 붙어 있어도
-  // PlugPark에서는 전체 목록 조회를 먼저 시도합니다.
-  const removedFilters: string[] = [];
-  for (const key of ['parkgcd', 'parkcd', 'pParkGCd']) {
-    if (listTemplate.searchParams.has(key)) {
-      listTemplate.searchParams.delete(key);
-      removedFilters.push(key);
+function flexibleField(raw: RawObject, candidates: string[]) {
+  const entries = Object.entries(raw);
+  for (const candidate of candidates) {
+    const normalized = candidate.toLowerCase().replace(/[^a-z0-9]/g, '');
+    const match = entries.find(([key]) => key.toLowerCase().replace(/[^a-z0-9]/g, '') === normalized);
+    if (match) {
+      const value = String(match[1] ?? '').trim();
+      if (value) return value;
     }
   }
+  return '';
+}
 
-  const pageSize = 100;
-  const collected: RawObject[] = [];
+async function ensureParkingFacilityCatalog(
+  db: D1Database,
+  serviceKey: string,
+  endpoint: string,
+) {
+  const state = await db.prepare(
+    `SELECT COUNT(*) AS n, MAX(refreshed_at) AS refreshed_at
+       FROM parking_facility_catalog`,
+  ).first<{ n: number; refreshed_at: string | null }>();
+
+  const count = Number(state?.n || 0);
+  const fresh = count > 0 && isFreshIso(state?.refreshed_at, 24 * 60);
+  if (fresh) return { count, apiCalls: 0, refreshed: false };
+
+  const used = await getTodayApiUsage(db, 'parking_catalog');
+  if (used >= PARKING_CATALOG_DAILY_SAFETY_BUDGET) {
+    if (count > 0) return { count, apiCalls: 0, refreshed: false };
+    throw new Error('PARKING_CATALOG_SAFETY_BUDGET_EXHAUSTED');
+  }
+
+  const base = parkingFacilityBaseEndpoint(endpoint);
+  const collected = new Map<string, string>();
+  let apiCalls = 0;
   let totalCount: number | null = null;
 
-  for (let pageNo = 1; pageNo <= 20; pageNo += 1) {
-    const pageUrl = new URL(listTemplate.toString());
-    pageUrl.searchParams.set('pageNo', String(pageNo));
-    pageUrl.searchParams.set('numOfRows', String(pageSize));
+  for (let pageNo = 1; pageNo <= PARKING_CATALOG_MAX_PAGES; pageNo += 1) {
+    const remainingBudget = PARKING_CATALOG_DAILY_SAFETY_BUDGET - (used + apiCalls);
+    if (remainingBudget < 2) break;
 
+    const url = new URL(`${base}/getParkingList_v2`);
+    url.searchParams.set('serviceKey', normalizeServiceKey(serviceKey));
+    url.searchParams.set('pageNo', String(pageNo));
+    url.searchParams.set('numOfRows', String(PARKING_CATALOG_PAGE_SIZE));
+    url.searchParams.set('resultType', 'json');
+
+    let counted: Awaited<ReturnType<typeof fetchStructuredWithRetryCounted>>;
     try {
-      const payload = await fetchStructuredWithRetry(pageUrl, `부산시설공단 실시간 주차 page ${pageNo}`);
-      ensureNormalResult(payload, '부산시설공단 실시간 주차');
-      const items = extractKnownItems(payload);
-      if (pageNo === 1) totalCount = readMetaNumber(payload, 'totalCount');
-      collected.push(...items);
-      if (items.length < pageSize || items.length === 0) break;
+      counted = await fetchStructuredWithRetryCounted(url, `부산시설공단 주차장 목록 page ${pageNo}`);
     } catch (error) {
-      if (pageNo === 1 && removedFilters.length > 0) {
-        const fallback = new URL(original.toString());
-        if (!fallback.searchParams.has('serviceKey') && !fallback.searchParams.has('ServiceKey')) {
-          fallback.searchParams.set('serviceKey', normalizeServiceKey(serviceKey));
-        }
-        const payload = await fetchStructuredWithRetry(fallback, '부산시설공단 실시간 주차 단일 조회');
-        ensureNormalResult(payload, '부산시설공단 실시간 주차');
-        return {
-          items: extractKnownItems(payload),
-          totalCount: readMetaNumber(payload, 'totalCount'),
-          removedFilters,
-          listMode: false,
-        };
-      }
+      const attempts = readApiAttempts(error);
+      apiCalls += attempts;
+      await incrementApiUsageBy(db, 'parking_catalog', attempts);
       throw error;
     }
+
+    apiCalls += counted.attempts;
+    await incrementApiUsageBy(db, 'parking_catalog', counted.attempts);
+    ensureNormalResult(counted.payload, '부산시설공단 주차장 목록');
+
+    const rawItems = extractKnownItems(counted.payload);
+    if (pageNo === 1) totalCount = readMetaNumber(counted.payload, 'totalCount');
+
+    for (const raw of rawItems) {
+      const code = flexibleField(raw, ['parkgcd', 'pParkGCd', 'parkingCode', 'parkGcd']);
+      const name = flexibleField(raw, ['parknm', 'pParkNm', 'parkingName', 'parkNm']);
+      if (code) collected.set(code, name);
+    }
+
+    if (rawItems.length === 0 || rawItems.length < PARKING_CATALOG_PAGE_SIZE) break;
+    if (totalCount != null && collected.size >= totalCount) break;
   }
 
-  return { items: collected, totalCount, removedFilters, listMode: true };
+  if (collected.size === 0) {
+    if (count > 0) return { count, apiCalls, refreshed: false };
+    throw new Error('PARKING_CATALOG_EMPTY: getParkingList_v2에서 주차장 코드를 찾지 못했습니다.');
+  }
+
+  const refreshedAt = new Date().toISOString();
+  for (const entries of chunkArray([...collected.entries()], 100)) {
+    await db.prepare(
+      `INSERT INTO parking_facility_catalog (
+         parking_code, parking_name, refreshed_at, last_polled_at
+       )
+       SELECT
+         json_extract(j.value, '$[0]'),
+         NULLIF(json_extract(j.value, '$[1]'), ''),
+         ?2,
+         (SELECT last_polled_at FROM parking_facility_catalog
+           WHERE parking_code=json_extract(j.value, '$[0]'))
+       FROM json_each(?1) j
+       WHERE true
+       ON CONFLICT(parking_code) DO UPDATE SET
+         parking_name=excluded.parking_name,
+         refreshed_at=excluded.refreshed_at`,
+    ).bind(JSON.stringify(entries), refreshedAt).run();
+  }
+
+  return { count: collected.size, apiCalls, refreshed: true };
+}
+
+async function fetchRealtimeParkingByCode(
+  serviceKey: string,
+  endpoint: string,
+  parkingCode: string,
+) {
+  const base = parkingFacilityBaseEndpoint(endpoint);
+  const url = new URL(`${base}/getParkingInfoList_v2`);
+  url.searchParams.set('serviceKey', normalizeServiceKey(serviceKey));
+  url.searchParams.set('pageNo', '1');
+  url.searchParams.set('numOfRows', '10');
+  url.searchParams.set('pParkGCd', parkingCode);
+  url.searchParams.set('resultType', 'json');
+
+  const counted = await fetchStructuredWithRetryCounted(
+    url,
+    `부산시설공단 실시간 주차 ${parkingCode}`,
+  );
+
+  try {
+    ensureNormalResult(counted.payload, '부산시설공단 실시간 주차');
+  } catch (error) {
+    throw countedFetchError('부산시설공단 실시간 주차 응답 오류', error, counted.attempts);
+  }
+
+  return {
+    items: extractKnownItems(counted.payload),
+    totalCount: readMetaNumber(counted.payload, 'totalCount'),
+    parkingCode,
+    apiCalls: counted.attempts,
+  };
+}
+
+async function fetchRealtimeParkingRaw(serviceKey: string, endpoint: string) {
+  // 진단 API 호환용: catalog의 첫 코드를 찾은 뒤 실제 v2 실시간 endpoint를 1회 조회합니다.
+  const base = parkingFacilityBaseEndpoint(endpoint);
+  const listUrl = new URL(`${base}/getParkingList_v2`);
+  listUrl.searchParams.set('serviceKey', normalizeServiceKey(serviceKey));
+  listUrl.searchParams.set('pageNo', '1');
+  listUrl.searchParams.set('numOfRows', '1');
+  listUrl.searchParams.set('resultType', 'json');
+
+  const list = await fetchStructuredWithRetryCounted(listUrl, '부산시설공단 주차장 목록 진단');
+  ensureNormalResult(list.payload, '부산시설공단 주차장 목록');
+  const first = extractKnownItems(list.payload)[0];
+  if (!first) throw new Error('PARKING_CATALOG_EMPTY');
+
+  const code = flexibleField(first, ['parkgcd', 'pParkGCd', 'parkingCode', 'parkGcd']);
+  if (!code) throw new Error('PARKING_LIST_CODE_FIELD_UNCONFIRMED');
+
+  const realtime = await fetchRealtimeParkingByCode(serviceKey, endpoint, code);
+  return {
+    items: realtime.items,
+    totalCount: realtime.totalCount,
+    requestMode: 'v2-list-then-code' as const,
+    apiCalls: list.attempts + realtime.apiCalls,
+  };
 }
 
 function parseBaseParkingItems(rawItems: RawObject[]) {
@@ -1388,8 +2506,12 @@ function normalizeBaseParking(item: BusanParkingApiItem): ParkingBase {
   const baseFee = numberField(item.tenMin);
   const address = cleanValue(item.doroAddr) || cleanValue(item.jibunAddr) || '주소 정보 없음';
 
+  const normalizedName = normalizeParkingName(item.pkNam);
+  const normalizedAddress = normalizeAddress(address);
+
   return {
-    id: cleanValue(item.mgntNum) || `base:${normalizeParkingName(item.pkNam)}`,
+    // 관리번호가 없는 서로 다른 주차장이 같은 이름을 쓸 수 있으므로 주소까지 fallback key에 포함합니다.
+    id: cleanValue(item.mgntNum) || `base:${normalizedName}|${normalizedAddress}`,
     name: cleanValue(item.pkNam) || '이름 없는 공영주차장',
     address,
     agency: cleanValue(item.guNm),
@@ -1418,24 +2540,50 @@ function normalizeBaseParking(item: BusanParkingApiItem): ParkingBase {
 }
 
 function normalizeRealtimeNumbers(item: BusanRealtimeParkingApiItem) {
-  let available = numberField(item.curravacnt);
-  let occupied = numberField(item.parkingcnt);
-  let capacity = numberField(item.maxcnt);
+  const rawAvailable = numberField(item.curravacnt);
+  const rawOccupied = numberField(item.parkingcnt);
+  const rawCapacity = numberField(item.maxcnt);
 
-  if (capacity == null && available != null && occupied != null) capacity = available + occupied;
-  if (available == null && capacity != null && occupied != null) available = Math.max(0, capacity - occupied);
-  if (occupied == null && capacity != null && available != null) occupied = Math.max(0, capacity - available);
+  let available = rawAvailable;
+  let occupied = rawOccupied;
+  let capacity = rawCapacity;
+  let derived = false;
 
-  if (
-    capacity != null &&
-    available != null &&
-    occupied != null &&
-    Math.abs(capacity - (available + occupied)) > 1
-  ) {
-    available = Math.max(0, capacity - occupied);
+  const missingCount = [available, occupied, capacity].filter((value) => value == null).length;
+
+  // 정확히 한 값만 누락된 경우에만 나머지 두 값으로 파생합니다.
+  // 세 원본 값이 모두 존재하면서 불일치하면 임의 보정하지 않습니다.
+  if (missingCount === 1) {
+    if (capacity == null && available != null && occupied != null) {
+      capacity = available + occupied;
+      derived = true;
+    } else if (available == null && capacity != null && occupied != null) {
+      available = Math.max(0, capacity - occupied);
+      derived = true;
+    } else if (occupied == null && capacity != null && available != null) {
+      occupied = Math.max(0, capacity - available);
+      derived = true;
+    }
   }
 
-  return { available, occupied, capacity };
+  const consistent =
+    capacity == null ||
+    available == null ||
+    occupied == null ||
+    Math.abs(capacity - (available + occupied)) <= 1;
+
+  return {
+    available,
+    occupied,
+    capacity,
+    derived,
+    consistent,
+    raw: {
+      available: rawAvailable,
+      occupied: rawOccupied,
+      capacity: rawCapacity,
+    },
+  };
 }
 
 function joinRealtimeParkingByName(baseItems: ParkingBase[], realtimeItems: BusanRealtimeParkingApiItem[]): ParkingJoinResult {
@@ -1533,12 +2681,14 @@ function joinRealtimeParkingByName(baseItems: ParkingBase[], realtimeItems: Busa
     const numbers = normalizeRealtimeNumbers(realtime);
     output[chosen.index] = {
       ...current,
-      capacity: numbers.capacity ?? current.capacity,
-      availableParking: numbers.available,
-      occupiedParking: numbers.occupied,
-      parkingUpdatedAt: cleanValue(realtime.lastupdatetime) || current.parkingUpdatedAt,
-      parkingRealtime: numbers.available != null,
-      parkingSource: 'merged',
+      capacity: numbers.consistent ? (numbers.capacity ?? current.capacity) : current.capacity,
+      availableParking: numbers.consistent ? numbers.available : current.availableParking,
+      occupiedParking: numbers.consistent ? numbers.occupied : current.occupiedParking,
+      parkingUpdatedAt: numbers.consistent
+        ? (cleanValue(realtime.lastupdatetime) || current.parkingUpdatedAt)
+        : current.parkingUpdatedAt,
+      parkingRealtime: numbers.consistent && numbers.available != null,
+      parkingSource: numbers.consistent ? 'merged' : current.parkingSource,
       realtimeMatch: {
         matched: true,
         type,
@@ -1588,10 +2738,61 @@ function summarizeJoin(details: RealtimeJoinDetail[]): ParkingJoinResult['summar
   };
 }
 
+function parkingRowQuality(item: ParkingBase) {
+  let score = 0;
+  if (item.parkingRealtime) score += 100;
+  if (item.availableParking != null) score += 20;
+  if (item.occupiedParking != null) score += 10;
+  if (item.lat != null && item.lng != null) score += 8;
+  if (item.capacity != null) score += 4;
+  if (item.address && item.address !== '주소 정보 없음') score += 2;
+  if (item.agency) score += 1;
+  return score;
+}
+
+function dedupeParkingById(items: ParkingBase[]) {
+  const byId = new Map<string, ParkingBase>();
+  let duplicateCount = 0;
+
+  for (const item of items) {
+    const id = String(item.id || '').trim();
+    if (!id) continue;
+
+    const current = byId.get(id);
+    if (!current) {
+      byId.set(id, item);
+      continue;
+    }
+
+    duplicateCount += 1;
+    const currentScore = parkingRowQuality(current);
+    const incomingScore = parkingRowQuality(item);
+    if (incomingScore > currentScore) {
+      byId.set(id, item);
+      continue;
+    }
+
+    // 동점이면 더 최신 실시간 시각을 가진 행을 선택합니다.
+    if (incomingScore === currentScore) {
+      const currentUpdated = String(current.parkingUpdatedAt || '');
+      const incomingUpdated = String(item.parkingUpdatedAt || '');
+      if (incomingUpdated > currentUpdated) byId.set(id, item);
+    }
+  }
+
+  return {
+    items: [...byId.values()],
+    inputCount: items.length,
+    uniqueCount: byId.size,
+    duplicateCount,
+  };
+}
+
 function dedupeParking(items: ParkingBase[]) {
+  const byId = dedupeParkingById(items).items;
   const seen = new Set<string>();
   const result: ParkingBase[] = [];
-  for (const item of items) {
+  for (const item of byId) {
     const key = `${normalizeParkingName(item.name)}|${normalizeAddress(item.address)}`;
     if (seen.has(key)) continue;
     seen.add(key);
@@ -1772,8 +2973,8 @@ async function diagnosticsParkingRealtime(env: Env) {
       itemCount: raw.items.length,
       validCount: parsed.valid.length,
       invalidCount: parsed.invalid.length,
-      listMode: raw.listMode,
-      removedSampleFilters: raw.removedFilters,
+      requestMode: raw.requestMode,
+      apiCalls: raw.apiCalls,
       schema: schemaDiagnostic(raw.items[0], REALTIME_REQUIRED_FIELDS),
       sample: raw.items[0] || null,
       invalid: parsed.invalid.slice(0, 5),
@@ -2278,14 +3479,20 @@ async function upsertSyncState(
   ).run();
 }
 
-async function incrementApiUsage(db: D1Database, apiName: string) {
+async function incrementApiUsageBy(db: D1Database, apiName: string, count: number) {
+  const safeCount = Math.max(0, Math.trunc(Number(count || 0)));
+  if (safeCount <= 0) return;
   const usageDate = new Date().toISOString().slice(0, 10);
   await db.prepare(
     `INSERT INTO api_usage_daily (usage_date, api_name, request_count)
-     VALUES (?1, ?2, 1)
+     VALUES (?1, ?2, ?3)
      ON CONFLICT(usage_date, api_name) DO UPDATE SET
-       request_count = request_count + 1`,
-  ).bind(usageDate, apiName).run();
+       request_count = request_count + excluded.request_count`,
+  ).bind(usageDate, apiName, safeCount).run();
+}
+
+async function incrementApiUsage(db: D1Database, apiName: string) {
+  await incrementApiUsageBy(db, apiName, 1);
 }
 
 function nullableText(value: string) {
@@ -2324,6 +3531,42 @@ async function fetchStructuredWithBackoff(
   }
 
   throw new Error(`${label} 실패: ${safeError(lastError)}`);
+}
+
+function countedFetchError(label: string, error: unknown, attempts: number) {
+  const wrapped = new Error(`${label}: ${safeError(error)}`) as Error & { apiAttempts?: number };
+  wrapped.apiAttempts = attempts;
+  return wrapped;
+}
+
+function readApiAttempts(error: unknown) {
+  if (error && typeof error === 'object' && 'apiAttempts' in error) {
+    const count = Number((error as { apiAttempts?: number }).apiAttempts || 0);
+    if (Number.isFinite(count) && count > 0) return Math.trunc(count);
+  }
+  return 1;
+}
+
+async function fetchStructuredWithRetryCounted(url: URL, label: string) {
+  let attempts = 0;
+  try {
+    attempts += 1;
+    return { payload: await fetchStructured(url), attempts };
+  } catch (error) {
+    const message = safeError(error);
+    if (!message.includes('503') && !message.includes('SERVICETIMEOUT')) {
+      throw countedFetchError(label, error, attempts);
+    }
+  }
+
+  await delay(400);
+
+  try {
+    attempts += 1;
+    return { payload: await fetchStructured(url), attempts };
+  } catch (error) {
+    throw countedFetchError(`${label} 재시도 실패`, error, attempts);
+  }
 }
 
 async function fetchStructuredWithRetry(url: URL, label: string) {
@@ -2557,6 +3800,12 @@ function haversineMeters(aLat: number, aLng: number, bLat: number, bLng: number)
   const dLng = rad(bLng - aLng);
   const h = Math.sin(dLat / 2) ** 2 + Math.cos(rad(aLat)) * Math.cos(rad(bLat)) * Math.sin(dLng / 2) ** 2;
   return 2 * radius * Math.asin(Math.sqrt(h));
+}
+
+function chunkArray<T>(items: T[], size: number) {
+  const chunks: T[][] = [];
+  for (let i = 0; i < items.length; i += size) chunks.push(items.slice(i, i + size));
+  return chunks;
 }
 
 function clamp(value: number, min: number, max: number) {

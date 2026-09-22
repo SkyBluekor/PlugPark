@@ -1,7 +1,7 @@
 {
   "name": "plugpark",
   "private": true,
-  "version": "0.6.0",
+  "version": "0.7.1",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -13,9 +13,21 @@
     "d1:migrate:local": "wrangler d1 migrations apply plugpark-db --local",
     "d1:migrate:remote": "wrangler d1 migrations apply plugpark-db --remote",
     "ev:backfill": "node scripts/ev-backfill.mjs",
-    "data:prepare": "node scripts/prepare-read-models.mjs",
-    "release": "npm run deploy && npm run data:prepare && npm run verify:v0.6",
-    "verify:v0.6": "node scripts/verify-v0.6.mjs"
+    "baseline": "node scripts/source-baseline.mjs",
+    "verify:live-local": "node scripts/verify-live-local.mjs",
+    "verify:live": "node scripts/verify-live-local.mjs",
+    "probe:parking-api": "node scripts/probe-parking-api.mjs",
+    "preflight:remote": "node scripts/live-remote-preflight.mjs",
+    "live:preflight": "node scripts/live-remote-preflight.mjs",
+    "status:remote": "node scripts/live-state-remote.mjs",
+    "live:state": "node scripts/live-state-remote.mjs",
+    "release": "node scripts/release-live.mjs",
+    "release:remote": "node scripts/release-live.mjs",
+    "release:live": "node scripts/release-live.mjs",
+    "prepare:live": "node scripts/prepare-live-release.mjs",
+    "prepare:live:resume": "node scripts/resume-live-release.mjs",
+    "check:parking-endpoint": "node scripts/check-parking-endpoint.mjs",
+    "audit:parking-coverage": "node scripts/audit-parking-realtime-coverage.mjs --confirm-live-audit"
   },
   "dependencies": {
     "react": "^19.1.1",
