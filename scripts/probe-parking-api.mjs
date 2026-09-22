@@ -4,8 +4,10 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 
 const RESULT = resolve('.plugpark', 'parking-api-probe.json');
-const REQUIRED = ['parkgcd','parknm','curravacnt','parkingcnt','maxcnt','lastupdatetime'];
-const SINGLE_FILTER_NAMES = ['parkgcd','parkcd','pParkGCd'];
+const BASE_DEFAULT = 'https://apis.data.go.kr/B552587/ParkingInfoService_v2';
+const LIST_PATH = '/getParkingList_v2';
+const REALTIME_PATH = '/getParkingInfoList_v2';
+const REALTIME_REQUIRED = ['parkgcd','parknm','curravacnt','parkingcnt','maxcnt','lastupdatetime'];
 
 function parseEnvText(text) {
   const out = {};
@@ -23,193 +25,173 @@ function parseEnvText(text) {
   }
   return out;
 }
-
 async function localEnv() {
   const p = resolve('.dev.vars');
   if (!existsSync(p)) return {};
   return parseEnvText(await readFile(p, 'utf8'));
 }
-
+function normalizeBase(input) {
+  const u = new URL(input);
+  u.search = '';
+  u.hash = '';
+  u.pathname = u.pathname
+    .replace(/\/(?:getParkingList_v2|getParkingInfoList_v2)\/?$/i, '')
+    .replace(/\/$/, '');
+  return u.toString().replace(/\/$/, '');
+}
+function endpoint(base, path) {
+  return new URL(normalizeBase(base) + path);
+}
+function endpointHash(input) {
+  return createHash('sha256').update(normalizeBase(input)).digest('hex');
+}
 function sanitizeUrl(input) {
   const u = new URL(input);
-  for (const key of ['serviceKey','ServiceKey']) {
-    if (u.searchParams.has(key)) u.searchParams.set(key, '<redacted>');
-  }
+  for (const key of ['serviceKey','ServiceKey']) if (u.searchParams.has(key)) u.searchParams.set(key,'<redacted>');
   return u.toString();
 }
-
-function endpointHash(input) {
-  const u = new URL(input);
-  u.searchParams.delete('serviceKey');
-  u.searchParams.delete('ServiceKey');
-  return createHash('sha256').update(u.toString()).digest('hex');
-}
-
-function collectObjects(value, out = []) {
-  if (!value || typeof value !== 'object') return out;
-  if (Array.isArray(value)) {
-    for (const v of value) collectObjects(v, out);
-    return out;
-  }
-  if (REQUIRED.some((k) => Object.prototype.hasOwnProperty.call(value, k))) out.push(value);
-  for (const v of Object.values(value)) collectObjects(v, out);
-  return out;
-}
-
 function findKeyDeep(value, key) {
   if (!value || typeof value !== 'object') return null;
-  if (!Array.isArray(value) && Object.prototype.hasOwnProperty.call(value, key)) return value[key];
+  if (!Array.isArray(value) && Object.prototype.hasOwnProperty.call(value,key)) return value[key];
   for (const v of Object.values(value)) {
-    const found = findKeyDeep(v, key);
+    const found = findKeyDeep(v,key);
     if (found != null) return found;
   }
   return null;
 }
-
-function xmlFirst(text, key) {
-  const m = text.match(new RegExp('<' + key + '>([\\s\\S]*?)<\\/' + key + '>', 'i'));
-  return m ? m[1].trim() : null;
+function extractItems(value) {
+  if (!value || typeof value !== 'object') return [];
+  const response = value.response && typeof value.response === 'object' ? value.response : value;
+  const body = response.body && typeof response.body === 'object' ? response.body : value.body;
+  const itemsNode = body?.items ?? value.items;
+  const item = itemsNode?.item ?? itemsNode;
+  if (Array.isArray(item)) return item.filter((x)=>x && typeof x === 'object' && !Array.isArray(x));
+  if (item && typeof item === 'object' && !Array.isArray(item)) return [item];
+  return [];
 }
-
-function analyzeBody(text) {
-  try {
-    const json = JSON.parse(text);
-    const objects = collectObjects(json);
-    const first = objects[0] || null;
-    return {
-      sample: first ? Object.fromEntries(REQUIRED.map((k) => [k, first[k] == null ? null : String(first[k])])) : null,
-      itemCount: objects.length,
-      totalCount: numberOrNull(findKeyDeep(json, 'totalCount')),
-      resultCode: findKeyDeep(json, 'resultCode'),
-      format: 'json',
-    };
-  } catch {}
-
-  const sample = Object.fromEntries(REQUIRED.map((k) => [k, xmlFirst(text, k)]));
-  const hasSample = REQUIRED.some((k) => sample[k] != null);
-  const itemCount = (text.match(/<parkgcd>/gi) || []).length;
-  return {
-    sample: hasSample ? sample : null,
-    itemCount,
-    totalCount: numberOrNull(xmlFirst(text, 'totalCount')),
-    resultCode: xmlFirst(text, 'resultCode'),
-    format: 'xml-or-text',
-  };
+function xmlFirst(text,key) {
+  const m=text.match(new RegExp('<'+key+'>([\\s\\S]*?)<\\/'+key+'>','i'));
+  return m?m[1].trim():null;
 }
-
 function numberOrNull(v) {
-  if (v == null || String(v).trim() === '') return null;
-  const n = Number(String(v).replace(/,/g,'').trim());
-  return Number.isFinite(n) ? n : null;
+  if (v==null || String(v).trim()==='') return null;
+  const n=Number(String(v).replace(/,/g,'').trim());
+  return Number.isFinite(n)?n:null;
 }
-
-function shouldReplaceServiceKey(value) {
-  const v = String(value || '').trim();
-  return !v || /서비스|인증|service.?key|api.?key|replace/i.test(v);
+function parsePayload(text) {
+  try { return { format:'json', value:JSON.parse(text) }; }
+  catch { return { format:'xml-or-text', value:null }; }
 }
-
-console.log('\nPlugPark parking API contract probe');
-console.log('원칙: 실제 API GET 1회 · Cloudflare/D1 write 0 · 요청 파라미터 추측 0\n');
-
-const fileEnv = await localEnv();
-const endpoint = String(process.env.BUSAN_REALTIME_PARKING_API_URL || fileEnv.BUSAN_REALTIME_PARKING_API_URL || '').trim();
-const key = String(process.env.BUSAN_PARKING_API_KEY || fileEnv.BUSAN_PARKING_API_KEY || '').trim();
-
-if (!endpoint) throw new Error('BUSAN_REALTIME_PARKING_API_URL이 없습니다. 공공데이터포털 활용신청 화면의 실제 상세기능 요청주소가 필요합니다.');
-if (!key) throw new Error('BUSAN_PARKING_API_KEY가 없습니다. .dev.vars 또는 현재 환경변수를 확인하세요.');
-
-const url = new URL(endpoint);
-if (!['http:','https:'].includes(url.protocol)) throw new Error('실시간 주차 URL은 http/https여야 합니다.');
-
-let serviceKeyName = null;
-for (const candidate of ['serviceKey','ServiceKey']) {
-  if (url.searchParams.has(candidate)) {
-    serviceKeyName = candidate;
-    if (shouldReplaceServiceKey(url.searchParams.get(candidate))) url.searchParams.set(candidate, key);
-    break;
+function getScalar(raw, candidates) {
+  if (!raw || typeof raw !== 'object') return { key:null, value:'' };
+  const entries=Object.entries(raw);
+  for (const candidate of candidates) {
+    const normalizedCandidate=candidate.toLowerCase().replace(/[^a-z0-9]/g,'');
+    const match=entries.find(([k])=>k.toLowerCase().replace(/[^a-z0-9]/g,'')===normalizedCandidate);
+    if (match && String(match[1]??'').trim()) return { key:match[0], value:String(match[1]).trim() };
   }
+  return { key:null, value:'' };
 }
-if (!serviceKeyName) url.searchParams.set('serviceKey', key);
+async function call(url,label) {
+  const response=await fetch(url,{headers:{Accept:'application/json, application/xml;q=0.9, text/xml;q=0.8, */*;q=0.1'}});
+  const text=await response.text();
+  if(!response.ok) throw new Error(`${label} HTTP ${response.status}: ${text.slice(0,300)}`);
+  return { response, text, parsed:parsePayload(text) };
+}
 
-const originalUrl = new URL(endpoint);
-const queryParameterNames = [...originalUrl.searchParams.keys()].filter((x) => !/^servicekey$/i.test(x));
-const singleParkingFilterPresent = SINGLE_FILTER_NAMES.some((name) => originalUrl.searchParams.has(name));
+console.log('\nPlugPark 부산시설공단 ParkingInfoService_v2 contract probe');
+console.log('문서 확정: 목록 /getParkingList_v2 → 코드별 실시간 /getParkingInfoList_v2');
+console.log('원칙: 실제 공공 API 최대 2회 · Cloudflare/D1 write 0\n');
 
-console.log('endpoint:', sanitizeUrl(url.toString()));
-console.log('query params:', queryParameterNames.join(', ') || '(none)');
+const env=await localEnv();
+const configured=String(process.env.BUSAN_REALTIME_PARKING_API_URL || env.BUSAN_REALTIME_PARKING_API_URL || BASE_DEFAULT).trim();
+const key=String(process.env.BUSAN_PARKING_API_KEY || env.BUSAN_PARKING_API_KEY || '').trim();
+if(!key) throw new Error('BUSAN_PARKING_API_KEY가 없습니다. .dev.vars 또는 현재 환경변수를 확인하세요.');
+const base=normalizeBase(configured);
 
-const response = await fetch(url, {
-  method: 'GET',
-  headers: { Accept: 'application/json, application/xml;q=0.9, text/xml;q=0.8, */*;q=0.1' },
-});
-const body = await response.text();
-const analysis = analyzeBody(body);
-const sample = analysis.sample;
-const missing = sample ? REQUIRED.filter((k) => sample[k] == null || String(sample[k]).trim() === '') : [...REQUIRED];
+const listUrl=endpoint(base,LIST_PATH);
+listUrl.searchParams.set('serviceKey',key);
+listUrl.searchParams.set('pageNo','1');
+listUrl.searchParams.set('numOfRows','100');
+listUrl.searchParams.set('resultType','json');
 
-const available = numberOrNull(sample?.curravacnt);
-const occupied = numberOrNull(sample?.parkingcnt);
-const capacity = numberOrNull(sample?.maxcnt);
-const numericConsistent =
-  available == null || occupied == null || capacity == null ||
-  Math.abs((available + occupied) - capacity) <= 1;
+console.log('1) 목록 조회:',sanitizeUrl(listUrl.toString()));
+const list=await call(listUrl.toString(),'getParkingList_v2');
+let listItems=[];
+let listTotal=null;
+let listResultCode=null;
+if(list.parsed.value){
+  listItems=extractItems(list.parsed.value);
+  listTotal=numberOrNull(findKeyDeep(list.parsed.value,'totalCount'));
+  listResultCode=findKeyDeep(list.parsed.value,'resultCode');
+} else {
+  listTotal=numberOrNull(xmlFirst(list.text,'totalCount'));
+  listResultCode=xmlFirst(list.text,'resultCode');
+}
+if(listItems.length===0 && list.parsed.value==null) {
+  throw new Error('목록 응답이 XML이어서 현재 probe가 item 구조를 안전하게 추출하지 못했습니다. resultType=json 지원 여부를 확인해야 합니다.');
+}
+if(listItems.length===0) throw new Error('PARKING_LIST_EMPTY: getParkingList_v2가 0건을 반환했습니다.');
 
-const contractOk = response.ok && !!sample && missing.length === 0;
-const fullSnapshotComplete =
-  analysis.itemCount >= 2 &&
-  (analysis.totalCount == null || analysis.itemCount >= analysis.totalCount);
+const firstList=listItems[0];
+const code=getScalar(firstList,['parkgcd','pParkGCd','parkingCode','parkGcd']);
+if(!code.value) {
+  console.error('목록 첫 item keys:',Object.keys(firstList));
+  throw new Error('PARKING_LIST_CODE_FIELD_UNCONFIRMED: 주차장 코드 필드를 확정하지 못했습니다.');
+}
 
-const releaseReady = contractOk && fullSnapshotComplete && !singleParkingFilterPresent;
-const releaseBlockers = [];
-if (!contractOk) releaseBlockers.push('required-response-contract-failed');
-if (singleParkingFilterPresent) releaseBlockers.push('single-parking-filter-present');
-if (analysis.itemCount < 2) releaseBlockers.push('only-one-or-zero-items');
-if (analysis.totalCount != null && analysis.itemCount < analysis.totalCount) releaseBlockers.push('partial-page-pagination-not-documented');
+console.log(`   PASS · items=${listItems.length} totalCount=${listTotal ?? 'unknown'} codeField=${code.key} sampleCode=${code.value}`);
 
-const result = {
-  probedAt: new Date().toISOString(),
-  ok: contractOk,
-  releaseReady,
-  releaseBlockers,
-  httpStatus: response.status,
-  responseFormat: analysis.format,
-  endpointHash: endpointHash(endpoint),
-  endpoint: sanitizeUrl(endpoint),
-  queryParameterNames,
-  singleParkingFilterPresent,
-  resultCode: analysis.resultCode,
-  requiredFields: REQUIRED,
-  missingFields: missing,
-  itemCount: analysis.itemCount,
-  totalCount: analysis.totalCount,
-  fullSnapshotComplete,
-  numericConsistent,
-  sample: sample ? {
-    parkgcd: sample.parkgcd,
-    parknm: sample.parknm,
-    curravacnt: sample.curravacnt,
-    parkingcnt: sample.parkingcnt,
-    maxcnt: sample.maxcnt,
-    lastupdatetime: sample.lastupdatetime,
-  } : null,
-  remoteD1Writes: 0,
-  publicApiCalls: 1,
+const realtimeUrl=endpoint(base,REALTIME_PATH);
+realtimeUrl.searchParams.set('serviceKey',key);
+realtimeUrl.searchParams.set('pageNo','1');
+realtimeUrl.searchParams.set('numOfRows','10');
+realtimeUrl.searchParams.set('pParkGCd',code.value);
+realtimeUrl.searchParams.set('resultType','json');
+
+console.log('2) 실시간 조회:',sanitizeUrl(realtimeUrl.toString()));
+const rt=await call(realtimeUrl.toString(),'getParkingInfoList_v2');
+let rtItems=[];
+let rtResultCode=null;
+if(rt.parsed.value){
+  rtItems=extractItems(rt.parsed.value);
+  rtResultCode=findKeyDeep(rt.parsed.value,'resultCode');
+}
+if(rtItems.length===0) throw new Error('PARKING_REALTIME_EMPTY: 샘플 주차장 코드의 실시간 응답이 0건입니다.');
+
+const sample=rtItems[0];
+const missing=REALTIME_REQUIRED.filter((key)=>!(key in sample) || String(sample[key]??'').trim()==='');
+const available=numberOrNull(sample.curravacnt);
+const occupied=numberOrNull(sample.parkingcnt);
+const capacity=numberOrNull(sample.maxcnt);
+const numericConsistent=
+  available==null || occupied==null || capacity==null ||
+  Math.abs((available+occupied)-capacity)<=1;
+
+const contractVerified=missing.length===0;
+const result={
+  probedAt:new Date().toISOString(),
+  ok:contractVerified,
+  contractVerified,
+  runtimeAdapterReady:false,
+  releaseReady:false,
+  releaseBlockers:['runtime-adapter-must-use-list-then-code-filtered-realtime'],
+  baseEndpoint:base,
+  endpointHash:endpointHash(base),
+  operations:{
+    list:{path:LIST_PATH,requestParams:['serviceKey','pageNo','numOfRows','resultType'],itemCount:listItems.length,totalCount:listTotal,resultCode:listResultCode,firstItemKeys:Object.keys(firstList),parkingCodeKey:code.key,sampleCode:code.value},
+    realtime:{path:REALTIME_PATH,requestParams:['serviceKey','pageNo','numOfRows','pParkGCd','resultType'],resultCode:rtResultCode,missingFields:missing,firstItemKeys:Object.keys(sample),numericConsistent}
+  },
+  remoteD1Writes:0,
+  publicApiCalls:2
 };
+await mkdir(resolve('.plugpark'),{recursive:true});
+await writeFile(RESULT,JSON.stringify(result,null,2)+'\n','utf8');
 
-await mkdir(resolve('.plugpark'), { recursive: true });
-await writeFile(RESULT, JSON.stringify(result, null, 2) + '\n', 'utf8');
-
-console.log('\nHTTP', response.status);
-console.log('response format:', analysis.format);
-console.log('required fields:', missing.length === 0 ? 'PASS' : 'FAIL · missing=' + missing.join(','));
-console.log('items:', analysis.itemCount, 'totalCount:', analysis.totalCount ?? '(none)');
-console.log('numeric consistency:', numericConsistent ? 'PASS' : 'WARN · 원본 수치를 자동보정하지 않습니다.');
-console.log('full snapshot:', fullSnapshotComplete ? 'PASS' : 'NOT CONFIRMED');
-console.log('release ready:', releaseReady ? 'YES' : 'NO · ' + releaseBlockers.join(', '));
-console.log('result:', RESULT);
-
-if (!contractOk) throw new Error('PARKING_API_CONTRACT_PROBE_FAILED');
-if (!releaseReady) throw new Error('PARKING_API_PROBE_NOT_RELEASE_READY');
-
-console.log('\n✅ PARKING API PROBE: PASS');
-console.log('Public API call: 1 · Remote D1 write: 0');
+console.log(`   ${contractVerified?'PASS':'FAIL'} · realtime fields ${missing.length===0?'확정':'missing='+missing.join(',')}`);
+console.log('   numeric consistency:',numericConsistent?'PASS':'WARN · 자동보정하지 않음');
+console.log('\n결과:',RESULT);
+console.log('Public API calls: 2 · Remote D1 write: 0');
+if(!contractVerified) throw new Error('PARKING_V2_CONTRACT_PROBE_FAILED');
+console.log('\n✅ PARKING v2 REQUEST/RESPONSE CONTRACT: VERIFIED');
+console.log('※ runtime adapter는 목록→코드별 실시간 방식으로 수정되기 전까지 release를 차단합니다.');
