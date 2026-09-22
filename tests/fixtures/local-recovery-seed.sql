@@ -69,3 +69,12 @@ INSERT INTO ev_status (
   stat_id, chger_id, status, status_updated_at, synced_at
 ) VALUES
 ('STPARK01', '02', '2', '20260922090500', '2026-09-22T00:00:00.000Z');
+
+
+-- v0.7.2-P2: code rule aggregation fixture.
+INSERT OR REPLACE INTO parking_match_rules (
+  parking_code, parking_id, match_type, confidence, allow_aggregate, note, updated_at
+) VALUES (
+  'A-CENTUM-2', '2019000008', 'CODE_RULE', 1.0, 1,
+  'local aggregation fixture', '2026-09-22T00:00:00.000Z'
+);
