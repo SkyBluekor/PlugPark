@@ -29,7 +29,8 @@
     "release:live": "node scripts/release-live.mjs",
     "live:state": "node scripts/live-state-remote.mjs",
     "verify:live": "node scripts/verify-live-local.mjs",
-    "probe:parking-api": "node scripts/probe-parking-api.mjs"
+    "probe:parking-api": "node scripts/probe-parking-api.mjs",
+    "configure:parking-api": "node scripts/configure-parking-api.mjs"
   },
   "dependencies": {
     "react": "^19.1.1",
