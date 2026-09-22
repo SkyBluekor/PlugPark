@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - fix/v0.7.1-live-stabilization-clean
+      - audit/v0.7.2-p1-parking-coverage
   pull_request:
     branches:
       - main
@@ -30,3 +31,6 @@ jobs:
 
       - name: LIVE local verify
         run: npm run verify:live
+
+      - name: Parking coverage audit self-test
+        run: npm run audit:parking-coverage:self-test
