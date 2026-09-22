@@ -1,140 +1,164 @@
 # PlugPark
 
-부산 공영주차장 정보와 한국환경공단 전기차 충전소 정보를 좌표로 결합해 **주차 + 충전이 동시에 가능한 장소**를 보여주는 Cloudflare 웹앱입니다.
+부산 공영주차장과 한국환경공단 EV 충전소 데이터를 결합해 **주차 + 충전 상태를 함께 보여주는 Cloudflare 웹앱**입니다.
 
-## v0.2 핵심 변경
+## Current data layer — v0.7.1
 
-- 실제 **Kakao Map Web(JavaScript) SDK** 적용
-- 기존 `부산 매칭 분포` 가짜 지도 제거
-- `WHY PLUGPARK`, `DATA 01/02`, `SECURITY` 소개 섹션 제거
-- 검색 결과 영역을 화면 높이 안에 고정하고 내부 스크롤 사용
-- 처음 20개만 렌더링하고 `더 보기`로 20개씩 추가
-- 리스트 클릭 ↔ 지도 위치 이동 ↔ 상세 Drawer 연동
-- P⚡ 커스텀 마커, 현재 위치 마커
-- 주차 가능 / 충전 가능 / 급속 / 완속 필터
-- 충전 가능순 / 주차 여유순 / 현재 위치 거리순 정렬
-- Hero를 축소하고 EV 주차장 이미지로 교체
-- 상세 Drawer에서 Kakao Map 보기 / 길찾기 연결
+사용자 요청에서는 공공 API를 직접 호출하지 않습니다.
 
-## 1. 설치
+```text
+EV Info / EV Status ─┐
+                     ├─ 수집기/Cron → D1
+부산 주차 API ────────┘
+                           │
+                           ▼
+parking_read_model
+parking_ev_matches
+ev_stations
+ev_station_live_status
+parking realtime snapshot
+                           │
+                           ▼
+                    GET /api/places
+                    upstream call = 0
+```
+
+현재 운영 D1의 EV Info 전체 적재는 이미 완료되어 있으므로 일반 배포 과정에서 `npm run ev:backfill`을 다시 실행하지 않습니다.
+
+## 설치
 
 ```bash
 npm install
 ```
 
-## 2. 로컬 Worker Secret
+## 로컬 Worker 설정
 
-`.dev.vars`:
-
-```text
-BUSAN_PARKING_API_KEY=공공데이터포털_인증키
-EV_CHARGER_API_KEY=공공데이터포털_인증키
-MATCH_RADIUS_METERS=200
-```
-
-공공데이터 API 키는 프론트에 넣지 않습니다.
-
-## 3. Kakao Map JavaScript 키
-
-프로젝트 루트 `.env`:
-
-```env
-VITE_KAKAO_MAP_JS_KEY=카카오_JavaScript_키
-```
-
-카카오 JavaScript 키는 Web SDK 특성상 브라우저에서 사용되는 키입니다. Git 저장소에는 `.env`를 올리지 않고, Kakao Developers의 **JavaScript SDK 도메인 제한**으로 사용 도메인을 제한합니다.
-
-등록 예:
+실제 값은 `.dev.vars`에만 두고 Git에 커밋하지 않습니다.
 
 ```text
-https://plugpark.dtdt4865.workers.dev
-http://127.0.0.1:8787
+BUSAN_PARKING_API_KEY=...
+EV_CHARGER_API_KEY=...
+INGEST_ADMIN_TOKEN=...
+BUSAN_REALTIME_PARKING_API_URL=...
 ```
 
-Kakao Developers에서 **Kakao Map API 사용 설정도 ON**이어야 합니다.
+`BUSAN_REALTIME_PARKING_API_URL`에는 공공데이터포털의 **부산시설공단 공영주차장 시설 현황 조회 서비스에서 확인한 실제 상세기능 요청주소**를 사용합니다.
 
-## 4. 로컬 실행
+PlugPark는 v0.7.1부터 이 URL의 파라미터를 추측해서 추가/삭제하지 않습니다. `serviceKey`가 URL에 없을 때만 별도 API 키를 추가합니다.
+
+## v0.7.1 검증/배포 순서
+
+### 1. Local-only 검증
 
 ```bash
-npm run cf:dev
+npm run verify:live
 ```
 
-기본 주소:
+- Remote Cloudflare write: 0
+- 실제 공공 API call: 0
+- fixture 기반 D1/read-model/live overlay 검증
+- 숫자 불일치 주차 데이터가 자동 보정되지 않는지 검증
 
-```text
-http://127.0.0.1:8787
-```
-
-API 확인:
-
-```text
-/api/health
-/api/parking
-/api/chargers
-/api/places
-```
-
-## 5. 운영 Secret
+### 2. 실제 부산시설공단 API 계약 Probe
 
 ```bash
-npx wrangler secret put BUSAN_PARKING_API_KEY
-npx wrangler secret put EV_CHARGER_API_KEY
+npm run probe:parking-api
 ```
 
-배포:
+- 실제 공공 API GET: 정확히 1회
+- Remote D1 write: 0
+- 응답 필드 `parkgcd`, `parknm`, `curravacnt`, `parkingcnt`, `maxcnt`, `lastupdatetime` 확인
+- 결과는 `.plugpark/parking-api-probe.json`에 저장
+
+### 3. Probe한 URL을 Cloudflare Worker에 설정
 
 ```bash
-npm run deploy
+npm run configure:parking-api
 ```
 
-## 6. 데이터 매칭
+Probe 결과와 URL hash가 같을 때만 `BUSAN_REALTIME_PARKING_API_URL`을 Worker secret으로 설정합니다. URL에 `serviceKey`가 들어 있으면 제거하고 기존 `BUSAN_PARKING_API_KEY`를 사용합니다.
+
+### 4. Read-only Remote preflight
+
+```bash
+npm run preflight:remote
+```
+
+EV Info 전체 적재 상태, v0.6 read model, Local PASS, Parking API probe/config receipt를 확인합니다.
+
+### 5. Remote release
+
+```bash
+npm run release:live
+```
+
+순서:
 
 ```text
-부산 공영주차장 좌표
-        +
-EV 충전기 좌표
-        ↓
-Haversine 거리 계산
-        ↓
-MATCH_RADIUS_METERS 이내 충전기 집계
-        ↓
-PlugPark 장소
+Local verify
+→ read-only preflight
+→ D1 migration 1회
+→ Worker deploy 1회
+→ EV Status incremental sync 1회
+→ Parking realtime sync 1회
+→ /api/places smoke verify
 ```
 
-현재 200m 공간 매칭은 MVP 기준입니다. 다음 데이터 품질 단계에서는 주소/시설명 유사도까지 함께 적용할 예정입니다.
+Remote write stage는 자동 재POST하지 않습니다.
 
-## 7. 주요 환경변수
+## EV Status
+
+- `getChargerStatus`
+- 부산 `zcode=26`
+- 증분 수집은 `period=10`
+- 사용자 요청에서는 API 호출하지 않음
+- 상태/statusUpdatedAt이 실제로 바뀐 충전기만 D1 UPSERT
+- EV Info 전체 적재를 baseline coverage로 사용하고 Status는 그 위에 overlay
+- API retry가 발생하면 실제 attempt 수만큼 `api_usage_daily`에 기록
+
+## 실시간 주차
+
+실시간 주차 응답 계약:
 
 ```text
-.dev.vars / Cloudflare Secret
-- BUSAN_PARKING_API_KEY
-- EV_CHARGER_API_KEY
-
-wrangler.toml 일반 변수
-- MATCH_RADIUS_METERS
-
-.env 프론트 변수
-- VITE_KAKAO_MAP_JS_KEY
+parkgcd
+parknm
+curravacnt
+parkingcnt
+maxcnt
+lastupdatetime
 ```
 
-## 8. 주요 구조
+세 숫자가 모두 존재할 때:
 
 ```text
-PlugPark/
-├─ src/
-│  ├─ components/
-│  │  └─ KakaoMap.tsx
-│  ├─ App.tsx
-│  ├─ main.tsx
-│  ├─ mock.ts
-│  ├─ types.ts
-│  └─ styles.css
-├─ worker/
-│  └─ index.ts
-├─ public/
-│  └─ plugpark-hero-v2.jpg
-├─ .dev.vars
-├─ .env
-├─ wrangler.toml
-└─ package.json
+curravacnt + parkingcnt == maxcnt
 ```
+
+가 맞지 않으면 해당 행을 invalid로 처리합니다. 원본 값을 임의로 고쳐 정상 데이터처럼 사용하지 않습니다.
+
+정확히 한 숫자만 누락된 경우에만 다른 두 값에서 파생할 수 있습니다.
+
+## 주요 환경
+
+- React 19
+- TypeScript
+- Vite
+- Cloudflare Workers
+- Cloudflare D1
+- Kakao Map JavaScript SDK
+
+## 보안
+
+다음 파일은 Git에서 제외됩니다.
+
+```text
+.dev.vars
+.env*
+.plugpark/
+payload/
+hotfix_payload/
+*.sqlite*
+```
+
+API 인증키와 관리자 토큰을 소스/프론트 코드에 넣지 않습니다.
