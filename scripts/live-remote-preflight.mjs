@@ -9,7 +9,6 @@ const BASE_URL = process.env.PLUGPARK_URL || 'https://plugpark.dtdt4865.workers.
 const LOCAL_RESULT = resolve('.plugpark', 'live-local-verify-result.json');
 const BASELINE_FILE = resolve('.plugpark', 'source-baseline.json');
 const PARKING_PROBE_FILE = resolve('.plugpark', 'parking-api-probe.json');
-const PARKING_CONFIG_FILE = resolve('.plugpark', 'parking-api-config.json');
 
 const critical = [
   'package.json',
@@ -19,10 +18,10 @@ const critical = [
   'migrations/0001_v0_5_1_foundation.sql',
   'migrations/0002_v0_6_0_read_models.sql',
   'migrations/0003_v0_7_0_live_data.sql',
+  'migrations/0004_v0_7_1_parking_facility_catalog.sql',
   'scripts/verify-live-local.mjs',
   'scripts/prepare-live-release.mjs',
   'scripts/probe-parking-api.mjs',
-  'scripts/configure-parking-api.mjs',
   'scripts/live-remote-preflight.mjs',
   'scripts/release-live.mjs',
   'tests/contracts/busan-facilities-parking.contract.json',
@@ -121,27 +120,24 @@ const parkingProbe = JSON.parse(await readFile(PARKING_PROBE_FILE, 'utf8'));
 if (
   parkingProbe.ok !== true ||
   parkingProbe.releaseReady !== true ||
-  Number(parkingProbe.publicApiCalls || 0) !== 1 ||
+  parkingProbe.runtimeAdapterReady !== true ||
+  Number(parkingProbe.publicApiCalls || 0) !== 2 ||
   Number(parkingProbe.remoteD1Writes || 0) !== 0
 ) {
   fail('Parking API probe가 release-ready PASS가 아닙니다. 단건 필터/부분 페이지 여부를 먼저 해결하세요.');
 }
-console.log('Parking API contract probe ... PASS · 실제 API 1회 · D1 write 0');
+console.log('Parking API contract probe ... PASS · 실제 API 2회 · D1 write 0');
 
-if (!existsSync(PARKING_CONFIG_FILE)) {
-  fail('parking-api-config.json이 없습니다. npm run configure:parking-api로 probe한 URL을 Remote Worker에 먼저 설정하세요.');
+const wranglerText = await readFile(resolve('wrangler.toml'), 'utf8');
+if (!wranglerText.includes('https://apis.data.go.kr/B552587/ParkingInfoService_v2')) {
+  fail('wrangler.toml에 부산시설공단 ParkingInfoService_v2 public endpoint가 없습니다.');
 }
-const parkingConfig = JSON.parse(await readFile(PARKING_CONFIG_FILE, 'utf8'));
-if (parkingConfig.endpointHash !== parkingProbe.endpointHash || Number(parkingConfig.remoteD1Writes || 0) !== 0) {
-  fail('Parking API remote 설정이 현재 probe 결과와 일치하지 않습니다. npm run configure:parking-api를 다시 실행하세요.');
-}
-console.log('Parking API remote config receipt ... PASS');
+console.log('Parking API public endpoint config ... PASS · deploy 시 [vars]로 적용');
 
 if (health.realtimeParkingUrlConfigured) {
-  console.log('현재 Remote Worker 실시간 주차 URL ... CONFIGURED');
+  console.log('현재 배포본 Parking URL ... CONFIGURED');
 } else {
-  console.log('현재 Remote Worker 실시간 주차 URL ... NOT CONFIGURED');
-  console.log('  → probe는 통과했지만 release 전에 Cloudflare Worker 변수/secret 설정이 필요합니다.');
+  console.log('현재 배포본 Parking URL ... 아직 미설정 · 새 deploy에서 [vars]로 적용 예정');
 }
 
 console.log('\n✅ LIVE REMOTE PREFLIGHT: PASS');
