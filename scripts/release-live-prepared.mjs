@@ -110,9 +110,13 @@ runNode('1) LIVE REMOTE PREFLIGHT (read-only)',resolve('scripts','live-remote-pr
 
 const devVars=await readDevVars();
 const token=String(process.env.PLUGPARK_INGEST_TOKEN || devVars.INGEST_ADMIN_TOKEN || '').trim();
-if(!token) throw new Error('INGEST_ADMIN_TOKEN이 .dev.vars에 없습니다. 토큰 값은 채팅에 보내지 말고 로컬 .dev.vars에 설정하세요.');
+if(!token) {
+  console.log('로컬 INGEST_ADMIN_TOKEN 없음 · 기존 Remote secret은 변경하지 않습니다.');
+  console.log('관리자 POST 대신 배포 후 기존 5분 Cron이 실제 sync를 수행할 때까지 확인합니다.');
+}
 
 runWrangler('2) D1 migrations remote (1회)', ['d1','migrations','apply','plugpark-db','--remote']);
+const deployedAt=Date.now();
 runWrangler('3) Worker deploy + Cron 활성화 (1회)', ['deploy']);
 
 const health=await getJson('/api/health?release=071');
@@ -120,10 +124,53 @@ if(health.dataLayerVersion!=='v0.7.1') throw new Error(`배포 버전=${health.d
 if(!health.realtimeParkingUrlConfigured) throw new Error('배포 후 ParkingInfoService_v2 endpoint가 적용되지 않았습니다.');
 console.log('배포 확인 ... PASS · v0.7.1');
 
-const ev=await postOnce('/api/admin/live-sync?kind=ev&mode=incremental',token,'EV Status incremental sync');
-const parking=await postOnce('/api/admin/live-sync?kind=parking&mode=incremental',token,'Parking realtime batch sync');
+let ev=null;
+let parking=null;
+let live=null;
 
-const live=await getJson('/api/d1/live-state?release=071');
+if(token) {
+  ev=await postOnce('/api/admin/live-sync?kind=ev&mode=incremental',token,'EV Status incremental sync');
+  parking=await postOnce('/api/admin/live-sync?kind=parking&mode=incremental',token,'Parking realtime batch sync');
+  live=await getJson('/api/d1/live-state?release=071');
+} else {
+  const deadline=Date.now()+12*60_000;
+  let lastEv=null;
+  let lastParking=null;
+
+  while(Date.now()<deadline) {
+    live=await getJson('/api/d1/live-state?release=071-cron');
+    lastEv=live?.evStatus?.lastSuccessAt || null;
+    lastParking=live?.parkingRealtime?.lastSuccessAt || null;
+
+    const evMs=lastEv ? Date.parse(lastEv) : Number.NaN;
+    const parkingMs=lastParking ? Date.parse(lastParking) : Number.NaN;
+    const evRan=Number.isFinite(evMs) && evMs >= deployedAt - 30_000;
+    const parkingRan=Number.isFinite(parkingMs) && parkingMs >= deployedAt - 30_000;
+
+    process.stdout.write(
+      `Cron sync 대기 ... EV=${evRan?'PASS':lastEv || 'pending'} · Parking=${parkingRan?'PASS':lastParking || 'pending'}\r`
+    );
+
+    if(evRan && parkingRan) {
+      process.stdout.write('\nCron live sync ... PASS\n');
+      break;
+    }
+    await new Promise((resolve)=>setTimeout(resolve,20_000));
+  }
+
+  if(!live) throw new Error('배포 후 live-state를 확인하지 못했습니다.');
+  const evMs=live.evStatus?.lastSuccessAt ? Date.parse(live.evStatus.lastSuccessAt) : Number.NaN;
+  const parkingMs=live.parkingRealtime?.lastSuccessAt ? Date.parse(live.parkingRealtime.lastSuccessAt) : Number.NaN;
+  if(!Number.isFinite(evMs) || evMs < deployedAt - 30_000) {
+    throw new Error('12분 안에 배포 후 EV Cron sync를 확인하지 못했습니다. 자동 재POST는 하지 않았습니다.');
+  }
+  if(!Number.isFinite(parkingMs) || parkingMs < deployedAt - 30_000) {
+    throw new Error('12분 안에 배포 후 Parking Cron sync를 확인하지 못했습니다. 자동 재POST는 하지 않았습니다.');
+  }
+
+  ev={ mode:'cron', lastSuccessAt:live.evStatus.lastSuccessAt };
+  parking={ mode:'cron', lastSuccessAt:live.parkingRealtime.lastSuccessAt };
+}
 const places=await getJson('/api/places?release=071');
 
 if(places.upstreamEvCalls!==0 || places.upstreamParkingCalls!==0) {
@@ -138,8 +185,9 @@ const result={
   version:'v0.7.1',
   remoteMigrationCommands:1,
   deployCalls:1,
-  evSyncCalls:1,
-  parkingSyncCalls:1,
+  evSyncCalls:token ? 1 : 0,
+  parkingSyncCalls:token ? 1 : 0,
+  syncTrigger:token ? 'admin-post' : 'cron',
   ev,
   parking,
   live,
@@ -152,5 +200,9 @@ await writeFile(RESULT_FILE,JSON.stringify(result,null,2)+'\n','utf8');
 console.log('\n✅ LIVE REMOTE RELEASE: PASS');
 console.log(`EV Status rows=${live.evStatus.storedRows} · syncFresh=${live.evStatus.syncFresh}`);
 console.log(`Parking snapshot=${live.parkingRealtime.itemCount}곳 · fresh=${live.parkingRealtime.fresh}`);
-console.log(`이번 Parking sync API calls=${parking.apiCalls ?? '?'} · catalog calls=${parking.catalogCalls ?? '?'}`);
+if(token) {
+  console.log(`이번 Parking sync API calls=${parking.apiCalls ?? '?'} · catalog calls=${parking.catalogCalls ?? '?'}`);
+} else {
+  console.log('이번 live sync trigger=Cron · 기존 Remote INGEST_ADMIN_TOKEN 유지');
+}
 console.log('사용자 /api/places upstream call=0');
