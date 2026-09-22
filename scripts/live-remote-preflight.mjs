@@ -20,8 +20,11 @@ const critical = [
   'migrations/0002_v0_6_0_read_models.sql',
   'migrations/0003_v0_7_0_live_data.sql',
   'scripts/verify-live-local.mjs',
+  'scripts/probe-parking-api.mjs',
+  'scripts/configure-parking-api.mjs',
   'scripts/live-remote-preflight.mjs',
   'scripts/release-live.mjs',
+  'tests/contracts/busan-facilities-parking.contract.json',
 ];
 
 function fail(message) { throw new Error(message); }
