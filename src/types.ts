@@ -87,6 +87,8 @@ export type PlacesResponse = {
   upstreamParkingCalls?: number;
   evStatusFresh?: boolean;
   evStatusUpdatedAt?: string | null;
+  evStatusCoverageComplete?: boolean;
+  evStatusBaselineAt?: string | null;
   realtimeParking: boolean;
   realtimeMessage: string;
   parkingMatchSummary?: ParkingMatchSummary;
