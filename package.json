@@ -25,7 +25,9 @@
     "release": "node scripts/release-live.mjs",
     "release:remote": "node scripts/release-live.mjs",
     "release:live": "node scripts/release-live.mjs",
-    "prepare:live": "node scripts/prepare-live-release.mjs"
+    "prepare:live": "node scripts/prepare-live-release.mjs",
+    "prepare:live:resume": "node scripts/resume-live-release.mjs",
+    "check:parking-endpoint": "node scripts/check-parking-endpoint.mjs"
   },
   "dependencies": {
     "react": "^19.1.1",
