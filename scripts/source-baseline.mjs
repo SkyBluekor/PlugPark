@@ -19,6 +19,7 @@ const critical = [
   'migrations/0004_v0_7_1_parking_facility_catalog.sql',
   'migrations/0005_v0_7_2_parking_match_rules.sql',
   'scripts/verify-live-local.mjs',
+  'scripts/analyze-parking-match-candidates.mjs',
   'scripts/prepare-live-release.mjs',
   'scripts/resume-live-release.mjs',
   'scripts/check-parking-endpoint.mjs',
