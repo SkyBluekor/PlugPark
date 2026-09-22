@@ -87,6 +87,8 @@ export default function App() {
     complete: false,
     realtimeParkingConfigured: false,
     realtimeParkingCount: 0,
+    realtimeParkingFresh: false,
+    evStatusFresh: false,
   });
 
   async function load() {
@@ -107,6 +109,8 @@ export default function App() {
         complete: data.evSnapshotComplete,
         realtimeParkingConfigured: data.realtimeParkingConfigured ?? false,
         realtimeParkingCount: data.realtimeParkingCount ?? 0,
+        realtimeParkingFresh: data.realtimeParkingFresh ?? false,
+        evStatusFresh: data.evStatusFresh ?? false,
       });
 
       if (data.places.length === 0) {
@@ -237,7 +241,7 @@ export default function App() {
                 실시간 잔여 제공{' '}
                 <b>
                   {evStats.realtimeParkingConfigured
-                    ? `${evStats.realtimeParkingCount.toLocaleString()}곳`
+                    ? `${evStats.realtimeParkingCount.toLocaleString()}곳${evStats.realtimeParkingFresh ? '' : ' · 갱신지연'}`
                     : '연동 전'}
                 </b>
               </span>
@@ -356,6 +360,11 @@ export default function App() {
                               충전 가능 <b className={place.charger.available > 0 ? 'good' : 'bad'}>{place.charger.available}</b>
                               <small> / 총 {place.charger.total}기</small>
                             </span>
+                            <span>
+                              충전 중 <b>{place.charger.charging}</b>
+                              {(place.charger.unavailable ?? 0) > 0 && <small> · 점검/중지 {place.charger.unavailable ?? 0}</small>}
+                              {place.charger.statusFresh === false && <small> · 상태 갱신 지연</small>}
+                            </span>
                             <span><b>{place.charger.fast}</b> 급속 · <b>{place.charger.slow}</b> 완속</span>
                           </>
                         ) : (
@@ -403,7 +412,7 @@ export default function App() {
                     </strong>
                     {selected.parkingRealtime && (
                       <small>
-                        실시간
+                        {selected.parkingRealtimeFresh === false ? '실시간 · 갱신 지연' : '실시간'}
                         {selected.occupiedParking != null ? ` · 현재 주차 ${selected.occupiedParking}대` : ''}
                         {selected.parkingUpdatedAt ? ` · ${selected.parkingUpdatedAt}` : ''}
                       </small>
@@ -425,7 +434,14 @@ export default function App() {
               <div>
                 <span>EV 충전</span>
                 {selected.charger.total > 0 ? (
-                  <strong>{selected.charger.available} <small>/ 총 {selected.charger.total}기</small></strong>
+                  <>
+                    <strong>{selected.charger.available} <small>/ 총 {selected.charger.total}기</small></strong>
+                    <small>
+                      충전 중 {selected.charger.charging}기
+                      {(selected.charger.unavailable ?? 0) > 0 ? ` · 점검/중지 ${selected.charger.unavailable}기` : ''}
+                      {selected.charger.statusFresh === false ? ' · 상태 갱신 지연' : ''}
+                    </small>
+                  </>
                 ) : (
                   <strong className="neutral">정보 미확인</strong>
                 )}
