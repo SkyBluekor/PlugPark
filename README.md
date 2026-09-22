@@ -48,6 +48,16 @@ PlugPark는 v0.7.1부터 이 URL의 파라미터를 추측해서 추가/삭제�
 
 ## v0.7.1 검증/배포 순서
 
+실제 상세기능 요청주소를 `.dev.vars`에 넣은 뒤 준비 단계는 한 명령으로 실행할 수 있습니다.
+
+```bash
+npm run prepare:live
+```
+
+이 명령은 Local verify → 실제 Parking API 1회 probe → Remote URL 설정 → read-only preflight 순으로 진행합니다.
+
+세부 단계:
+
 ### 1. Local-only 검증
 
 ```bash
