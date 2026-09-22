@@ -6,5 +6,7 @@ EV_CHARGER_API_KEY=replace_with_your_decoding_key
 # Optional: parking↔charger spatial-match radius in meters
 MATCH_RADIUS_METERS=200
 
-# 부산시설공단 실시간 공영주차장 API 상세기능 요청주소
+# 부산시설공단 실시간 공영주차장 API 실제 '상세기능 요청주소'
+# 중요: pageNo/numOfRows/주차장코드 파라미터를 임의로 추가/삭제하지 않습니다.
+# 공공데이터포털 활용신청 화면의 요청주소를 그대로 넣고 npm run probe:parking-api로 1회 검증하세요.
 BUSAN_REALTIME_PARKING_API_URL=
