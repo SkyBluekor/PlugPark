@@ -102,6 +102,9 @@ if (places.upstreamEvCalls !== 0 || places.upstreamParkingCalls !== 0) {
   throw new Error(`사용자 read path upstream 호출 감지: EV=${places.upstreamEvCalls}, Parking=${places.upstreamParkingCalls}`);
 }
 if (live.evStatus.status !== 'complete') throw new Error(`evStatus=${live.evStatus.status}`);
+if (live.evStatus.coverageComplete !== true) {
+  throw new Error('EV Status baseline coverageComplete=true가 아닙니다.');
+}
 if (live.parkingRealtime.status !== 'complete') {
   throw new Error(`parkingRealtime=${live.parkingRealtime.status}`);
 }
