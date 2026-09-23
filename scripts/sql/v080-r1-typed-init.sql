@@ -4,7 +4,18 @@
 
 DROP TABLE IF EXISTS r1_typed_availability_init;
 
-CREATE TEMP TABLE r1_typed_availability_init AS
+CREATE TABLE r1_typed_availability_init (
+  stat_id TEXT PRIMARY KEY,
+  available_fast_count INTEGER NOT NULL,
+  available_slow_count INTEGER NOT NULL
+);
+
+INSERT INTO r1_typed_availability_init (
+  stat_id,
+  available_fast_count,
+  available_slow_count
+)
+
 SELECT
   c.stat_id AS stat_id,
   SUM(CASE

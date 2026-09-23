@@ -27,7 +27,7 @@ assert(pkg.scripts['verify:release:v080-r1']==='node scripts/verify-release-v080
 assert(pkg.scripts['init:typed:v080-r1']==='node scripts/init-v080-r1-typed-availability.mjs','R1 typed init script missing');
 
 assert((sql.match(/FROM ev_chargers c/g)||[]).length===1,'typed init must aggregate raw ev_chargers once');
-assert(sql.includes('CREATE TEMP TABLE r1_typed_availability_init AS'),'typed temp aggregation missing');
+assert(sql.includes('CREATE TABLE r1_typed_availability_init'),'typed staging table missing');
 assert(sql.includes('UPDATE ev_stations'),'ev_stations typed init missing');
 assert(sql.includes('UPDATE ev_station_live_status'),'ev_station_live_status typed init missing');
 
