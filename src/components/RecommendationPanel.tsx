@@ -1,4 +1,5 @@
 import type { PlugParkPlace } from '../types';
+import { chargerSelectionText } from '../presentation/chargerText';
 import type {
   ChargerPreference,
   PlaceRecommendation,
@@ -15,6 +16,7 @@ type RecommendationPanelProps = {
   onLocate: () => void;
   onFocusMap: (place: PlugParkPlace) => void;
   onOpenDetail: (place: PlugParkPlace) => void;
+  focusedPlaceId: string | null;
   getDirectionsUrl: (place: PlugParkPlace) => string;
 };
 
@@ -33,6 +35,7 @@ export default function RecommendationPanel({
   onLocate,
   onFocusMap,
   onOpenDetail,
+  focusedPlaceId,
   getDirectionsUrl,
 }: RecommendationPanelProps) {
   return (
@@ -110,8 +113,17 @@ export default function RecommendationPanel({
             <ol className="recommendation-list">
               {recommendations.map((recommendation, index) => {
                 const detailReasons = recommendation.reasons.filter((reason) => !reason.endsWith(' 거리'));
+                const nonChargerReasons = detailReasons.filter((reason) => !/(충전|급속|완속)/.test(reason));
+                const displayReasons =
+                  mode === 'charging'
+                    ? [chargerSelectionText(recommendation.place.charger, chargerPreference), ...nonChargerReasons].slice(0, 2)
+                    : detailReasons.slice(0, 2);
+                const displayWarnings = recommendation.warnings.slice(0, 1);
                 return (
-                  <li key={recommendation.place.id} className="recommendation-row">
+                  <li
+                    key={recommendation.place.id}
+                    className={`recommendation-row ${focusedPlaceId === recommendation.place.id ? 'focused' : ''}`}
+                  >
                     <div className="recommendation-rank">{String(index + 1).padStart(2, '0')}</div>
 
                     <div className="recommendation-main">
@@ -129,12 +141,12 @@ export default function RecommendationPanel({
                       </div>
 
                       <div className="recommendation-reasons">
-                        {detailReasons.map((reason) => <span key={reason}>{reason}</span>)}
+                        {displayReasons.map((reason) => <span key={reason}>{reason}</span>)}
                       </div>
 
-                      {recommendation.warnings.length > 0 && (
+                      {displayWarnings.length > 0 && (
                         <div className="recommendation-warnings">
-                          {recommendation.warnings.map((warning) => <span key={warning}>{warning}</span>)}
+                          {displayWarnings.map((warning) => <span key={warning}>{warning}</span>)}
                         </div>
                       )}
                     </div>

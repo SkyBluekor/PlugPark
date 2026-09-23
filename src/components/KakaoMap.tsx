@@ -116,6 +116,7 @@ export default function KakaoMap({ places, focusedPlace, userLocation, onSelect,
   const userOverlayRef = useRef<any>(null);
   const resolvedPositionsRef = useRef<Map<string, { lat: number; lng: number }>>(new Map());
   const [resolvedVersion, setResolvedVersion] = useState(0);
+  const [renderedMarkerCount, setRenderedMarkerCount] = useState(0);
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
   const [errorText, setErrorText] = useState('');
 
@@ -202,7 +203,10 @@ export default function KakaoMap({ places, focusedPlace, userLocation, onSelect,
     overlaysRef.current.forEach((overlay) => overlay.setMap(null));
     overlaysRef.current = [];
 
-    if (!places.length) return;
+    if (!places.length) {
+      setRenderedMarkerCount(0);
+      return;
+    }
     const bounds = new kakao.maps.LatLngBounds();
 
     let markerCount = 0;
@@ -240,6 +244,8 @@ export default function KakaoMap({ places, focusedPlace, userLocation, onSelect,
       });
       overlaysRef.current.push(overlay);
     });
+
+    setRenderedMarkerCount(markerCount);
 
     if (!focusedPlace && markerCount > 0) {
       map.setBounds(bounds, 42, 42, 42, 42);
@@ -301,6 +307,12 @@ export default function KakaoMap({ places, focusedPlace, userLocation, onSelect,
       )}
       {status === 'ready' && (
         <>
+          {renderedMarkerCount === 0 && (
+            <div className="map-state map-empty">
+              <strong>표시할 지도 위치가 없습니다.</strong>
+              <span>검색 조건이나 반경을 바꿔보세요.</span>
+            </div>
+          )}
           <button className="map-location-button" type="button" onClick={onLocate}>
             ◎ 내 위치
           </button>

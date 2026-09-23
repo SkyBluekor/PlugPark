@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import KakaoMap from './components/KakaoMap';
 import RecommendationPanel from './components/RecommendationPanel';
 import { mockPlaces } from './mock';
+import { chargerAvailabilityText } from './presentation/chargerText';
 import { recommendPlaces } from './recommendation/recommendPlaces';
 import type { ChargerPreference, RecommendationMode } from './recommendation/recommendationTypes';
 import type { PlacesResponse, PlugParkPlace } from './types';
@@ -10,6 +11,8 @@ type ChargerFilter = 'all' | 'parking' | 'available' | 'fast' | 'slow';
 type SortKey = 'charger' | 'parking' | 'distance';
 type UserLocation = { lat: number; lng: number } | null;
 type RadiusKm = 1 | 3 | 5 | null;
+type NoticeTone = 'info' | 'warning' | 'error';
+type RuntimeMode = 'live' | 'local-fixture' | 'demo';
 const PAGE_SIZE = 20;
 
 function haversineMeters(aLat: number, aLng: number, bLat: number, bLng: number) {
@@ -73,8 +76,10 @@ async function fetchApiJson<T>(url: string): Promise<T> {
 export default function App() {
   const [places, setPlaces] = useState<PlugParkPlace[]>([]);
   const [live, setLive] = useState(false);
+  const [runtimeMode, setRuntimeMode] = useState<RuntimeMode>('demo');
   const [loading, setLoading] = useState(true);
   const [notice, setNotice] = useState('');
+  const [noticeTone, setNoticeTone] = useState<NoticeTone>('info');
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<ChargerFilter>('all');
   const [sort, setSort] = useState<SortKey>('charger');
@@ -97,9 +102,14 @@ export default function App() {
     evStatusFresh: false,
   });
 
+  function updateNotice(message: string, tone: NoticeTone = 'info') {
+    setNotice(message);
+    setNoticeTone(tone);
+  }
+
   async function load() {
     setLoading(true);
-    setNotice('공영주차장과 EV 충전정보를 불러오는 중…');
+    updateNotice('공영주차장과 EV 충전정보를 불러오는 중…', 'info');
 
     try {
       const data = await fetchApiJson<PlacesResponse>('/api/places');
@@ -107,6 +117,7 @@ export default function App() {
 
       setPlaces(data.places);
       setLive(true);
+      setRuntimeMode(data.runtimeMode === 'local-fixture' ? 'local-fixture' : 'live');
       setEvStats({
         parkingCount: data.parkingCount,
         matchedCount: data.matchedCount,
@@ -120,15 +131,17 @@ export default function App() {
       });
 
       if (data.places.length === 0) {
-        setNotice('표시할 공영주차장이 없습니다.');
+        updateNotice('표시할 공영주차장이 없습니다.', 'warning');
       } else {
-        setNotice(data.realtimeMessage || '');
+        const message = data.realtimeMessage || '';
+        updateNotice(message, /지연|오래|stale/i.test(message) ? 'warning' : 'info');
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : '알 수 없는 오류';
       setPlaces(mockPlaces);
       setLive(false);
-      setNotice(`PlugPark 데이터 연결 실패: ${message} · 예시 데이터로 표시 중`);
+      setRuntimeMode('demo');
+      updateNotice(`PlugPark 데이터 연결 실패: ${message} · 예시 데이터로 표시 중`, 'error');
     } finally {
       setLoading(false);
     }
@@ -141,6 +154,22 @@ export default function App() {
   useEffect(() => {
     setDisplayCount(PAGE_SIZE);
   }, [query, filter, sort, userLocation, radiusKm]);
+
+  useEffect(() => {
+    if (!selected) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setSelected(null);
+    };
+    window.addEventListener('keydown', onKeyDown);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener('keydown', onKeyDown);
+    };
+  }, [selected]);
 
   const filteredPlaces = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -218,24 +247,9 @@ export default function App() {
     });
   }
 
-  function typedAvailabilityText(place: PlugParkPlace, type: 'fast' | 'slow') {
-    const installed = type === 'fast' ? place.charger.fast : place.charger.slow;
-    const available = type === 'fast' ? place.charger.availableFast : place.charger.availableSlow;
-    const label = type === 'fast' ? '급속' : '완속';
-
-    if (installed <= 0) return `${label} 없음`;
-    if (place.charger.statusFresh === true) {
-      return `${label} ${available}기 가능 / ${installed}기`;
-    }
-    if (place.charger.statusFresh === false) {
-      return `${label} ${installed}기 설치 · 상태 갱신 지연`;
-    }
-    return `${label} ${installed}기 설치`;
-  }
-
   function locate() {
     if (!navigator.geolocation) {
-      setNotice('이 브라우저에서는 위치 기능을 사용할 수 없습니다.');
+      updateNotice('이 브라우저에서는 위치 기능을 사용할 수 없습니다.', 'error');
       return;
     }
     navigator.geolocation.getCurrentPosition(
@@ -245,14 +259,14 @@ export default function App() {
         setSort('distance');
         setSelected(null);
         setMapFocus(null);
-        setNotice('현재 위치 기준 3km 이내 장소를 가까운 순으로 표시합니다.');
+        updateNotice('현재 위치 기준 3km 이내 장소를 가까운 순으로 표시합니다.', 'info');
       },
       (error) => {
         const message =
           error.code === 1
             ? '위치 권한이 차단되었습니다. 브라우저 사이트 설정에서 위치 권한을 허용해주세요.'
             : '현재 위치를 가져오지 못했습니다. 잠시 후 다시 시도해주세요.';
-        setNotice(message);
+        updateNotice(message, 'error');
       },
       { enableHighAccuracy: true, timeout: 8000, maximumAge: 60_000 },
     );
@@ -266,7 +280,11 @@ export default function App() {
         </a>
         <div className="top-actions">
           <button className={`top-location ${userLocation ? 'active' : ''}`} onClick={locate}>◎ {userLocation ? '내 위치 사용 중' : '내 위치'}</button>
-          <div className={`live-badge ${live ? 'on' : ''}`}><span />{live ? 'LIVE DATA' : 'DEMO'}</div>
+          {runtimeMode === 'local-fixture' && <span className="local-fixture-badge">LOCAL FIXTURE</span>}
+          <div className={`live-badge ${runtimeMode === 'live' ? 'on' : runtimeMode === 'local-fixture' ? 'local' : ''}`}>
+            <span />
+            {runtimeMode === 'local-fixture' ? 'LOCAL DATA' : runtimeMode === 'live' ? 'LIVE DATA' : 'DEMO'}
+          </div>
         </div>
       </header>
 
@@ -306,7 +324,7 @@ export default function App() {
               <span>EV 충전 가능 공영주차장 <b>{`${evStats.matchedCount.toLocaleString()}곳`}</b></span>
               <span>부산 EV 충전소 <b>{`${evStats.stationCount.toLocaleString()}곳`}</b></span>
               <span>충전기 <b>{`${evStats.chargerCount.toLocaleString()}기`}</b></span>
-              <em>{live ? 'D1 데이터' : '예시 데이터'}</em>
+              <em>{runtimeMode === 'local-fixture' ? 'LOCAL DATA' : runtimeMode === 'live' ? 'LIVE DATA' : '예시 데이터'}</em>
             </div>
           )}
 
@@ -359,7 +377,7 @@ export default function App() {
                   setSelected(null);
                   setMapFocus(null);
                   if (sort === 'distance') setSort('charger');
-                  setNotice('');
+                  updateNotice('', 'info');
                 }}
               >
                 위치 해제
@@ -369,7 +387,7 @@ export default function App() {
 
 
 
-          {notice && <div className="notice">{notice}</div>}
+          {notice && <div className={`notice ${noticeTone}`} role={noticeTone === 'error' ? 'alert' : 'status'}>{notice}</div>}
 
           <RecommendationPanel
             recommendations={recommendations}
@@ -381,13 +399,17 @@ export default function App() {
             onLocate={locate}
             onFocusMap={focusPlaceOnMap}
             onOpenDetail={openPlaceDetail}
+            focusedPlaceId={mapFocus?.id ?? null}
             getDirectionsUrl={kakaoDirectionsUrl}
           />
 
           <div className="finder-grid">
             <section className="result-pane" aria-label="검색 결과">
               <div className="result-meta">
-                <div><strong>{filteredPlaces.length}</strong>곳</div>
+                <div className="result-meta-title">
+                  <span>전체 검색 결과</span>
+                  <strong>{filteredPlaces.length}곳</strong>
+                </div>
                 <span>{displayedPlaces.length}곳 표시</span>
               </div>
 
@@ -399,7 +421,11 @@ export default function App() {
                       ? haversineMeters(userLocation.lat, userLocation.lng, place.lat, place.lng)
                       : null;
                   return (
-                    <button className={`place-row ${selected?.id === place.id ? 'selected' : ''}`} key={place.id} onClick={() => openPlaceDetail(place)}>
+                    <button
+                      className={`place-row ${selected?.id === place.id ? 'selected' : ''} ${mapFocus?.id === place.id ? 'focused' : ''}`}
+                      key={place.id}
+                      onClick={() => openPlaceDetail(place)}
+                    >
                       <div className="row-head">
                         <div><span className="parking-label">{place.charger.total > 0 ? 'P⚡' : 'P'}</span><h3>{place.name}</h3></div>
                         <span className="distance">{distance != null ? formatMeters(distance) : formatMeters(place.charger.nearestDistanceMeters)}</span>
@@ -439,8 +465,8 @@ export default function App() {
                               {(place.charger.unavailable ?? 0) > 0 && <small> · 점검/중지 {place.charger.unavailable ?? 0}</small>}
                               {place.charger.statusFresh === false && <small> · 상태 갱신 지연</small>}
                             </span>
-                            <span>{typedAvailabilityText(place, 'fast')}</span>
-                            <span>{typedAvailabilityText(place, 'slow')}</span>
+                            <span>{chargerAvailabilityText(place.charger, 'fast')}</span>
+                            <span>{chargerAvailabilityText(place.charger, 'slow')}</span>
                           </>
                         ) : (
                           <span className="charger-pending">EV 충전정보 없음</span>
@@ -472,10 +498,16 @@ export default function App() {
 
       {selected && (
         <div className="drawer-backdrop" onClick={() => setSelected(null)}>
-          <aside className="detail-panel" onClick={(e) => e.stopPropagation()}>
+          <aside
+            className="detail-panel"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="place-detail-title"
+            onClick={(e) => e.stopPropagation()}
+          >
             <button className="close" onClick={() => setSelected(null)} aria-label="상세 닫기">×</button>
             <span className="parking-label">{selected.charger.total > 0 ? 'P⚡ MATCHED' : 'P PARKING'}</span>
-            <h2>{selected.name}</h2>
+            <h2 id="place-detail-title">{selected.name}</h2>
             <p className="detail-address">
               {selected.address && selected.address !== '주소 정보 없음'
                 ? selected.address
@@ -530,8 +562,8 @@ export default function App() {
             </div>
 
             <dl>
-              <div><dt>급속</dt><dd>{typedAvailabilityText(selected, 'fast')}</dd></div>
-              <div><dt>완속</dt><dd>{typedAvailabilityText(selected, 'slow')}</dd></div>
+              <div><dt>급속</dt><dd>{chargerAvailabilityText(selected.charger, 'fast')}</dd></div>
+              <div><dt>완속</dt><dd>{chargerAvailabilityText(selected.charger, 'slow')}</dd></div>
               <div><dt>가까운 충전기</dt><dd>{formatMeters(selected.charger.nearestDistanceMeters) || '확인 필요'}</dd></div>
               <div><dt>충전소</dt><dd>{selected.charger.stations.join(', ') || '정보 없음'}</dd></div>
               <div><dt>주차요금</dt><dd>{selected.feeText}</dd></div>

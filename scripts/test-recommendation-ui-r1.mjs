@@ -67,3 +67,31 @@ console.log('Stale availability wording guard ... PASS');
 console.log('Recommendation/Panel extra network calls ... 0');
 console.log('\n✅ R1-3 MAP/DETAIL INTEGRATION STATIC VERIFY: PASS');
 console.log('Cloudflare remote read=0 · write=0 · deploy=0 · public API=0');
+
+
+const types = await readFile('src/types.ts','utf8');
+const worker = await readFile('worker/index.ts','utf8');
+const chargerText = await readFile('src/presentation/chargerText.ts','utf8');
+
+assert(types.includes("runtimeMode?: 'live' | 'local-fixture'"), 'PlacesResponse runtimeMode 타입이 없습니다.');
+assert(worker.includes("runtimeMode: isLocalFixtureMode(env) ? 'local-fixture' : 'live'"), 'Worker runtimeMode 응답이 없습니다.');
+assert(app.includes('LOCAL FIXTURE'), '로컬 fixture 안전 배지가 없습니다.');
+assert(app.includes('LOCAL DATA'), '로컬 data 표시가 없습니다.');
+assert(app.includes("event.key === 'Escape'"), '상세 ESC 닫기가 없습니다.');
+assert(app.includes("document.body.style.overflow = 'hidden'"), '상세 scroll lock이 없습니다.');
+assert(app.includes('role="dialog"') && app.includes('aria-modal="true"'), '상세 dialog 접근성 처리가 없습니다.');
+assert(app.includes('result-meta-title'), '전체 검색 결과 제목이 없습니다.');
+assert(panel.includes('displayReasons') && panel.includes('displayWarnings'), '추천 정보량 제한이 없습니다.');
+assert(panel.includes('chargerSelectionText'), '추천 충전 문구 공통 유틸을 사용하지 않습니다.');
+assert(app.includes('chargerAvailabilityText'), '목록/상세 충전 문구 공통 유틸을 사용하지 않습니다.');
+assert(chargerText.includes('상태 갱신 지연'), 'stale 충전 문구가 없습니다.');
+assert(chargerText.includes('현재 상태 확인 필요'), 'unknown 충전 문구가 없습니다.');
+assert(map.includes('renderedMarkerCount === 0'), '지도 empty state가 없습니다.');
+assert(css.includes('.recommendation-row.focused'), '추천 focus 스타일이 없습니다.');
+assert(css.includes('.place-row.focused'), '목록 focus 스타일이 없습니다.');
+assert(css.includes('max-height:85vh'), '모바일 bottom sheet 규칙이 없습니다.');
+assert(!/fetch\s*\(/.test(chargerText), 'presentation helper가 네트워크를 호출합니다.');
+
+console.log('R1-4 runtime mode + responsive UX ... PASS');
+console.log('R1-4 drawer accessibility + mobile sheet ... PASS');
+console.log('R1-4 unified charger wording ... PASS');
