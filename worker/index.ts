@@ -772,6 +772,7 @@ async function handlePlaces(env: Env, _ctx: ExecutionContext) {
       dataLayerVersion: DATA_LAYER_VERSION,
       parkingMatchVersion: PARKING_MATCH_VERSION,
       dataSource: 'd1-read-model',
+      runtimeMode: isLocalFixtureMode(env) ? 'local-fixture' : 'live',
       upstreamEvCalls: 0,
       upstreamParkingCalls: 0,
       matchRadiusMeters: state.matchRadiusMeters,

@@ -85,6 +85,7 @@ export type PlacesResponse = {
   evProgress?: null;
   readModelReady?: boolean;
   dataSource?: 'd1-read-model';
+  runtimeMode?: 'live' | 'local-fixture';
   upstreamEvCalls?: number;
   upstreamParkingCalls?: number;
   evStatusFresh?: boolean;

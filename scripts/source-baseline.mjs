@@ -18,6 +18,7 @@ const critical = [
   'src/recommendation/recommendationTypes.ts',
   'src/recommendation/recommendPlaces.ts',
   'src/components/RecommendationPanel.tsx',
+  'src/presentation/chargerText.ts',
   'migrations/0001_v0_5_1_foundation.sql',
   'migrations/0002_v0_6_0_read_models.sql',
   'migrations/0003_v0_7_0_live_data.sql',

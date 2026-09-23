@@ -32,6 +32,9 @@ jobs:
       - name: R1 local verify
         run: npm run local:verify
 
+      - name: Build
+        run: npm run build
+
       - name: Local tooling syntax
         run: |
           node --check scripts/local-reset-r1.mjs
