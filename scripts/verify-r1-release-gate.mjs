@@ -2,8 +2,21 @@ import { spawnSync } from 'node:child_process';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 
-const npm=process.platform==='win32'?'npm.cmd':'npm';
 const RECEIPT=resolve('.plugpark','v080-r1-local-gate-result.json');
+
+function npmRunCommand(script){
+  const npmExecPath=String(process.env.npm_execpath||'').trim();
+  if(npmExecPath){
+    return {command:process.execPath,args:[npmExecPath,'run',script]};
+  }
+  if(process.platform==='win32'){
+    return {
+      command:process.env.ComSpec||'cmd.exe',
+      args:['/d','/s','/c','npm.cmd','run',script],
+    };
+  }
+  return {command:'npm',args:['run',script]};
+}
 
 function gitHead(){
   const r=spawnSync('git',['rev-parse','HEAD'],{encoding:'utf8',shell:false,windowsHide:true});
@@ -13,7 +26,8 @@ function gitHead(){
 
 function run(label,script){
   console.log(`\n=== ${label} ===`);
-  const r=spawnSync(npm,['run',script],{
+  const {command,args}=npmRunCommand(script);
+  const r=spawnSync(command,args,{
     cwd:process.cwd(),
     stdio:'inherit',
     shell:false,
