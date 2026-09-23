@@ -48,10 +48,10 @@ assert(map.includes('mapRef.current.panTo(position)'), 'focusedPlace panTo가 �
 assert(map.includes('mapRef.current.setLevel(5)'), 'focusedPlace zoom 보정이 없습니다.');
 assert(map.includes('id="plugpark-map"'), '지도 DOM anchor가 없습니다.');
 
-assert(app.includes("typedAvailabilityText(place, 'fast')"), '목록 급속 가용 수 표시가 없습니다.');
-assert(app.includes("typedAvailabilityText(place, 'slow')"), '목록 완속 가용 수 표시가 없습니다.');
-assert(app.includes("typedAvailabilityText(selected, 'fast')"), '상세 급속 가용 수 표시가 없습니다.');
-assert(app.includes("typedAvailabilityText(selected, 'slow')"), '상세 완속 가용 수 표시가 없습니다.');
+assert(app.includes("chargerAvailabilityText(place.charger, 'fast')"), '목록 급속 가용 수 표시가 없습니다.');
+assert(app.includes("chargerAvailabilityText(place.charger, 'slow')"), '목록 완속 가용 수 표시가 없습니다.');
+assert(app.includes("chargerAvailabilityText(selected.charger, 'fast')"), '상세 급속 가용 수 표시가 없습니다.');
+assert(app.includes("chargerAvailabilityText(selected.charger, 'slow')"), '상세 완속 가용 수 표시가 없습니다.');
 assert(app.includes("place.charger.statusFresh === false"), 'stale 충전 상태 표현이 없습니다.');
 
 assert(!/\bfetch\s*\(/.test(panel), 'RecommendationPanel에서 새 네트워크 호출을 수행합니다.');
