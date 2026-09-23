@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import KakaoMap from './components/KakaoMap';
+import RecommendationPanel from './components/RecommendationPanel';
 import { mockPlaces } from './mock';
+import { recommendPlaces } from './recommendation/recommendPlaces';
+import type { ChargerPreference, RecommendationMode } from './recommendation/recommendationTypes';
 import type { PlacesResponse, PlugParkPlace } from './types';
 
 type ChargerFilter = 'all' | 'parking' | 'available' | 'fast' | 'slow';
@@ -79,6 +82,8 @@ export default function App() {
   const [userLocation, setUserLocation] = useState<UserLocation>(null);
   const [radiusKm, setRadiusKm] = useState<RadiusKm>(null);
   const [displayCount, setDisplayCount] = useState(PAGE_SIZE);
+  const [recommendationMode, setRecommendationMode] = useState<RecommendationMode>('charging');
+  const [chargerPreference, setChargerPreference] = useState<ChargerPreference>('any');
   const [evStats, setEvStats] = useState({
     parkingCount: 0,
     matchedCount: 0,
@@ -173,6 +178,18 @@ export default function App() {
 
     return result;
   }, [places, query, filter, sort, userLocation, radiusKm]);
+
+  const recommendations = useMemo(() => {
+    if (!userLocation) return [];
+    return recommendPlaces(places, {
+      mode: recommendationMode,
+      chargerPreference,
+      userLat: userLocation.lat,
+      userLng: userLocation.lng,
+      radiusKm,
+      limit: 3,
+    });
+  }, [places, userLocation, radiusKm, recommendationMode, chargerPreference]);
 
   const displayedPlaces = filteredPlaces.slice(0, displayCount);
 
@@ -309,6 +326,18 @@ export default function App() {
 
 
           {notice && <div className="notice">{notice}</div>}
+
+          <RecommendationPanel
+            recommendations={recommendations}
+            mode={recommendationMode}
+            chargerPreference={chargerPreference}
+            hasLocation={Boolean(userLocation)}
+            onModeChange={setRecommendationMode}
+            onChargerPreferenceChange={setChargerPreference}
+            onLocate={locate}
+            onSelectPlace={setSelected}
+            getDirectionsUrl={kakaoDirectionsUrl}
+          />
 
           <div className="finder-grid">
             <section className="result-pane" aria-label="검색 결과">
