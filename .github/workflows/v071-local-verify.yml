@@ -29,14 +29,13 @@ jobs:
       - name: Install
         run: npm ci
 
-      - name: R1 local verify
-        run: npm run local:verify
-
-      - name: Build
-        run: npm run build
+      - name: R1 local release gate
+        run: npm run verify:r1
 
       - name: Local tooling syntax
         run: |
           node --check scripts/local-reset-r1.mjs
           node --check scripts/local-dev-r1.mjs
           node --check scripts/verify-r1-local-only.mjs
+          node --check scripts/verify-r1-integration-local.mjs
+          node --check scripts/verify-r1-release-gate.mjs

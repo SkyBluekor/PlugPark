@@ -39,7 +39,9 @@
     "local:verify": "npm run test:recommendation && npm run test:recommendation-ui && npm run verify:live && npm run verify:parking-match-v072 && npm run verify:d1-read-budget-v072 && npm run verify:r1-local-only",
     "local:dev": "node scripts/local-dev-r1.mjs",
     "test:recommendation": "node scripts/test-recommendation-r1.mjs",
-    "test:recommendation-ui": "node scripts/test-recommendation-ui-r1.mjs"
+    "test:recommendation-ui": "node scripts/test-recommendation-ui-r1.mjs",
+    "verify:r1-integration": "node scripts/verify-r1-integration-local.mjs",
+    "verify:r1": "node scripts/verify-r1-release-gate.mjs"
   },
   "dependencies": {
     "react": "^19.1.1",

@@ -13,6 +13,8 @@ const places = worker.slice(placesStart, placesEnd);
 
 assert(places.includes('getLiveFreshnessState(env.DB, env)'), 'public /api/places가 lightweight freshness state를 사용하지 않습니다.');
 assert(!places.includes('getLiveState(env.DB, env)'), 'public /api/places에서 expensive getLiveState 호출이 남아 있습니다.');
+assert(!places.includes('FROM ev_chargers'), 'public /api/places가 ev_chargers raw table을 직접 읽습니다.');
+assert(!places.includes('FROM parking_lots'), 'public /api/places가 parking_lots raw table을 직접 읽습니다.');
 
 const readModelStart = worker.indexOf('async function getReadModelState');
 const readModelEnd = worker.indexOf('function readRowToPlace', readModelStart);
