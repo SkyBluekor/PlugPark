@@ -36,7 +36,8 @@
     "verify:d1-read-budget-v072": "node scripts/verify-d1-read-budget-v072.mjs",
     "local:reset": "node scripts/local-reset-r1.mjs",
     "verify:r1-local-only": "node scripts/verify-r1-local-only.mjs",
-    "local:verify": "npm run verify:live && npm run verify:parking-match-v072 && npm run verify:d1-read-budget-v072 && npm run verify:r1-local-only"
+    "local:verify": "npm run verify:live && npm run verify:parking-match-v072 && npm run verify:d1-read-budget-v072 && npm run verify:r1-local-only",
+    "local:dev": "node scripts/local-dev-r1.mjs"
   },
   "dependencies": {
     "react": "^19.1.1",

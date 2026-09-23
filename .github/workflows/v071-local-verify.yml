@@ -1,18 +1,19 @@
-name: v0.7.2-P2 verify
+name: v0.8.0-R1 local-only verify
 
 on:
   push:
     branches:
-      - fix/v0.7.1-live-stabilization-clean
+      - feat/v0.8.0-r1-recommendation
   pull_request:
     branches:
       - main
+      - feat/v0.7.2-p2-parking-match-stabilization
 
 permissions:
   contents: read
 
 jobs:
-  verify-live-local:
+  local-only-verify:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -28,19 +29,11 @@ jobs:
       - name: Install
         run: npm ci
 
-      - name: LIVE local verify
-        run: npm run verify:live
+      - name: R1 local verify
+        run: npm run local:verify
 
-      - name: P2 parking match replay verify
-        run: npm run verify:parking-match-v072
-
-      - name: P2 release gate static verify
-        run: npm run verify:release-v072-p2
-
-      - name: P2 D1 read budget verify
-        run: npm run verify:d1-read-budget-v072
-
-      - name: P2 release scripts syntax
+      - name: Local tooling syntax
         run: |
-          node --check scripts/preflight-v072-p2.mjs
-          node --check scripts/release-v072-p2.mjs
+          node --check scripts/local-reset-r1.mjs
+          node --check scripts/local-dev-r1.mjs
+          node --check scripts/verify-r1-local-only.mjs
