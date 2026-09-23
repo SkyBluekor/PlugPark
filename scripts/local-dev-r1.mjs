@@ -8,26 +8,41 @@ const BASE_URL=`http://127.0.0.1:${PORT}`;
 const STATE=resolve('.plugpark','r1-local-state');
 const TOKEN='plugpark-r1-local-only';
 
-function bin(){
-  for(const p of [['wrangler','bin','wrangler.js'],['wrangler','bin','wrangler.cjs']]){
+function resolveBin(...candidates){
+  for(const p of candidates){
     const f=resolve('node_modules',...p);
     if(existsSync(f)) return f;
   }
   throw new Error('npm ci 후 다시 실행하세요.');
 }
 
-const reset=spawnSync(process.execPath,[resolve('scripts','local-reset-r1.mjs')],{
-  cwd:ROOT,
-  stdio:'inherit',
-  shell:false,
-  windowsHide:true,
-  env:{...process.env,CI:'1',WRANGLER_SEND_METRICS:'false'}
-});
-if(reset.error) throw reset.error;
-if(reset.status!==0) process.exit(reset.status??1);
+function runNode(label, script, args=[]){
+  process.stdout.write(`${label} ... `);
+  const r=spawnSync(process.execPath,[script,...args],{
+    cwd:ROOT,
+    stdio:'inherit',
+    shell:false,
+    windowsHide:true,
+    env:{...process.env,CI:'1',WRANGLER_SEND_METRICS:'false'}
+  });
+  if(r.error) throw r.error;
+  if(r.status!==0) throw new Error(`${label} 실패 (exit=${r.status})`);
+  console.log('PASS');
+}
+
+const tsc=resolveBin(['typescript','bin','tsc']);
+const vite=resolveBin(['vite','bin','vite.js']);
+const wrangler=resolveBin(['wrangler','bin','wrangler.js'],['wrangler','bin','wrangler.cjs']);
+
+console.log('\nPlugPark R1 LOCAL DEV');
+console.log('Remote Cloudflare read=0 · write=0 · deploy=0 · public API=0\n');
+
+runNode('TypeScript build',tsc,['-b']);
+runNode('Vite frontend build',vite,['build']);
+runNode('Local D1 reset',resolve('scripts','local-reset-r1.mjs'));
 
 const child=spawn(process.execPath,[
-  bin(),'dev','--local',
+  wrangler,'dev','--local',
   '--port',String(PORT),
   `--persist-to=${STATE}`,
   '--var','LOCAL_FIXTURE_MODE:true',
@@ -97,6 +112,7 @@ try{
 
   console.log('\n✅ PlugPark LOCAL DEV READY');
   console.log(`UI/API: ${BASE_URL}`);
+  console.log('최신 src → dist build 완료');
   console.log('LOCAL_FIXTURE_MODE=true · Cloudflare remote usage=0 · public API calls=0');
   console.log('Ctrl+C 종료\n');
 }catch(error){
