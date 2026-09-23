@@ -22,7 +22,11 @@ assert(app.includes("prefers-reduced-motion: reduce"), 'reduced motion 대응이
 
 assert(app.includes('const mapPlaces = useMemo'), '지도 전용 places 계산이 없습니다.');
 assert(app.includes('return [mapFocus, ...filteredPlaces]'), '필터 밖 추천 장소를 지도에 임시 포함하지 않습니다.');
-assert(!app.includes('setFilter(') || !app.includes('focusPlaceOnMap') || !/function focusPlaceOnMap[\s\S]*?setFilter\(/.test(app), '추천 지도 포커스가 목록 filter를 강제로 변경합니다.');
+const focusStart = app.indexOf('function focusPlaceOnMap(place: PlugParkPlace)');
+const focusEnd = app.indexOf('function typedAvailabilityText', focusStart);
+assert(focusStart >= 0 && focusEnd > focusStart, 'focusPlaceOnMap 함수 범위를 찾지 못했습니다.');
+const focusFunction = app.slice(focusStart, focusEnd);
+assert(!focusFunction.includes('setFilter('), '추천 지도 포커스가 목록 filter를 강제로 변경합니다.');
 
 assert(app.includes('onFocusMap={focusPlaceOnMap}'), 'RecommendationPanel 지도 포커스 callback 연결이 없습니다.');
 assert(app.includes('onOpenDetail={openPlaceDetail}'), 'RecommendationPanel 상세 callback 연결이 없습니다.');
