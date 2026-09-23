@@ -3,7 +3,7 @@ import { spawnSync } from 'node:child_process';
 const npm=process.platform==='win32'?'npm.cmd':'npm';
 
 function run(label,script){
-  console.log(\`\\n=== \${label} ===\`);
+  console.log(`\n=== ${label} ===`);
   const r=spawnSync(npm,['run',script],{
     cwd:process.cwd(),
     stdio:'inherit',
@@ -13,12 +13,12 @@ function run(label,script){
   });
   if(r.error) throw r.error;
   if(r.status!==0){
-    console.error(\`\\n❌ R1 RELEASE GATE STOP · \${label}\`);
+    console.error(`\n❌ R1 RELEASE GATE STOP · ${label}`);
     process.exit(r.status??1);
   }
 }
 
-console.log('\\nPlugPark v0.8.0-R1 LOCAL RELEASE GATE');
+console.log('\nPlugPark v0.8.0-R1 LOCAL RELEASE GATE');
 console.log('원격 Cloudflare/API를 호출하지 않는 최종 로컬 검증입니다.');
 
 run('Recommendation','test:recommendation');
@@ -30,7 +30,7 @@ run('Local-only safety','verify:r1-local-only');
 run('TypeScript + Vite build','build');
 run('Local Worker + D1 integration','verify:r1-integration');
 
-console.log('\\n✅ PlugPark v0.8.0-R1 LOCAL RELEASE GATE: PASS');
+console.log('\n✅ PlugPark v0.8.0-R1 LOCAL RELEASE GATE: PASS');
 console.log('Recommendation       PASS');
 console.log('Typed availability  PASS');
 console.log('Parking match        PASS');
