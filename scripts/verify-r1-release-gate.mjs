@@ -1,6 +1,15 @@
 import { spawnSync } from 'node:child_process';
+import { mkdir, writeFile } from 'node:fs/promises';
+import { resolve } from 'node:path';
 
 const npm=process.platform==='win32'?'npm.cmd':'npm';
+const RECEIPT=resolve('.plugpark','v080-r1-local-gate-result.json');
+
+function gitHead(){
+  const r=spawnSync('git',['rev-parse','HEAD'],{encoding:'utf8',shell:false,windowsHide:true});
+  if(r.error||r.status!==0) throw new Error('git HEAD 확인 실패');
+  return r.stdout.trim();
+}
 
 function run(label,script){
   console.log(`\n=== ${label} ===`);
@@ -43,3 +52,7 @@ console.log('Remote D1 read       0');
 console.log('Remote D1 write      0');
 console.log('Deploy               0');
 console.log('Public API call      0');
+
+await mkdir(resolve('.plugpark'),{recursive:true});
+await writeFile(RECEIPT,JSON.stringify({version:'v0.8.0-R1',gitHead:gitHead(),passed:true,remoteD1Reads:0,remoteD1Writes:0,deployCalls:0,publicApiCalls:0,verifiedAt:new Date().toISOString()},null,2)+'\n','utf8');
+console.log('Local gate receipt: '+RECEIPT);

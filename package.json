@@ -41,7 +41,11 @@
     "test:recommendation": "node scripts/test-recommendation-r1.mjs",
     "test:recommendation-ui": "node scripts/test-recommendation-ui-r1.mjs",
     "verify:r1-integration": "node scripts/verify-r1-integration-local.mjs",
-    "verify:r1": "node scripts/verify-r1-release-gate.mjs"
+    "verify:r1": "node scripts/verify-r1-release-gate.mjs",
+    "init:typed:v080-r1": "node scripts/init-v080-r1-typed-availability.mjs",
+    "preflight:v080-r1": "node scripts/preflight-v080-r1.mjs",
+    "release:v080-r1": "node scripts/release-v080-r1.mjs",
+    "verify:release:v080-r1": "node scripts/verify-release-v080-r1.mjs"
   },
   "dependencies": {
     "react": "^19.1.1",

@@ -71,6 +71,8 @@ export type PlacesResponse = {
   ok: boolean;
   generatedAt: string;
   dataLayerVersion?: string;
+  parkingMatchVersion?: string;
+  recommendationVersion?: 'v0.8.0-R1';
   matchRadiusMeters: number;
   parkingCount: number;
   realtimeParkingConfigured: boolean;

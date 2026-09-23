@@ -32,6 +32,9 @@ jobs:
       - name: R1 local release gate
         run: npm run verify:r1
 
+      - name: R1 release tooling verify
+        run: npm run verify:release:v080-r1
+
       - name: Local tooling syntax
         run: |
           node --check scripts/local-reset-r1.mjs
@@ -39,3 +42,8 @@ jobs:
           node --check scripts/verify-r1-local-only.mjs
           node --check scripts/verify-r1-integration-local.mjs
           node --check scripts/verify-r1-release-gate.mjs
+          node --check scripts/preflight-v080-r1.mjs
+          node --check scripts/init-v080-r1-typed-availability.mjs
+          node --check scripts/release-v080-r1.mjs
+          node --check scripts/verify-release-v080-r1.mjs
+          node --check scripts/verify-v080-r1-typed-init-local.mjs

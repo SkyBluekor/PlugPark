@@ -188,9 +188,10 @@ const PARKING_BASE_URL =
 const EV_INFO_URL = 'https://apis.data.go.kr/B552584/EvCharger/getChargerInfo';
 const EV_STATUS_URL = 'https://apis.data.go.kr/B552584/EvCharger/getChargerStatus';
 
-const CACHE_VERSION = 'v7.2.0-p2';
+const CACHE_VERSION = 'v8.0.0-r1';
 const DATA_LAYER_VERSION = 'v0.7.1';
 const PARKING_MATCH_VERSION = 'v0.7.2-P2';
+const RECOMMENDATION_VERSION = 'v0.8.0-R1';
 const D1_EV_INFO_JOB = 'ev_info';
 const D1_INGEST_MAX_PAGES_PER_REQUEST = 1;
 const PARKING_BASE_PAGE_SIZE = 100;
@@ -247,6 +248,7 @@ export default {
         ok: true,
         dataLayerVersion: DATA_LAYER_VERSION,
         parkingMatchVersion: PARKING_MATCH_VERSION,
+        recommendationVersion: RECOMMENDATION_VERSION,
         parkingSecretConfigured: Boolean(env.BUSAN_PARKING_API_KEY),
         evSecretConfigured: Boolean(env.EV_CHARGER_API_KEY),
         realtimeParkingUrlConfigured: Boolean(env.BUSAN_REALTIME_PARKING_API_URL),
@@ -719,6 +721,7 @@ async function handlePlaces(env: Env, _ctx: ExecutionContext) {
         ok: false,
         dataLayerVersion: DATA_LAYER_VERSION,
         parkingMatchVersion: PARKING_MATCH_VERSION,
+        recommendationVersion: RECOMMENDATION_VERSION,
         error: 'D1 read model 준비가 필요합니다. 배포 후 npm run data:prepare 를 한 번 실행해주세요.',
         readModelState: state,
       }, 503);
@@ -771,6 +774,7 @@ async function handlePlaces(env: Env, _ctx: ExecutionContext) {
       generatedAt: new Date().toISOString(),
       dataLayerVersion: DATA_LAYER_VERSION,
       parkingMatchVersion: PARKING_MATCH_VERSION,
+      recommendationVersion: RECOMMENDATION_VERSION,
       dataSource: 'd1-read-model',
       runtimeMode: isLocalFixtureMode(env) ? 'local-fixture' : 'live',
       upstreamEvCalls: 0,
