@@ -79,6 +79,7 @@ export default function App() {
   const [filter, setFilter] = useState<ChargerFilter>('all');
   const [sort, setSort] = useState<SortKey>('charger');
   const [selected, setSelected] = useState<PlugParkPlace | null>(null);
+  const [mapFocus, setMapFocus] = useState<PlugParkPlace | null>(null);
   const [userLocation, setUserLocation] = useState<UserLocation>(null);
   const [radiusKm, setRadiusKm] = useState<RadiusKm>(null);
   const [displayCount, setDisplayCount] = useState(PAGE_SIZE);
@@ -191,7 +192,46 @@ export default function App() {
     });
   }, [places, userLocation, radiusKm, recommendationMode, chargerPreference]);
 
+  const mapPlaces = useMemo(() => {
+    if (!mapFocus || filteredPlaces.some((place) => place.id === mapFocus.id)) {
+      return filteredPlaces;
+    }
+    return [mapFocus, ...filteredPlaces];
+  }, [filteredPlaces, mapFocus]);
+
   const displayedPlaces = filteredPlaces.slice(0, displayCount);
+
+  function openPlaceDetail(place: PlugParkPlace) {
+    setSelected(place);
+    setMapFocus(place);
+  }
+
+  function focusPlaceOnMap(place: PlugParkPlace) {
+    setMapFocus(place);
+    setSelected(null);
+    window.requestAnimationFrame(() => {
+      const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+      document.getElementById('plugpark-map')?.scrollIntoView({
+        behavior: reduceMotion ? 'auto' : 'smooth',
+        block: 'center',
+      });
+    });
+  }
+
+  function typedAvailabilityText(place: PlugParkPlace, type: 'fast' | 'slow') {
+    const installed = type === 'fast' ? place.charger.fast : place.charger.slow;
+    const available = type === 'fast' ? place.charger.availableFast : place.charger.availableSlow;
+    const label = type === 'fast' ? '급속' : '완속';
+
+    if (installed <= 0) return `${label} 없음`;
+    if (place.charger.statusFresh === true) {
+      return `${label} ${available}기 가능 / ${installed}기`;
+    }
+    if (place.charger.statusFresh === false) {
+      return `${label} ${installed}기 설치 · 상태 갱신 지연`;
+    }
+    return `${label} ${installed}기 설치`;
+  }
 
   function locate() {
     if (!navigator.geolocation) {
@@ -204,6 +244,7 @@ export default function App() {
         setRadiusKm(3);
         setSort('distance');
         setSelected(null);
+        setMapFocus(null);
         setNotice('현재 위치 기준 3km 이내 장소를 가까운 순으로 표시합니다.');
       },
       (error) => {
@@ -298,6 +339,7 @@ export default function App() {
                     setRadiusKm(km);
                     setSort('distance');
                     setSelected(null);
+                    setMapFocus(null);
                   }}
                 >
                   {km}km
@@ -314,6 +356,8 @@ export default function App() {
                 onClick={() => {
                   setUserLocation(null);
                   setRadiusKm(null);
+                  setSelected(null);
+                  setMapFocus(null);
                   if (sort === 'distance') setSort('charger');
                   setNotice('');
                 }}
@@ -335,7 +379,8 @@ export default function App() {
             onModeChange={setRecommendationMode}
             onChargerPreferenceChange={setChargerPreference}
             onLocate={locate}
-            onSelectPlace={setSelected}
+            onFocusMap={focusPlaceOnMap}
+            onOpenDetail={openPlaceDetail}
             getDirectionsUrl={kakaoDirectionsUrl}
           />
 
@@ -354,7 +399,7 @@ export default function App() {
                       ? haversineMeters(userLocation.lat, userLocation.lng, place.lat, place.lng)
                       : null;
                   return (
-                    <button className={`place-row ${selected?.id === place.id ? 'selected' : ''}`} key={place.id} onClick={() => setSelected(place)}>
+                    <button className={`place-row ${selected?.id === place.id ? 'selected' : ''}`} key={place.id} onClick={() => openPlaceDetail(place)}>
                       <div className="row-head">
                         <div><span className="parking-label">{place.charger.total > 0 ? 'P⚡' : 'P'}</span><h3>{place.name}</h3></div>
                         <span className="distance">{distance != null ? formatMeters(distance) : formatMeters(place.charger.nearestDistanceMeters)}</span>
@@ -394,7 +439,8 @@ export default function App() {
                               {(place.charger.unavailable ?? 0) > 0 && <small> · 점검/중지 {place.charger.unavailable ?? 0}</small>}
                               {place.charger.statusFresh === false && <small> · 상태 갱신 지연</small>}
                             </span>
-                            <span><b>{place.charger.fast}</b> 급속 · <b>{place.charger.slow}</b> 완속</span>
+                            <span>{typedAvailabilityText(place, 'fast')}</span>
+                            <span>{typedAvailabilityText(place, 'slow')}</span>
                           </>
                         ) : (
                           <span className="charger-pending">EV 충전정보 없음</span>
@@ -413,7 +459,13 @@ export default function App() {
               </div>
             </section>
 
-            <KakaoMap places={filteredPlaces} selected={selected} userLocation={userLocation} onSelect={setSelected} onLocate={locate} />
+            <KakaoMap
+              places={mapPlaces}
+              focusedPlace={mapFocus}
+              userLocation={userLocation}
+              onSelect={openPlaceDetail}
+              onLocate={locate}
+            />
           </div>
         </section>
       </main>
@@ -478,7 +530,8 @@ export default function App() {
             </div>
 
             <dl>
-              <div><dt>급속 / 완속</dt><dd>{selected.charger.fast}기 / {selected.charger.slow}기</dd></div>
+              <div><dt>급속</dt><dd>{typedAvailabilityText(selected, 'fast')}</dd></div>
+              <div><dt>완속</dt><dd>{typedAvailabilityText(selected, 'slow')}</dd></div>
               <div><dt>가까운 충전기</dt><dd>{formatMeters(selected.charger.nearestDistanceMeters) || '확인 필요'}</dd></div>
               <div><dt>충전소</dt><dd>{selected.charger.stations.join(', ') || '정보 없음'}</dd></div>
               <div><dt>주차요금</dt><dd>{selected.feeText}</dd></div>

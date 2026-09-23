@@ -388,3 +388,35 @@ body{overflow-x:hidden}
   .recommendation-actions{display:grid;grid-template-columns:1fr 1fr;width:100%}
   .recommendation-actions button,.recommendation-actions a{width:100%;min-height:38px}
 }
+
+
+/* v0.8.0-R1-3 recommendation action + map focus */
+.recommendation-detail-link{
+  margin:0;
+  padding:0;
+  border:0;
+  background:transparent;
+  color:inherit;
+  font:inherit;
+  font-weight:inherit;
+  letter-spacing:inherit;
+  text-align:left;
+  cursor:pointer;
+}
+.recommendation-detail-link:hover,
+.recommendation-detail-link:focus-visible{
+  color:#087451;
+  text-decoration:underline;
+  text-underline-offset:3px;
+}
+.kakao-place-marker.focused{
+  width:47px;
+  height:47px;
+  border-width:3px;
+  box-shadow:0 0 0 5px rgba(13,122,87,.16),0 7px 20px rgba(7,54,39,.30);
+  z-index:9;
+}
+#plugpark-map{scroll-margin-top:84px}
+@media(prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto}
+}

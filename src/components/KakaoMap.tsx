@@ -3,7 +3,7 @@ import type { PlugParkPlace } from '../types';
 
 type Props = {
   places: PlugParkPlace[];
-  selected: PlugParkPlace | null;
+  focusedPlace: PlugParkPlace | null;
   userLocation: { lat: number; lng: number } | null;
   onSelect: (place: PlugParkPlace) => void;
   onLocate: () => void;
@@ -108,7 +108,7 @@ function geocodePlace(kakao: any, place: PlugParkPlace): Promise<{ lat: number; 
   });
 }
 
-export default function KakaoMap({ places, selected, userLocation, onSelect, onLocate }: Props) {
+export default function KakaoMap({ places, focusedPlace, userLocation, onSelect, onLocate }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<any>(null);
   const kakaoRef = useRef<any>(null);
@@ -220,7 +220,7 @@ export default function KakaoMap({ places, selected, userLocation, onSelect, onL
 
       const marker = document.createElement('button');
       marker.type = 'button';
-      marker.className = 'kakao-place-marker';
+      marker.className = `kakao-place-marker${focusedPlace?.id === place.id ? ' focused' : ''}`;
       marker.title = place.name;
       marker.setAttribute('aria-label', `${place.name} 선택`);
       marker.innerHTML = place.charger.total > 0 ? `<span>P</span><b>⚡</b>` : `<span>P</span>`;
@@ -241,7 +241,7 @@ export default function KakaoMap({ places, selected, userLocation, onSelect, onL
       overlaysRef.current.push(overlay);
     });
 
-    if (!selected && markerCount > 0) {
+    if (!focusedPlace && markerCount > 0) {
       map.setBounds(bounds, 42, 42, 42, 42);
     }
 
@@ -249,18 +249,18 @@ export default function KakaoMap({ places, selected, userLocation, onSelect, onL
       overlaysRef.current.forEach((overlay) => overlay.setMap(null));
       overlaysRef.current = [];
     };
-  }, [places, status, onSelect, resolvedVersion]);
+  }, [places, status, onSelect, resolvedVersion, focusedPlace]);
 
   useEffect(() => {
-    if (!selected || status !== 'ready' || !mapRef.current || !kakaoRef.current) return;
-    const coords = hasValidCoordinates(selected)
-      ? { lat: selected.lat as number, lng: selected.lng as number }
-      : resolvedPositionsRef.current.get(selected.id);
+    if (!focusedPlace || status !== 'ready' || !mapRef.current || !kakaoRef.current) return;
+    const coords = hasValidCoordinates(focusedPlace)
+      ? { lat: focusedPlace.lat as number, lng: focusedPlace.lng as number }
+      : resolvedPositionsRef.current.get(focusedPlace.id);
     if (!coords) return;
     const position = new kakaoRef.current.maps.LatLng(coords.lat, coords.lng);
     mapRef.current.panTo(position);
     if (mapRef.current.getLevel() > 5) mapRef.current.setLevel(5);
-  }, [selected, status, resolvedVersion]);
+  }, [focusedPlace, status, resolvedVersion]);
 
   useEffect(() => {
     if (status !== 'ready' || !mapRef.current || !kakaoRef.current) return;
@@ -289,7 +289,7 @@ export default function KakaoMap({ places, selected, userLocation, onSelect, onL
   }, [userLocation, status]);
 
   return (
-    <div className="map-shell">
+    <div className="map-shell" id="plugpark-map">
       <div ref={containerRef} className="kakao-map" />
       {status === 'loading' && <div className="map-state">카카오맵 불러오는 중…</div>}
       {status === 'error' && (

@@ -13,7 +13,8 @@ type RecommendationPanelProps = {
   onModeChange: (value: RecommendationMode) => void;
   onChargerPreferenceChange: (value: ChargerPreference) => void;
   onLocate: () => void;
-  onSelectPlace: (place: PlugParkPlace) => void;
+  onFocusMap: (place: PlugParkPlace) => void;
+  onOpenDetail: (place: PlugParkPlace) => void;
   getDirectionsUrl: (place: PlugParkPlace) => string;
 };
 
@@ -30,7 +31,8 @@ export default function RecommendationPanel({
   onModeChange,
   onChargerPreferenceChange,
   onLocate,
-  onSelectPlace,
+  onFocusMap,
+  onOpenDetail,
   getDirectionsUrl,
 }: RecommendationPanelProps) {
   return (
@@ -114,7 +116,15 @@ export default function RecommendationPanel({
 
                     <div className="recommendation-main">
                       <div className="recommendation-place-head">
-                        <h4>{recommendation.place.name}</h4>
+                        <h4>
+                          <button
+                            type="button"
+                            className="recommendation-detail-link"
+                            onClick={() => onOpenDetail(recommendation.place)}
+                          >
+                            {recommendation.place.name}
+                          </button>
+                        </h4>
                         <span>{formatDistance(recommendation.distanceMeters)}</span>
                       </div>
 
@@ -130,7 +140,7 @@ export default function RecommendationPanel({
                     </div>
 
                     <div className="recommendation-actions">
-                      <button type="button" onClick={() => onSelectPlace(recommendation.place)}>
+                      <button type="button" onClick={() => onFocusMap(recommendation.place)}>
                         지도에서 보기
                       </button>
                       <a
