@@ -1,7 +1,7 @@
 {
   "name": "plugpark",
   "private": true,
-  "version": "0.7.2",
+  "version": "0.8.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -33,7 +33,10 @@
     "verify:release-v072-p2": "node scripts/verify-release-v072-p2.mjs",
     "preflight:v072-p2": "node scripts/preflight-v072-p2.mjs",
     "release:v072-p2": "node scripts/release-v072-p2.mjs",
-    "verify:d1-read-budget-v072": "node scripts/verify-d1-read-budget-v072.mjs"
+    "verify:d1-read-budget-v072": "node scripts/verify-d1-read-budget-v072.mjs",
+    "local:reset": "node scripts/local-reset-r1.mjs",
+    "verify:r1-local-only": "node scripts/verify-r1-local-only.mjs",
+    "local:verify": "npm run verify:live && npm run verify:parking-match-v072 && npm run verify:d1-read-budget-v072 && npm run verify:r1-local-only"
   },
   "dependencies": {
     "react": "^19.1.1",

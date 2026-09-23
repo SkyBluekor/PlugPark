@@ -1,6 +1,8 @@
 export type ChargerSummary = {
   total: number;
   available: number;
+  availableFast: number;
+  availableSlow: number;
   charging: number;
   unavailable?: number;
   fast: number;

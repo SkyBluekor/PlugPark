@@ -19,6 +19,8 @@ export const mockPlaces: PlugParkPlace[] = [
     charger: {
       total: 4,
       available: 3,
+      availableFast: 2,
+      availableSlow: 1,
       charging: 1,
       fast: 2,
       slow: 2,
@@ -47,6 +49,8 @@ export const mockPlaces: PlugParkPlace[] = [
     charger: {
       total: 2,
       available: 1,
+      availableFast: 1,
+      availableSlow: 0,
       charging: 1,
       fast: 1,
       slow: 1,
@@ -75,6 +79,8 @@ export const mockPlaces: PlugParkPlace[] = [
     charger: {
       total: 3,
       available: 2,
+      availableFast: 1,
+      availableSlow: 1,
       charging: 1,
       fast: 2,
       slow: 1,

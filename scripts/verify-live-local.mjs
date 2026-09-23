@@ -112,6 +112,7 @@ const migrationFiles = [
   resolve('migrations', '0003_v0_7_0_live_data.sql'),
   resolve('migrations', '0004_v0_7_1_parking_facility_catalog.sql'),
   resolve('migrations', '0005_v0_7_2_parking_match_rules.sql'),
+  resolve('migrations', '0006_v0_8_0_typed_charger_availability.sql'),
 ];
 for (const file of migrationFiles) assert(existsSync(file), `migration 없음: ${file}`);
 assert(existsSync(FIXTURE_SQL), `fixture 없음: ${FIXTURE_SQL}`);
@@ -218,12 +219,18 @@ try {
   assert(centum.parkingRealtimeFresh === true, '센텀 realtime fresh=false');
   assert(centum.charger?.total === 2, `센텀 charger total=${centum.charger?.total}`);
   assert(centum.charger?.available === 1, `센텀 available charger=${centum.charger?.available}`);
+  assert(centum.charger?.availableFast === 1, `센텀 availableFast=${centum.charger?.availableFast}`);
+  assert(centum.charger?.availableSlow === 0, `센텀 availableSlow=${centum.charger?.availableSlow}`);
+  assert(centum.charger?.availableFast + centum.charger?.availableSlow === centum.charger?.available, '센텀 typed availability 합계 불일치');
   assert(centum.charger?.charging === 1, `센텀 charging=${centum.charger?.charging}`);
 
   const citizen = places.places.find((p) => String(p.name || '').includes('시민공원'));
   assert(citizen, '시민공원 주차장 없음');
   assert(citizen.availableParking === 15, `시민공원 availableParking=${citizen.availableParking}`);
   assert(citizen.charger?.available === 1, `시민공원 available charger=${citizen.charger?.available}`);
+  assert(citizen.charger?.availableFast === 1, `시민공원 availableFast=${citizen.charger?.availableFast}`);
+  assert(citizen.charger?.availableSlow === 0, `시민공원 availableSlow=${citizen.charger?.availableSlow}`);
+  assert(citizen.charger?.availableFast + citizen.charger?.availableSlow === citizen.charger?.available, '시민공원 typed availability 합계 불일치');
   assert(citizen.charger?.unavailable === 1, `시민공원 unavailable=${citizen.charger?.unavailable}`);
 
   const invalidProtected = places.places.find((p) => p.id === 'PARK003');

@@ -209,6 +209,10 @@ const PARKING_REALTIME_CHUNK_SIZE = 100;
 const DEFAULT_PARKING_STALE_MINUTES = 60;
 const DEFAULT_STATUS_STALE_MINUTES = 20;
 const PLACES_CACHE_SECONDS = 5;
+const FAST_CHARGER_SQL =
+  "(CASE WHEN c.output_kw >= 50 THEN 1 WHEN c.output_kw IS NULL AND c.charger_type IN ('01','03','04','05','06','07','09','10') THEN 1 ELSE 0 END) = 1";
+const SLOW_CHARGER_SQL =
+  "(CASE WHEN c.output_kw >= 50 THEN 1 WHEN c.output_kw IS NULL AND c.charger_type IN ('01','03','04','05','06','07','09','10') THEN 1 ELSE 0 END) = 0";
 
 const BASE_REQUIRED_FIELDS = ['pkNam'] as const;
 const REALTIME_REQUIRED_FIELDS = [
@@ -728,6 +732,8 @@ async function handlePlaces(env: Env, _ctx: ExecutionContext) {
          p.realtime_match_type, p.realtime_name,
          COALESCE(SUM(s.charger_count), 0) AS charger_total,
          COALESCE(SUM(COALESCE(ls.available_count, s.available_count)), 0) AS charger_available,
+         COALESCE(SUM(COALESCE(ls.available_fast_count, s.available_fast_count)), 0) AS charger_available_fast,
+         COALESCE(SUM(COALESCE(ls.available_slow_count, s.available_slow_count)), 0) AS charger_available_slow,
          COALESCE(SUM(COALESCE(ls.charging_count, s.charging_count)), 0) AS charger_charging,
          COALESCE(SUM(COALESCE(ls.unavailable_count, 0)), 0) AS charger_unavailable,
          COALESCE(SUM(s.fast_count), 0) AS charger_fast,
@@ -891,6 +897,8 @@ async function ensureLiveSchema(db: D1Database) {
     db.prepare(`CREATE TABLE IF NOT EXISTS ev_station_live_status (
       stat_id TEXT PRIMARY KEY,
       available_count INTEGER NOT NULL DEFAULT 0,
+      available_fast_count INTEGER NOT NULL DEFAULT 0,
+      available_slow_count INTEGER NOT NULL DEFAULT 0,
       charging_count INTEGER NOT NULL DEFAULT 0,
       unavailable_count INTEGER NOT NULL DEFAULT 0,
       status_updated_at TEXT,
@@ -1147,12 +1155,14 @@ async function refreshStationLiveSummaries(db: D1Database, statIds: string[], sy
     const chunk = statIds.slice(offset, offset + 100);
     await db.prepare(
       `INSERT INTO ev_station_live_status (
-         stat_id, available_count, charging_count, unavailable_count,
-         status_updated_at, synced_at
+         stat_id, available_count, available_fast_count, available_slow_count,
+         charging_count, unavailable_count, status_updated_at, synced_at
        )
        SELECT
          c.stat_id,
          SUM(CASE WHEN COALESCE(s.status, c.info_status)='2' THEN 1 ELSE 0 END),
+         SUM(CASE WHEN COALESCE(s.status, c.info_status)='2' AND ${FAST_CHARGER_SQL} THEN 1 ELSE 0 END),
+         SUM(CASE WHEN COALESCE(s.status, c.info_status)='2' AND ${SLOW_CHARGER_SQL} THEN 1 ELSE 0 END),
          SUM(CASE WHEN COALESCE(s.status, c.info_status)='3' THEN 1 ELSE 0 END),
          SUM(CASE WHEN COALESCE(s.status, c.info_status) IN ('1','4','5') THEN 1 ELSE 0 END),
          MAX(COALESCE(s.status_updated_at, c.info_status_updated_at)),
@@ -1164,6 +1174,8 @@ async function refreshStationLiveSummaries(db: D1Database, statIds: string[], sy
        GROUP BY c.stat_id
        ON CONFLICT(stat_id) DO UPDATE SET
          available_count=excluded.available_count,
+         available_fast_count=excluded.available_fast_count,
+         available_slow_count=excluded.available_slow_count,
          charging_count=excluded.charging_count,
          unavailable_count=excluded.unavailable_count,
          status_updated_at=excluded.status_updated_at,
@@ -1753,6 +1765,8 @@ type ParkingReadRow = {
   realtime_name: string | null;
   charger_total: number;
   charger_available: number;
+  charger_available_fast: number;
+  charger_available_slow: number;
   charger_charging: number;
   charger_unavailable: number;
   charger_fast: number;
@@ -1789,6 +1803,8 @@ async function ensureReadModelSchema(db: D1Database) {
       lng REAL,
       charger_count INTEGER NOT NULL,
       available_count INTEGER NOT NULL,
+      available_fast_count INTEGER NOT NULL DEFAULT 0,
+      available_slow_count INTEGER NOT NULL DEFAULT 0,
       charging_count INTEGER NOT NULL,
       fast_count INTEGER NOT NULL,
       slow_count INTEGER NOT NULL,
@@ -1961,8 +1977,8 @@ async function rebuildEvStations(db: D1Database) {
   const insert = db.prepare(
     `INSERT INTO ev_stations (
        stat_id, station_name, normalized_station_name, address, lat, lng,
-       charger_count, available_count, charging_count, fast_count, slow_count,
-       last_updated_at, synced_at
+       charger_count, available_count, available_fast_count, available_slow_count,
+       charging_count, fast_count, slow_count, last_updated_at, synced_at
      )
      SELECT
        c.stat_id,
@@ -1973,17 +1989,11 @@ async function rebuildEvStations(db: D1Database) {
        AVG(c.lng),
        COUNT(*),
        SUM(CASE WHEN COALESCE(s.status, c.info_status) = '2' THEN 1 ELSE 0 END),
+       SUM(CASE WHEN COALESCE(s.status, c.info_status) = '2' AND ${FAST_CHARGER_SQL} THEN 1 ELSE 0 END),
+       SUM(CASE WHEN COALESCE(s.status, c.info_status) = '2' AND ${SLOW_CHARGER_SQL} THEN 1 ELSE 0 END),
        SUM(CASE WHEN COALESCE(s.status, c.info_status) = '3' THEN 1 ELSE 0 END),
-       SUM(CASE
-             WHEN c.output_kw >= 50 THEN 1
-             WHEN c.output_kw IS NULL AND c.charger_type IN ('01','03','04','05','06','07','09','10') THEN 1
-             ELSE 0
-           END),
-       SUM(CASE
-             WHEN c.output_kw >= 50 THEN 0
-             WHEN c.output_kw IS NULL AND c.charger_type IN ('01','03','04','05','06','07','09','10') THEN 0
-             ELSE 1
-           END),
+       SUM(CASE WHEN ${FAST_CHARGER_SQL} THEN 1 ELSE 0 END),
+       SUM(CASE WHEN ${SLOW_CHARGER_SQL} THEN 1 ELSE 0 END),
        MAX(COALESCE(s.status_updated_at, c.info_status_updated_at)),
        ?1
      FROM ev_chargers c
@@ -2281,6 +2291,8 @@ function readRowToPlace(row: ParkingReadRow) {
     charger: {
       total: Number(row.charger_total || 0),
       available: Number(row.charger_available || 0),
+      availableFast: Number(row.charger_available_fast || 0),
+      availableSlow: Number(row.charger_available_slow || 0),
       charging: Number(row.charger_charging || 0),
       unavailable: Number(row.charger_unavailable || 0),
       fast: Number(row.charger_fast || 0),
@@ -3135,6 +3147,8 @@ function toParkingOnlyPlace(parking: ParkingBase) {
     charger: {
       total: 0,
       available: 0,
+      availableFast: 0,
+      availableSlow: 0,
       charging: 0,
       fast: 0,
       slow: 0,
