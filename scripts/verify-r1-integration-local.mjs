@@ -9,7 +9,7 @@ import ts from 'typescript';
 const ROOT=process.cwd();
 const DB='plugpark-db';
 const PORT=Number(process.env.PLUGPARK_R1_VERIFY_PORT||8791);
-const BASE_URL=\`http://127.0.0.1:\${PORT}\`;
+const BASE_URL=`http://127.0.0.1:${PORT}`;
 const TOKEN='plugpark-r1-local-only';
 const STATE=resolve('.plugpark','r1-local-state');
 const UPGRADE_STATE=resolve('.plugpark','r1-upgrade-state');
@@ -23,24 +23,24 @@ function wrangler(){
 }
 
 function runNode(label,script,args=[]){
-  process.stdout.write(\`\${label} ... \`);
+  process.stdout.write(`${label} ... `);
   const r=spawnSync(process.execPath,[script,...args],{
     cwd:ROOT,stdio:'inherit',shell:false,windowsHide:true,
     env:{...process.env,CI:'1',WRANGLER_SEND_METRICS:'false'}
   });
   if(r.error) throw r.error;
-  assert.equal(r.status,0,\`\${label} 실패 (exit=\${r.status})\`);
+  assert.equal(r.status,0,`${label} 실패 (exit=${r.status})`);
   console.log('PASS');
 }
 
 function runWrangler(label,args){
-  process.stdout.write(\`\${label} ... \`);
+  process.stdout.write(`${label} ... `);
   const r=spawnSync(process.execPath,[wrangler(),...args],{
     cwd:ROOT,stdio:'inherit',shell:false,windowsHide:true,
     env:{...process.env,CI:'1',WRANGLER_SEND_METRICS:'false'}
   });
   if(r.error) throw r.error;
-  assert.equal(r.status,0,\`\${label} 실패 (exit=\${r.status})\`);
+  assert.equal(r.status,0,`${label} 실패 (exit=${r.status})`);
   console.log('PASS');
 }
 
@@ -48,21 +48,21 @@ async function waitForServer(child,timeoutMs=60000){
   const deadline=Date.now()+timeoutMs;
   let lastError='not started';
   while(Date.now()<deadline){
-    if(child.exitCode!=null) throw new Error(\`wrangler dev 조기 종료 (exit=\${child.exitCode})\`);
+    if(child.exitCode!=null) throw new Error(`wrangler dev 조기 종료 (exit=${child.exitCode})`);
     try{
-      const response=await fetch(\`\${BASE_URL}/api/health\`,{headers:{Accept:'application/json'}});
+      const response=await fetch(`${BASE_URL}/api/health`,{headers:{Accept:'application/json'}});
       if(response.ok) return;
-      lastError=\`HTTP \${response.status}\`;
+      lastError=`HTTP ${response.status}`;
     }catch(error){
       lastError=error instanceof Error?error.message:String(error);
     }
     await new Promise(resolve=>setTimeout(resolve,350));
   }
-  throw new Error(\`local Worker 시작 시간 초과: \${lastError}\`);
+  throw new Error(`local Worker 시작 시간 초과: ${lastError}`);
 }
 
 async function jsonRequest(path,init){
-  const response=await fetch(\`\${BASE_URL}\${path}\`,{
+  const response=await fetch(`${BASE_URL}${path}`,{
     ...init,
     headers:{
       Accept:'application/json',
@@ -73,9 +73,9 @@ async function jsonRequest(path,init){
   const raw=await response.text();
   let data;
   try{data=JSON.parse(raw);}
-  catch{throw new Error(\`\${path}: JSON 아님 (HTTP \${response.status}) \${raw.slice(0,200)}\`);}
+  catch{throw new Error(`${path}: JSON 아님 (HTTP ${response.status}) ${raw.slice(0,200)}`);}
   if(!response.ok||data?.ok===false){
-    throw new Error(\`\${path}: \${data?.error||data?.message||\`HTTP \${response.status}\`}\`);
+    throw new Error(`${path}: ${data?.error||data?.message||`HTTP ${response.status}`}`);
   }
   return data;
 }
@@ -83,7 +83,7 @@ async function jsonRequest(path,init){
 async function post(path){
   return jsonRequest(path,{
     method:'POST',
-    headers:{Authorization:\`Bearer \${TOKEN}\`}
+    headers:{Authorization:`Bearer ${TOKEN}`}
   });
 }
 
@@ -99,7 +99,7 @@ async function loadRecommendationEngine(){
   }).outputText;
   const runtimePath=resolve('.plugpark','recommendPlaces.r1-integration.mjs');
   await writeFile(runtimePath,js,'utf8');
-  return import(\`file:///\${runtimePath.replace(/\\\\/g,'/')}?v=\${Date.now()}\`);
+  return import(`file:///${runtimePath.replace(/\\/g,'/')}?v=${Date.now()}`);
 }
 
 function assertTypedAvailability(place){
@@ -108,65 +108,65 @@ function assertTypedAvailability(place){
     ['total',c.total],['available',c.available],['fast',c.fast],['slow',c.slow],
     ['availableFast',c.availableFast],['availableSlow',c.availableSlow]
   ]){
-    assert.equal(typeof value,'number',\`\${place.id} charger.\${name} number 아님\`);
-    assert.ok(Number.isFinite(value)&&value>=0,\`\${place.id} charger.\${name} 음수/비정상\`);
+    assert.equal(typeof value,'number',`${place.id} charger.${name} number 아님`);
+    assert.ok(Number.isFinite(value)&&value>=0,`${place.id} charger.${name} 음수/비정상`);
   }
-  assert.ok(c.availableFast<=c.fast,\`\${place.id} availableFast > fast\`);
-  assert.ok(c.availableSlow<=c.slow,\`\${place.id} availableSlow > slow\`);
-  assert.ok(c.availableFast+c.availableSlow<=c.available,\`\${place.id} typed available 합 > total available\`);
+  assert.ok(c.availableFast<=c.fast,`${place.id} availableFast > fast`);
+  assert.ok(c.availableSlow<=c.slow,`${place.id} availableSlow > slow`);
+  assert.ok(c.availableFast+c.availableSlow<=c.available,`${place.id} typed available 합 > total available`);
 }
 
 function assertRecommendationContract(items,mode,preference){
-  assert.ok(items.length>0,\`\${mode}/\${preference}: 추천 0건\`);
-  assert.ok(items.length<=3,\`\${mode}/\${preference}: 추천 3건 초과\`);
+  assert.ok(items.length>0,`${mode}/${preference}: 추천 0건`);
+  assert.ok(items.length<=3,`${mode}/${preference}: 추천 3건 초과`);
   for(const item of items){
     const place=item.place;
-    assert.ok(Number.isFinite(place.lat)&&Number.isFinite(place.lng),\`\${place.id}: 추천 좌표 없음\`);
-    assert.ok(!(place.parkingRealtime&&place.parkingRealtimeFresh===true&&place.availableParking===0),\`\${place.id}: fresh 만차 추천됨\`);
-    if(mode==='charging'&&preference==='fast') assert.ok(place.charger.fast>0,\`\${place.id}: fast=0 급속 추천\`);
-    if(mode==='charging'&&preference==='slow') assert.ok(place.charger.slow>0,\`\${place.id}: slow=0 완속 추천\`);
-    if(mode==='charging'&&preference==='any') assert.ok(place.charger.total>0,\`\${place.id}: 충전기 없는 장소 추천\`);
+    assert.ok(Number.isFinite(place.lat)&&Number.isFinite(place.lng),`${place.id}: 추천 좌표 없음`);
+    assert.ok(!(place.parkingRealtime&&place.parkingRealtimeFresh===true&&place.availableParking===0),`${place.id}: fresh 만차 추천됨`);
+    if(mode==='charging'&&preference==='fast') assert.ok(place.charger.fast>0,`${place.id}: fast=0 급속 추천`);
+    if(mode==='charging'&&preference==='slow') assert.ok(place.charger.slow>0,`${place.id}: slow=0 완속 추천`);
+    if(mode==='charging'&&preference==='any') assert.ok(place.charger.total>0,`${place.id}: 충전기 없는 장소 추천`);
     if(place.charger.statusFresh===false){
-      assert.ok(!item.reasons.some(reason=>/사용 가능/.test(reason)),\`\${place.id}: stale 상태 사용 가능 단정\`);
+      assert.ok(!item.reasons.some(reason=>/사용 가능/.test(reason)),`${place.id}: stale 상태 사용 가능 단정`);
     }
   }
 }
 
-console.log('\\nPlugPark v0.8.0-R1 LOCAL INTEGRATION');
-console.log('Cloudflare remote read=0 · write=0 · deploy=0 · public API=0\\n');
+console.log('\nPlugPark v0.8.0-R1 LOCAL INTEGRATION');
+console.log('Cloudflare remote read=0 · write=0 · deploy=0 · public API=0\n');
 
 await mkdir(resolve('.plugpark'),{recursive:true});
 runNode('Fresh DB migration + fixture',resolve('scripts','local-reset-r1.mjs'));
 
 rmSync(UPGRADE_STATE,{recursive:true,force:true});
 const migrationNames=(await readdir(resolve('migrations')))
-  .filter(name=>/^\\d+.*\\.sql$/i.test(name))
+  .filter(name=>/^\d+.*\.sql$/i.test(name))
   .sort();
 const baseNames=migrationNames.filter(name=>name<'0006_');
 assert.ok(baseNames.length>=5,'0001~0005 migration 목록 부족');
-const baseSql=(await Promise.all(baseNames.map(name=>readFile(resolve('migrations',name),'utf8')))).join('\\n\\n');
+const baseSql=(await Promise.all(baseNames.map(name=>readFile(resolve('migrations',name),'utf8')))).join('\n\n');
 const upgradeBaseFile=resolve('.plugpark','r1-upgrade-base.sql');
 await writeFile(upgradeBaseFile,baseSql,'utf8');
 runWrangler('Upgrade base 0001~0005',[
-  'd1','execute',DB,'--local',\`--file=\${upgradeBaseFile}\`,\`--persist-to=\${UPGRADE_STATE}\`,'--yes'
+  'd1','execute',DB,'--local',`--file=${upgradeBaseFile}`,`--persist-to=${UPGRADE_STATE}`,'--yes'
 ]);
 runWrangler('Upgrade migration 0006',[
   'd1','execute',DB,'--local','--file=migrations/0006_v0_8_0_typed_charger_availability.sql',
-  \`--persist-to=\${UPGRADE_STATE}\`,'--yes'
+  `--persist-to=${UPGRADE_STATE}`,'--yes'
 ]);
 runWrangler('Upgrade typed columns query',[
   'd1','execute',DB,'--local',
   '--command=SELECT available_fast_count, available_slow_count FROM ev_stations LIMIT 0; SELECT available_fast_count, available_slow_count FROM ev_station_live_status LIMIT 0;',
-  \`--persist-to=\${UPGRADE_STATE}\`,'--yes'
+  `--persist-to=${UPGRADE_STATE}`,'--yes'
 ]);
 
 const child=spawn(process.execPath,[
   wrangler(),'dev','--local',
   '--port',String(PORT),
-  \`--persist-to=\${STATE}\`,
+  `--persist-to=${STATE}`,
   '--var','LOCAL_FIXTURE_MODE:true',
   '--var','LIVE_SYNC_ENABLED:true',
-  '--var',\`INGEST_ADMIN_TOKEN:\${TOKEN}\`,
+  '--var',`INGEST_ADMIN_TOKEN:${TOKEN}`,
   '--var','MATCH_RADIUS_METERS:200'
 ],{
   cwd:ROOT,
@@ -183,8 +183,8 @@ try{
   console.log('PASS');
 
   for(const stage of ['stations','parking','matches']){
-    process.stdout.write(\`Read model \${stage} ... \`);
-    await post(\`/api/admin/d1/prepare-read-models?stage=\${stage}\`);
+    process.stdout.write(`Read model ${stage} ... `);
+    await post(`/api/admin/d1/prepare-read-models?stage=${stage}`);
     console.log('PASS');
   }
 
@@ -195,7 +195,7 @@ try{
   console.log('PASS');
 
   process.stdout.write('/api/places contract ... ');
-  const data=await jsonRequest(\`/api/places?r1verify=\${Date.now()}\`);
+  const data=await jsonRequest(`/api/places?r1verify=${Date.now()}`);
   assert.equal(data.ok,true);
   assert.equal(data.runtimeMode,'local-fixture','runtimeMode local-fixture 아님');
   assert.equal(data.upstreamEvCalls,0,'user read EV upstream 호출');
@@ -203,13 +203,13 @@ try{
   assert.equal(data.readModelReady,true,'readModelReady 아님');
   assert.equal(data.evSnapshotComplete,true,'evSnapshotComplete 아님');
   assert.ok(Array.isArray(data.places)&&data.places.length>0,'places 비어 있음');
-  console.log(\`PASS · \${data.places.length} places\`);
+  console.log(`PASS · ${data.places.length} places`);
 
   process.stdout.write('Typed availability invariants ... ');
   const evPlaces=data.places.filter(place=>place.charger?.total>0);
   assert.ok(evPlaces.length>0,'EV 매칭 장소 없음');
   evPlaces.forEach(assertTypedAvailability);
-  console.log(\`PASS · \${evPlaces.length} EV places\`);
+  console.log(`PASS · ${evPlaces.length} EV places`);
 
   process.stdout.write('Recommendation integration ... ');
   const withCoords=data.places.find(place=>Number.isFinite(place.lat)&&Number.isFinite(place.lng));
@@ -233,13 +233,13 @@ try{
   }
   console.log('PASS · parking/charging(any/fast/slow)');
 
-  console.log('\\n✅ R1 LOCAL INTEGRATION: PASS');
+  console.log('\n✅ R1 LOCAL INTEGRATION: PASS');
   console.log('Fresh migrations PASS · 0001~0005→0006 upgrade PASS');
   console.log('Local Worker/API PASS · typed availability PASS · recommendation PASS');
   console.log('Remote D1 read=0 · write=0 · deploy=0 · public API=0');
 }catch(error){
   failed=true;
-  console.error('\\n❌ R1 LOCAL INTEGRATION: FAIL');
+  console.error('\n❌ R1 LOCAL INTEGRATION: FAIL');
   console.error(error instanceof Error?error.stack||error.message:String(error));
   process.exitCode=1;
 }finally{
