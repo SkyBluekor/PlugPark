@@ -25,11 +25,14 @@ function git(args){
 }
 function wrangler(args,capture=false){
   const r=spawnSync(process.execPath,[cli(),...args],{
-    encoding:'utf8',shell:false,windowsHide:true,
+    encoding:'utf8',
+    stdio:capture?['inherit','pipe','inherit']:'inherit',
+    shell:false,
+    windowsHide:true,
     env:(()=>{const env={...process.env,WRANGLER_SEND_METRICS:'false',NO_COLOR:'1'}; delete env.CI; return env;})()
   });
   if(r.error) throw r.error;
-  if(r.status!==0){process.stderr.write(r.stderr||'');fail('wrangler read-only command failed');}
+  if(r.status!==0) fail('wrangler read-only command failed');
   return capture?String(r.stdout||''):null;
 }
 function migrationNames(raw){
