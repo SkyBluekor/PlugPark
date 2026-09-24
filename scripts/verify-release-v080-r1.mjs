@@ -35,7 +35,9 @@ assert(init.includes("if(remote&&!confirmed)"),'typed init remote confirmation g
 assert(init.includes("writeCommands:1"),'typed init write receipt missing');
 assert(init.includes("rawVerificationScans:0"),'typed init verification raw scan guard missing');
 
-assert(preflight.includes("'d1','migrations','list',DB,'--remote','--json'"),'preflight pending migration read missing');
+assert(preflight.includes("'d1','migrations','list',DB,'--remote'"),'preflight pending migration read missing');
+assert(!preflight.includes("'--json'"),'preflight migrations list must not use unsupported --json');
+assert(preflight.includes("match(/\\b\\d{4}_[A-Za-z0-9._-]+\\.sql\\b/g)"),'preflight text migration parser missing');
 assert(preflight.includes("/api/health?v080-r1-preflight=1"),'preflight health missing');
 assert(preflight.includes("/api/places?v080-r1-preflight=1"),'preflight places missing');
 assert(!preflight.includes("'d1','execute'"),'preflight must not execute D1 SQL');
