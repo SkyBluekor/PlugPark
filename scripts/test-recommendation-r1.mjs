@@ -198,7 +198,7 @@ await test('21 stale 상태에서는 사용 가능 단정 문구 금지', () => 
   const p=basePlace({id:'stale-msg',charger:{availableFast:2,fast:3,statusFresh:false}});
   const [r]=recommendPlaces([p],opts({chargerPreference:'fast'}));
   assert.ok(r.reasons.includes('인근 급속 충전기 3기 설치'));
-  assert.ok(!r.reasons.some(x=>x.includes('2기 사용 가능')));
+  assert.ok(!r.reasons.some(x=>x.includes('충전 가능 상태 2기')));
   assert.ok(r.warnings.includes('충전기 상태 갱신 지연'));
 });
 
@@ -211,6 +211,20 @@ await test('23 이용 제한 충전소 경고', () => {
   const p=basePlace({charger:{stations:['테스트아파트 입주민 전용 충전소']}});
   const [r]=recommendPlaces([p],opts());
   assert.ok(r.warnings.includes('일부 인근 충전소 이용 제한 가능'));
+});
+
+await test('24 제한 충전소는 충전 우선 추천에서 보수적으로 순위 하향', () => {
+  const restricted=basePlace({
+    id:'restricted',
+    lat:northMeters(50),
+    charger:{stations:['테스트아파트 입주민 전용 충전소'],available:2,statusFresh:true},
+  });
+  const publicPlace=basePlace({
+    id:'public',
+    lat:northMeters(400),
+    charger:{stations:['공영 충전소'],available:2,statusFresh:true},
+  });
+  assert.equal(recommendPlaces([restricted,publicPlace],opts())[0].place.id,'public');
 });
 
 globalThis.fetch = originalFetch;
