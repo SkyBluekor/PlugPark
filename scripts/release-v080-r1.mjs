@@ -38,7 +38,7 @@ function runWranglerOnce(label,args,json=false){
   console.log('\n'+label+' · automatic retry=0');
   const r=spawnSync(process.execPath,[cli(),...args],{
     encoding:json?'utf8':undefined,
-    stdio:json?undefined:'inherit',
+    stdio:json?['inherit','pipe','inherit']:'inherit',
     shell:false,windowsHide:true,
     env:childEnv(true)
   });
