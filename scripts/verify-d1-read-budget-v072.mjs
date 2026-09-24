@@ -4,7 +4,7 @@ function assert(condition, message) {
   if (!condition) throw new Error(message);
 }
 
-const worker = await readFile('worker/index.ts', 'utf8');
+const worker = (await readFile('worker/index.ts', 'utf8')).replace(/\r\n/g, '\n');
 
 const placesStart = worker.indexOf('async function handlePlaces');
 const placesEnd = worker.indexOf('/* -------------------------------------------------------------------------- */\n/* v0.7.0 live data sync', placesStart);
