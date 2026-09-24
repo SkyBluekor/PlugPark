@@ -26,7 +26,7 @@ function git(args){
 function wrangler(args,capture=false){
   const r=spawnSync(process.execPath,[cli(),...args],{
     encoding:'utf8',shell:false,windowsHide:true,
-    env:{...process.env,CI:'1',WRANGLER_SEND_METRICS:'false',NO_COLOR:'1'}
+    env:(()=>{const env={...process.env,WRANGLER_SEND_METRICS:'false',NO_COLOR:'1'}; delete env.CI; return env;})()
   });
   if(r.error) throw r.error;
   if(r.status!==0){process.stderr.write(r.stderr||'');fail('wrangler read-only command failed');}
