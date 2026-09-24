@@ -1,11 +1,13 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
-const app = await readFile('src/App.tsx','utf8');
-const panel = await readFile('src/components/RecommendationPanel.tsx','utf8');
-const map = await readFile('src/components/KakaoMap.tsx','utf8');
-const css = await readFile('src/styles.css','utf8');
-const engine = await readFile('src/recommendation/recommendPlaces.ts','utf8');
+const normalize = (text) => text.replace(/\r\n/g, '\n');
+
+const app = normalize(await readFile('src/App.tsx','utf8'));
+const panel = normalize(await readFile('src/components/RecommendationPanel.tsx','utf8'));
+const map = normalize(await readFile('src/components/KakaoMap.tsx','utf8'));
+const css = normalize(await readFile('src/styles.css','utf8'));
+const engine = normalize(await readFile('src/recommendation/recommendPlaces.ts','utf8'));
 
 assert(app.includes("useState<RecommendationMode>('charging')"), '기본 추천 기준이 charging이 아닙니다.');
 assert(app.includes("useState<ChargerPreference>('any')"), '기본 충전 방식이 any가 아닙니다.');
