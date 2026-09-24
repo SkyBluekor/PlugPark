@@ -28,7 +28,7 @@ function exec(args,asJson=false){
   const r=spawnSync(process.execPath,[cli(),...args],{
     cwd:process.cwd(),
     encoding:asJson?'utf8':undefined,
-    stdio:asJson?undefined:'inherit',
+    stdio:asJson?['inherit','pipe','inherit']:'inherit',
     shell:false,
     windowsHide:true,
     env
