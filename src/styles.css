@@ -438,3 +438,17 @@ body{overflow-x:hidden}
   .detail-panel dl>div{grid-template-columns:96px 1fr}
 }
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;transition-duration:.001ms!important;animation-duration:.001ms!important;animation-iteration-count:1!important}}
+
+
+/* v0.8.0-R1 final nearby-EV semantics */
+.detail-ev-context{
+  margin:-8px 0 18px;
+  padding:10px 12px;
+  border-left:3px solid #9fb8ae;
+  background:#f6f8f7;
+  color:#66766f;
+  font-size:11px;
+  line-height:1.55;
+}
+.detail-ev-context span,.detail-ev-context strong{display:block}
+.detail-ev-context strong{margin-top:4px;color:#8a6230;font-weight:800}
