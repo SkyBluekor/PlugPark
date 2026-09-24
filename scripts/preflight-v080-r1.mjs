@@ -26,14 +26,28 @@ function git(args){
 function wrangler(args,capture=false){
   const r=spawnSync(process.execPath,[cli(),...args],{
     encoding:'utf8',
-    stdio:capture?['inherit','pipe','inherit']:'inherit',
+    stdio:capture?['inherit','pipe','pipe']:'inherit',
     shell:false,
     windowsHide:true,
     env:(()=>{const env={...process.env,WRANGLER_SEND_METRICS:'false',NO_COLOR:'1'}; delete env.CI; return env;})()
   });
   if(r.error) throw r.error;
-  if(r.status!==0) fail('wrangler read-only command failed');
+  if(r.status!==0){
+    const stderr=String(r.stderr||'').trim();
+    const detail=stderr?': '+stderr.split(/\r?\n/).slice(-3).join(' | '):'';
+    fail('wrangler '+args.join(' ')+' failed (exit='+String(r.status)+')'+detail);
+  }
   return capture?String(r.stdout||''):null;
+}
+function parseWhoami(raw){
+  let value;
+  try{value=JSON.parse(String(raw||'').trim());}
+  catch{fail('wrangler whoami --json returned invalid JSON');}
+  const text=JSON.stringify(value).toLowerCase();
+  if(!text||/not authenticated|not logged in|unauthenticated/.test(text)){
+    fail('Cloudflare authentication missing. Run npx wrangler login or provide CLOUDFLARE_API_TOKEN.');
+  }
+  return value;
 }
 function migrationNames(raw){
   const plain=String(raw||'')
@@ -61,7 +75,7 @@ if(branch!==EXPECTED_BRANCH) fail('release branch mismatch: '+branch);
 if(local.version!==VERSION||local.passed!==true||local.gitHead!==head) fail('local R1 gate receipt does not match HEAD');
 if(Number(local.remoteD1Writes)!==0||Number(local.deployCalls)!==0) fail('local receipt contains remote activity');
 
-wrangler(['whoami']);
+parseWhoami(wrangler(['whoami','--json'],true));
 console.log('Cloudflare auth ... PASS');
 
 const pending=migrationNames(wrangler(['d1','migrations','list',DB,'--remote'],true));
