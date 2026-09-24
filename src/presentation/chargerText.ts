@@ -21,7 +21,7 @@ export function chargerAvailabilityText(charger: ChargerSummary, kind: ChargerKi
   if (installed <= 0) return `인근 ${label} 없음`;
 
   if (charger.statusFresh === true && available != null) {
-    return `인근 ${label} ${available}기 가능 / 주변 총 ${installed}기`;
+    return `인근 ${label} 충전 가능 상태 ${available}기 / 주변 총 ${installed}기`;
   }
   if (charger.statusFresh === false) {
     return `인근 ${label} ${installed}기 · 상태 갱신 지연`;
@@ -42,7 +42,7 @@ export function chargerSelectionText(
   if (installed <= 0) return '인근 EV 충전정보 없음';
 
   if (charger.statusFresh === true && available != null) {
-    return `인근 충전 ${available}기 가능 / 주변 총 ${installed}기`;
+    return `인근 충전 가능 상태 ${available}기 / 주변 총 ${installed}기`;
   }
   if (charger.statusFresh === false) {
     return `인근 충전기 ${installed}기 · 상태 갱신 지연`;
