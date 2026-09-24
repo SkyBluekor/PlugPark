@@ -22,9 +22,15 @@ function cli(){
   }
   fail('wrangler not found');
 }
-function runNode(label,script,args=[]){
+function childEnv(interactiveCloudflare=false){
+  const env={...process.env,WRANGLER_SEND_METRICS:'false'};
+  if(interactiveCloudflare) delete env.CI;
+  else env.CI='1';
+  return env;
+}
+function runNode(label,script,args=[],interactiveCloudflare=false){
   console.log('\n'+label);
-  const r=spawnSync(process.execPath,[script,...args],{stdio:'inherit',shell:false,windowsHide:true,env:{...process.env,CI:'1',WRANGLER_SEND_METRICS:'false'}});
+  const r=spawnSync(process.execPath,[script,...args],{stdio:'inherit',shell:false,windowsHide:true,env:childEnv(interactiveCloudflare)});
   if(r.error) throw r.error;
   if(r.status!==0) fail(label+' failed. Do not retry automatically.');
 }
@@ -34,7 +40,7 @@ function runWranglerOnce(label,args,json=false){
     encoding:json?'utf8':undefined,
     stdio:json?undefined:'inherit',
     shell:false,windowsHide:true,
-    env:{...process.env,CI:'1',WRANGLER_SEND_METRICS:'false'}
+    env:childEnv(true)
   });
   if(r.error) throw r.error;
   if(r.status!==0) fail(label+' failed or unclear. Inspect remote state before any retry.');
@@ -131,7 +137,7 @@ function validateRecommendations(items,mode,pref){
 
 runNode('1) R1 LOCAL RELEASE GATE',resolve('scripts','verify-r1-release-gate.mjs'));
 runNode('2) R1 RELEASE TOOLING VERIFY',resolve('scripts','verify-release-v080-r1.mjs'));
-runNode('3) R1 REMOTE PREFLIGHT (READ ONLY)',resolve('scripts','preflight-v080-r1.mjs'));
+runNode('3) R1 REMOTE PREFLIGHT (READ ONLY)',resolve('scripts','preflight-v080-r1.mjs'),[],true);
 
 if(!existsSync(PREFLIGHT)) fail('preflight receipt missing');
 const preflight=JSON.parse(await readFile(PREFLIGHT,'utf8'));
@@ -146,7 +152,7 @@ const previousDeploymentId=(deploymentsBefore.match(/[0-9a-f]{8}-[0-9a-f-]{27,}/
 if(!previousDeploymentId) fail('previous deployment id not found; stop before remote write');
 
 runWranglerOnce('5) D1 migration 0006', ['d1','migrations','apply',DB,'--remote']);
-runNode('6) Typed availability remote init',resolve('scripts','init-v080-r1-typed-availability.mjs'),['--remote','--confirm-remote']);
+runNode('6) Typed availability remote init',resolve('scripts','init-v080-r1-typed-availability.mjs'),['--remote','--confirm-remote'],true);
 
 if(!existsSync(TYPED_RECEIPT)) fail('typed init receipt missing');
 const typed=JSON.parse(await readFile(TYPED_RECEIPT,'utf8'));
