@@ -105,6 +105,12 @@ function parkingMessages(place: PlugParkPlace, reasons: string[], warnings: stri
   warnings.push('실시간 주차 잔여 미제공');
 }
 
+function hasRestrictedChargerAccess(place: PlugParkPlace) {
+  return place.charger.stations.some((station) =>
+    /(입주민|입주자|거주자|직원|관계자|회원|사내)\s*전용/i.test(station),
+  );
+}
+
 function chargingMessages(
   place: PlugParkPlace,
   preference: ChargerPreference,
@@ -113,7 +119,7 @@ function chargingMessages(
 ) {
   const installed = chargerInstalled(place, preference);
   const available = chargerAvailable(place, preference);
-  const label = preference === 'fast' ? '급속' : preference === 'slow' ? '완속' : '충전';
+  const label = preference === 'fast' ? '인근 급속' : preference === 'slow' ? '인근 완속' : '인근 충전';
 
   if (available != null && available > 0 && place.charger.statusFresh === true) {
     reasons.push(`${label} ${available}기 사용 가능`);
@@ -248,6 +254,7 @@ export function recommendPlaces(
     const warnings: string[] = [];
 
     if (options.mode === 'charging') {
+      if (hasRestrictedChargerAccess(place)) warnings.push('일부 인근 충전소 이용 제한 가능');
       chargingMessages(place, options.chargerPreference, reasons, warnings);
       parkingMessages(place, reasons, warnings);
     } else {
