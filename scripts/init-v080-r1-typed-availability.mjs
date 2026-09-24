@@ -22,13 +22,16 @@ function cli(){
   throw new Error('wrangler not found');
 }
 function exec(args,asJson=false){
+  const env={...process.env,WRANGLER_SEND_METRICS:'false'};
+  if(remote) delete env.CI;
+  else env.CI='1';
   const r=spawnSync(process.execPath,[cli(),...args],{
     cwd:process.cwd(),
     encoding:asJson?'utf8':undefined,
     stdio:asJson?undefined:'inherit',
     shell:false,
     windowsHide:true,
-    env:{...process.env,CI:'1',WRANGLER_SEND_METRICS:'false'}
+    env
   });
   if(r.error) throw r.error;
   if(r.status!==0) throw new Error('Wrangler command failed. Do not retry automatically. exit='+r.status);
