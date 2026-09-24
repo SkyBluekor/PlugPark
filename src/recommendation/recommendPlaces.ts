@@ -74,10 +74,14 @@ function chargerAvailable(place: PlugParkPlace, preference: ChargerPreference) {
 
 function chargingRank(place: PlugParkPlace, preference: ChargerPreference) {
   const available = chargerAvailable(place, preference);
-  if (available != null && available > 0 && place.charger.statusFresh === true) return 0;
-  if (available != null && available > 0 && place.charger.statusFresh === false) return 1;
-  if (available === 0) return 2;
-  return 3;
+  let rank = 3;
+  if (available != null && available > 0 && place.charger.statusFresh === true) rank = 0;
+  else if (available != null && available > 0 && place.charger.statusFresh === false) rank = 1;
+  else if (available === 0) rank = 2;
+
+  // "충전 가능 상태"와 "실제 이용 가능"은 다릅니다.
+  // 입주민/직원 전용 등이 섞인 후보는 충전 우선 추천에서 한 단계 보수적으로 낮춥니다.
+  return hasRestrictedChargerAccess(place) ? Math.min(3, rank + 1) : rank;
 }
 
 function distanceReason(distanceMeters: number) {
@@ -122,7 +126,7 @@ function chargingMessages(
   const label = preference === 'fast' ? '인근 급속' : preference === 'slow' ? '인근 완속' : '인근 충전';
 
   if (available != null && available > 0 && place.charger.statusFresh === true) {
-    reasons.push(`${label} ${available}기 사용 가능`);
+    reasons.push(`${label} 충전 가능 상태 ${available}기`);
     return;
   }
 
@@ -133,7 +137,7 @@ function chargingMessages(
   if (place.charger.statusFresh === false) {
     warnings.push('충전기 상태 갱신 지연');
   } else if (available === 0) {
-    warnings.push(`현재 사용 가능한 ${label} 충전기 없음`);
+    warnings.push(`현재 ${label} 충전 가능 상태 0기`);
   } else if (available == null) {
     warnings.push(`${label} 충전기 가용 상태 확인 필요`);
   }
