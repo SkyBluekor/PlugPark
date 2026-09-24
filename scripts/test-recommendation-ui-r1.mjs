@@ -54,7 +54,7 @@ assert(app.includes("chargerAvailabilityText(place.charger, 'fast')"), '목록 �
 assert(app.includes("chargerAvailabilityText(place.charger, 'slow')"), '목록 완속 가용 수 표시가 없습니다.');
 assert(app.includes("chargerAvailabilityText(selected.charger, 'fast')"), '상세 급속 가용 수 표시가 없습니다.');
 assert(app.includes("chargerAvailabilityText(selected.charger, 'slow')"), '상세 완속 가용 수 표시가 없습니다.');
-assert(app.includes("place.charger.statusFresh === false"), 'stale 충전 상태 표현이 없습니다.');
+assert(chargerText.includes('상태 갱신 지연'), 'stale 충전 상태 표현이 없습니다.');
 
 assert(!/\bfetch\s*\(/.test(panel), 'RecommendationPanel에서 새 네트워크 호출을 수행합니다.');
 assert(!/\bfetch\s*\(/.test(engine), '추천 엔진에서 네트워크 호출을 수행합니다.');
