@@ -38,6 +38,7 @@ assert(init.includes("rawVerificationScans:0"),'typed init verification raw scan
 assert(preflight.includes("'d1','migrations','list',DB,'--remote'"),'preflight pending migration read missing');
 assert(!preflight.includes("'--json'"),'preflight migrations list must not use unsupported --json');
 assert(preflight.includes('delete env.CI'),'preflight must allow local Wrangler OAuth instead of forcing CI');
+assert(preflight.includes("stdio:capture?['inherit','pipe','inherit']:'inherit'"),'preflight capture must preserve interactive stdin');
 assert(preflight.includes("match(/\\b\\d{4}_[A-Za-z0-9._-]+\\.sql\\b/g)"),'preflight text migration parser missing');
 assert(preflight.includes("/api/health?v080-r1-preflight=1"),'preflight health missing');
 assert(preflight.includes("/api/places?v080-r1-preflight=1"),'preflight places missing');
@@ -47,8 +48,10 @@ assert(release.includes("['d1','migrations','apply',DB,'--remote']"),'release mi
 assert(release.includes("['--remote','--confirm-remote']"),'release typed init confirmation missing');
 assert(release.includes("runWranglerOnce('7) Worker deploy', ['deploy'])"),'release deploy once command missing');
 assert(release.includes('env:childEnv(true)'),'remote Wrangler commands must not force CI');
+assert(release.includes("stdio:json?['inherit','pipe','inherit']:'inherit'"),'release JSON capture must preserve interactive stdin');
 assert(release.includes("[],true);"),'remote preflight child must allow local Wrangler OAuth');
 assert(init.includes("if(remote) delete env.CI"),'remote typed init must allow local Wrangler OAuth');
+assert(init.includes("stdio:asJson?['inherit','pipe','inherit']:'inherit'"),'typed init JSON capture must preserve interactive stdin');
 assert(release.includes("kind=ev&mode=incremental"),'EV incremental sync missing');
 assert(!release.includes('kind=parking'),'release must not force parking sync');
 assert(!release.includes('ev:backfill'),'EV full backfill forbidden');
