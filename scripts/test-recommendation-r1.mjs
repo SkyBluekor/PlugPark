@@ -197,7 +197,7 @@ await test('20 추천 엔진에 D1/Worker 의존 없음', async () => {
 await test('21 stale 상태에서는 사용 가능 단정 문구 금지', () => {
   const p=basePlace({id:'stale-msg',charger:{availableFast:2,fast:3,statusFresh:false}});
   const [r]=recommendPlaces([p],opts({chargerPreference:'fast'}));
-  assert.ok(r.reasons.includes('급속 충전기 3기 설치'));
+  assert.ok(r.reasons.includes('인근 급속 충전기 3기 설치'));
   assert.ok(!r.reasons.some(x=>x.includes('2기 사용 가능')));
   assert.ok(r.warnings.includes('충전기 상태 갱신 지연'));
 });
@@ -205,6 +205,12 @@ await test('21 stale 상태에서는 사용 가능 단정 문구 금지', () => 
 await test('22 availableFast + availableSlow 계약 fixture 확인', () => {
   const p=basePlace({charger:{available:3,availableFast:2,availableSlow:1}});
   assert.equal(p.charger.availableFast+p.charger.availableSlow,p.charger.available);
+});
+
+await test('23 이용 제한 충전소 경고', () => {
+  const p=basePlace({charger:{stations:['테스트아파트 입주민 전용 충전소']}});
+  const [r]=recommendPlaces([p],opts());
+  assert.ok(r.warnings.includes('일부 인근 충전소 이용 제한 가능'));
 });
 
 globalThis.fetch = originalFetch;
