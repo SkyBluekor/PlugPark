@@ -38,7 +38,10 @@ assert(init.includes("rawVerificationScans:0"),'typed init verification raw scan
 assert(preflight.includes("'d1','migrations','list',DB,'--remote'"),'preflight pending migration read missing');
 assert(!preflight.includes("'--json'"),'preflight migrations list must not use unsupported --json');
 assert(preflight.includes('delete env.CI'),'preflight must allow local Wrangler OAuth instead of forcing CI');
-assert(preflight.includes("stdio:capture?['inherit','pipe','inherit']:'inherit'"),'preflight capture must preserve interactive stdin');
+assert(preflight.includes("stdio:capture?['inherit','pipe','pipe']:'inherit'"),'preflight capture must preserve interactive stdin while capturing diagnostics');
+assert(preflight.includes("['whoami','--json']"),'preflight must validate auth with whoami --json');
+assert(preflight.includes('parseWhoami'),'preflight auth result parser missing');
+assert(preflight.includes("failed (exit="),'preflight Wrangler errors must include command exit code');
 assert(preflight.includes("match(/\\b\\d{4}_[A-Za-z0-9._-]+\\.sql\\b/g)"),'preflight text migration parser missing');
 assert(preflight.includes("/api/health?v080-r1-preflight=1"),'preflight health missing');
 assert(preflight.includes("/api/places?v080-r1-preflight=1"),'preflight places missing');
