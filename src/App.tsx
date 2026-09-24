@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import KakaoMap from './components/KakaoMap';
 import RecommendationPanel from './components/RecommendationPanel';
 import { mockPlaces } from './mock';
-import { chargerAvailabilityText } from './presentation/chargerText';
+import { chargerAvailabilityText, chargerSelectionText, hasRestrictedChargerAccess } from './presentation/chargerText';
 import { recommendPlaces } from './recommendation/recommendPlaces';
 import type { ChargerPreference, RecommendationMode } from './recommendation/recommendationTypes';
 import type { PlacesResponse, PlugParkPlace } from './types';
@@ -321,9 +321,9 @@ export default function App() {
                     : '연동 전'}
                 </b>
               </span>
-              <span>EV 충전 가능 공영주차장 <b>{`${evStats.matchedCount.toLocaleString()}곳`}</b></span>
+              <span>인근 EV 매칭 공영주차장 <b>{`${evStats.matchedCount.toLocaleString()}곳`}</b></span>
               <span>부산 EV 충전소 <b>{`${evStats.stationCount.toLocaleString()}곳`}</b></span>
-              <span>충전기 <b>{`${evStats.chargerCount.toLocaleString()}기`}</b></span>
+              <span>부산 EV 충전기 <b>{`${evStats.chargerCount.toLocaleString()}기`}</b></span>
               <em>{runtimeMode === 'local-fixture' ? 'LOCAL DATA' : runtimeMode === 'live' ? 'LIVE DATA' : '예시 데이터'}</em>
             </div>
           )}
@@ -456,20 +456,18 @@ export default function App() {
 
                         {place.charger.total > 0 ? (
                           <>
-                            <span>
-                              충전 가능 <b className={place.charger.available > 0 ? 'good' : 'bad'}>{place.charger.available}</b>
-                              <small> / 총 {place.charger.total}기</small>
-                            </span>
-                            <span>
-                              충전 중 <b>{place.charger.charging}</b>
-                              {(place.charger.unavailable ?? 0) > 0 && <small> · 점검/중지 {place.charger.unavailable ?? 0}</small>}
-                              {place.charger.statusFresh === false && <small> · 상태 갱신 지연</small>}
-                            </span>
+                            <span>{chargerSelectionText(place.charger, 'any')}</span>
+                            {place.charger.statusFresh === true && (
+                              <span>
+                                충전 중 <b>{place.charger.charging}</b>
+                                {(place.charger.unavailable ?? 0) > 0 && <small> · 점검/중지 {place.charger.unavailable ?? 0}</small>}
+                              </span>
+                            )}
                             <span>{chargerAvailabilityText(place.charger, 'fast')}</span>
                             <span>{chargerAvailabilityText(place.charger, 'slow')}</span>
                           </>
                         ) : (
-                          <span className="charger-pending">EV 충전정보 없음</span>
+                          <span className="charger-pending">인근 EV 충전정보 없음</span>
                         )}
                       </div>
                     </button>
@@ -506,7 +504,7 @@ export default function App() {
             onClick={(e) => e.stopPropagation()}
           >
             <button className="close" onClick={() => setSelected(null)} aria-label="상세 닫기">×</button>
-            <span className="parking-label">{selected.charger.total > 0 ? 'P⚡ MATCHED' : 'P PARKING'}</span>
+            <span className="parking-label">{selected.charger.total > 0 ? 'P⚡ 인근 EV' : 'P PARKING'}</span>
             <h2 id="place-detail-title">{selected.name}</h2>
             <p className="detail-address">
               {selected.address && selected.address !== '주소 정보 없음'
@@ -545,27 +543,42 @@ export default function App() {
                 )}
               </div>
               <div>
-                <span>EV 충전</span>
+                <span>인근 EV 충전</span>
                 {selected.charger.total > 0 ? (
-                  <>
-                    <strong>{selected.charger.available} <small>/ 총 {selected.charger.total}기</small></strong>
-                    <small>
-                      충전 중 {selected.charger.charging}기
-                      {(selected.charger.unavailable ?? 0) > 0 ? ` · 점검/중지 ${selected.charger.unavailable}기` : ''}
-                      {selected.charger.statusFresh === false ? ' · 상태 갱신 지연' : ''}
-                    </small>
-                  </>
+                  selected.charger.statusFresh === true ? (
+                    <>
+                      <strong>{selected.charger.available}<small>기</small></strong>
+                      <small>
+                        사용 가능 · 주변 총 {selected.charger.total}기
+                        {selected.charger.charging > 0 ? ` · 충전 중 ${selected.charger.charging}기` : ''}
+                      </small>
+                    </>
+                  ) : (
+                    <>
+                      <strong>{selected.charger.total}<small>기</small></strong>
+                      <small>{selected.charger.statusFresh === false ? '주변 설치 · 상태 갱신 지연' : '주변 설치 · 현재 상태 확인 필요'}</small>
+                    </>
+                  )
                 ) : (
                   <strong className="neutral">정보 미확인</strong>
                 )}
               </div>
             </div>
 
+            {selected.charger.total > 0 && (
+              <div className="detail-ev-context">
+                <span>인근 충전소 매칭 정보이며 주차장 내부 설비와 다를 수 있습니다.</span>
+                {hasRestrictedChargerAccess(selected.charger) && (
+                  <strong>일부 충전소는 입주민·관계자 등 이용 제한이 있을 수 있습니다.</strong>
+                )}
+              </div>
+            )}
+
             <dl>
               <div><dt>급속</dt><dd>{chargerAvailabilityText(selected.charger, 'fast')}</dd></div>
               <div><dt>완속</dt><dd>{chargerAvailabilityText(selected.charger, 'slow')}</dd></div>
-              <div><dt>가까운 충전기</dt><dd>{formatMeters(selected.charger.nearestDistanceMeters) || '확인 필요'}</dd></div>
-              <div><dt>충전소</dt><dd>{selected.charger.stations.join(', ') || '정보 없음'}</dd></div>
+              <div><dt>가장 가까운 충전소</dt><dd>{formatMeters(selected.charger.nearestDistanceMeters) || '확인 필요'}</dd></div>
+              <div><dt>인근 충전소</dt><dd>{selected.charger.stations.join(', ') || '정보 없음'}</dd></div>
               <div><dt>주차요금</dt><dd>{selected.feeText}</dd></div>
               <div><dt>운영시간</dt><dd>{selected.operationText}</dd></div>
             </dl>
