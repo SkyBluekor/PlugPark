@@ -23,30 +23,21 @@ function git(args){
   if(r.error||r.status!==0) fail('git '+args.join(' ')+' failed');
   return r.stdout.trim();
 }
-function wrangler(args,json=false){
+function wrangler(args,capture=false){
   const r=spawnSync(process.execPath,[cli(),...args],{
     encoding:'utf8',shell:false,windowsHide:true,
-    env:{...process.env,CI:'1',WRANGLER_SEND_METRICS:'false'}
+    env:{...process.env,CI:'1',WRANGLER_SEND_METRICS:'false',NO_COLOR:'1'}
   });
   if(r.error) throw r.error;
   if(r.status!==0){process.stderr.write(r.stderr||'');fail('wrangler read-only command failed');}
-  return json?String(r.stdout||''):null;
+  return capture?String(r.stdout||''):null;
 }
 function migrationNames(raw){
-  const start=raw.indexOf('[');
-  const value=JSON.parse(start>=0?raw.slice(start):raw);
-  const names=new Set();
-  const walk=(v)=>{
-    if(Array.isArray(v)) for(const x of v) walk(x);
-    else if(v&&typeof v==='object'){
-      for(const [k,x] of Object.entries(v)){
-        if(typeof x==='string'&&/name|migration/i.test(k)&&/\.sql$/i.test(x)) names.add(x);
-        walk(x);
-      }
-    }
-  };
-  walk(value);
-  return [...names].sort();
+  const plain=String(raw||'')
+    .replace(/\u001b\[[0-9;]*m/g,'')
+    .replace(/\r\n/g,'\n');
+  const names=plain.match(/\b\d{4}_[A-Za-z0-9._-]+\.sql\b/g)||[];
+  return [...new Set(names)].sort();
 }
 async function getJson(path){
   const r=await fetch(BASE_URL+path,{headers:{Accept:'application/json','Cache-Control':'no-cache'}});
@@ -70,7 +61,7 @@ if(Number(local.remoteD1Writes)!==0||Number(local.deployCalls)!==0) fail('local 
 wrangler(['whoami']);
 console.log('Cloudflare auth ... PASS');
 
-const pending=migrationNames(wrangler(['d1','migrations','list',DB,'--remote','--json'],true));
+const pending=migrationNames(wrangler(['d1','migrations','list',DB,'--remote'],true));
 if(pending.length!==1||!pending[0].startsWith('0006_')){
   fail('expected exactly pending migration 0006, got: '+JSON.stringify(pending));
 }
