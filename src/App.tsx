@@ -549,7 +549,7 @@ export default function App() {
                     <>
                       <strong>{selected.charger.available}<small>기</small></strong>
                       <small>
-                        사용 가능 · 주변 총 {selected.charger.total}기
+                        충전 가능 상태 · 주변 총 {selected.charger.total}기
                         {selected.charger.charging > 0 ? ` · 충전 중 ${selected.charger.charging}기` : ''}
                       </small>
                     </>
@@ -569,7 +569,7 @@ export default function App() {
               <div className="detail-ev-context">
                 <span>인근 충전소 매칭 정보이며 주차장 내부 설비와 다를 수 있습니다.</span>
                 {hasRestrictedChargerAccess(selected.charger) && (
-                  <strong>일부 충전소는 입주민·관계자 등 이용 제한이 있을 수 있습니다.</strong>
+                  <strong>일부 충전소는 입주민·관계자 전용 등 이용 제한이 있습니다. ‘충전 가능 상태’는 실제 이용 가능 여부와 다를 수 있습니다.</strong>
                 )}
               </div>
             )}
