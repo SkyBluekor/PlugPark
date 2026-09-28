@@ -1,5 +1,8 @@
+# Dependencies and build output
 node_modules/
 dist/
+coverage/
+.vite/
 .wrangler/
 *.tsbuildinfo
 
@@ -16,7 +19,19 @@ dist/
 
 
 .DS_Store
+Thumbs.db
+Desktop.ini
 *.log
+*.stackdump
+
+# Local editor settings and temporary files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+*.tmp
+*.bak
 
 # PlugPark generated verification/recovery artifacts
 .plugpark/
@@ -28,3 +43,24 @@ VERIFIED_V0.*.md
 *.sqlite
 *.sqlite-shm
 *.sqlite-wal
+*.sqlite-journal
+*.sqlite3
+*.sqlite3-*
+
+# Historical patch application notes (keep locally)
+/APPLY*.txt
+/APPLY_V*.md
+/FIX_V*.md
+/PATCH_V*.md
+/RUN_V*.md
+/SETUP_V*.md
+/V0.4_API_DATA_LAYER.md
+/CHANGELOG_v*.md
+
+# Superseded setup examples; use the dot-prefixed examples
+/dev.vars.example
+/wrangler.d1.snippet.toml
+
+# Browser verification output; curated docs/screenshots stay tracked
+playwright-report/
+test-results/
