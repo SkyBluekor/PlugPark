@@ -1,12 +1,16 @@
 export type ChargerSummary = {
   total: number;
   available: number;
+  availableFast: number;
+  availableSlow: number;
   charging: number;
+  unavailable?: number;
   fast: number;
   slow: number;
   stations: string[];
   nearestDistanceMeters: number | null;
   lastUpdated: string | null;
+  statusFresh?: boolean | null;
   matchConfidence: 'high' | 'medium' | 'low' | null;
 };
 
@@ -30,6 +34,7 @@ export type PlugParkPlace = {
   operationText: string;
   parkingUpdatedAt: string | null;
   parkingRealtime: boolean;
+  parkingRealtimeFresh?: boolean;
   parkingSource: 'busan-city' | 'busan-facilities' | 'merged';
   realtimeMatch?: RealtimeMatch;
   charger: ChargerSummary;
@@ -66,10 +71,14 @@ export type PlacesResponse = {
   ok: boolean;
   generatedAt: string;
   dataLayerVersion?: string;
+  parkingMatchVersion?: string;
+  recommendationVersion?: 'v0.8.0-R1';
   matchRadiusMeters: number;
   parkingCount: number;
   realtimeParkingConfigured: boolean;
   realtimeParkingCount: number;
+  realtimeParkingFresh?: boolean;
+  realtimeParkingUpdatedAt?: string | null;
   chargerCount: number;
   chargerStationCount: number;
   matchedCount: number;
@@ -78,7 +87,13 @@ export type PlacesResponse = {
   evProgress?: null;
   readModelReady?: boolean;
   dataSource?: 'd1-read-model';
+  runtimeMode?: 'live' | 'local-fixture';
   upstreamEvCalls?: number;
+  upstreamParkingCalls?: number;
+  evStatusFresh?: boolean;
+  evStatusUpdatedAt?: string | null;
+  evStatusCoverageComplete?: boolean;
+  evStatusBaselineAt?: string | null;
   realtimeParking: boolean;
   realtimeMessage: string;
   parkingMatchSummary?: ParkingMatchSummary;

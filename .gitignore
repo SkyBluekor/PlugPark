@@ -17,3 +17,14 @@ dist/
 
 .DS_Store
 *.log
+
+# PlugPark generated verification/recovery artifacts
+.plugpark/
+payload/
+hotfix_payload/
+apply_v0_*.py
+README_V0.*.md
+VERIFIED_V0.*.md
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal

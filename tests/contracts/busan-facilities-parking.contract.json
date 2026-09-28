@@ -1,0 +1,41 @@
+{
+  "service": "부산시설공단_공영주차장 시설 현황 조회 서비스",
+  "dataGoKrId": "15157490",
+  "endpointSource": "BUSAN_REALTIME_PARKING_API_URL",
+  "requestPolicy": {
+    "method": "GET",
+    "urlMode": "exact-user-contract-url",
+    "automaticMutations": [
+      "serviceKey-if-absent"
+    ],
+    "forbiddenUntilDocumented": [
+      "remove-parking-code-filter",
+      "invent-pageNo",
+      "invent-numOfRows",
+      "guess-pagination"
+    ]
+  },
+  "responseContract": {
+    "requiredFields": [
+      "parkgcd",
+      "parknm",
+      "curravacnt",
+      "parkingcnt",
+      "maxcnt",
+      "lastupdatetime"
+    ],
+    "numericRule": "if all three counts exist, curravacnt + parkingcnt must equal maxcnt (tolerance 1)",
+    "missingOneNumericField": "may derive exactly one missing count; mark as derived",
+    "conflictingValues": "invalid; never overwrite source values to make them consistent"
+  },
+  "pagination": {
+    "status": "unknown",
+    "policy": "do not paginate until the authenticated API specification confirms request parameter names"
+  },
+  "releaseReadiness": {
+    "singleParkingFilter": "must be absent",
+    "minimumItems": 2,
+    "paginationRule": "if totalCount is present, the one-call probe must return itemCount >= totalCount; otherwise release is blocked until pagination parameters are documented",
+    "reason": "PlugPark cron must build a complete realtime snapshot, not silently publish a single parking lot or partial page"
+  }
+}

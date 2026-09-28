@@ -8,8 +8,13 @@ binding = "ASSETS"
 
 [vars]
 MATCH_RADIUS_METERS = "200"
+BUSAN_REALTIME_PARKING_API_URL = "https://apis.data.go.kr/B552587/ParkingInfoService_v2"
 
 [[d1_databases]]
 binding = "DB"
 database_name = "plugpark-db"
 database_id = "4c75a008-14a4-4ff7-9f94-c601a686f0aa"
+
+# PlugPark v0.7.0 live sync: parking 5분 / EV는 handler에서 10분 cadence
+[triggers]
+crons = ["*/5 * * * *"]

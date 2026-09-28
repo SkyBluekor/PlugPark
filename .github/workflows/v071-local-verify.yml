@@ -1,0 +1,49 @@
+name: v0.8.0-R1 local-only verify
+
+on:
+  push:
+    branches:
+      - feat/v0.8.0-r1-recommendation
+  pull_request:
+    branches:
+      - main
+      - feat/v0.7.2-p2-parking-match-stabilization
+
+permissions:
+  contents: read
+
+jobs:
+  local-only-verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: R1 local release gate
+        run: npm run verify:r1
+
+      - name: R1 release tooling verify
+        run: npm run verify:release:v080-r1
+
+      - name: Local tooling syntax
+        run: |
+          node --check scripts/local-reset-r1.mjs
+          node --check scripts/local-dev-r1.mjs
+          node --check scripts/verify-r1-local-only.mjs
+          node --check scripts/verify-r1-integration-local.mjs
+          node --check scripts/verify-r1-release-gate.mjs
+          node --check scripts/preflight-v080-r1.mjs
+          node --check scripts/init-v080-r1-typed-availability.mjs
+          node --check scripts/release-v080-r1.mjs
+          node --check scripts/verify-release-v080-r1.mjs
+          node --check scripts/verify-v080-r1-typed-init-local.mjs
