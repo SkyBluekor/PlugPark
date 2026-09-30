@@ -1077,8 +1077,7 @@ async function syncEvStatus(env: Env, mode: LiveSyncMode) {
            FROM json_each(?1) j
          )
          SELECT i.stat_id, i.chger_id,
-                COALESCE(s.status, c.info_status) AS current_status,
-                COALESCE(s.status_updated_at, c.info_status_updated_at) AS current_updated_at
+                COALESCE(s.status, c.info_status) AS current_status
            FROM incoming i
            LEFT JOIN ev_status s ON s.stat_id=i.stat_id AND s.chger_id=i.chger_id
            LEFT JOIN ev_chargers c ON c.stat_id=i.stat_id AND c.chger_id=i.chger_id`,
@@ -1086,15 +1085,15 @@ async function syncEvStatus(env: Env, mode: LiveSyncMode) {
         stat_id: string;
         chger_id: string;
         current_status: string | null;
-        current_updated_at: string | null;
       }>();
 
       const byKey = new Map(current.results.map((row) => [evCompositeKey(row.stat_id, row.chger_id), row]));
       for (const item of chunk) {
         const row = byKey.get(evCompositeKey(item.statId, item.chgerId));
         const sameStatus = String(row?.current_status || '') === cleanValue(item.stat);
-        const sameUpdated = String(row?.current_updated_at || '') === cleanValue(item.statUpdDt);
-        if (!sameStatus || !sameUpdated) {
+        // D1 budget guard: source timestamps may advance even when the effective
+        // charger state is unchanged. Only user-visible status changes need a row write.
+        if (!sameStatus) {
           changed.push(item);
           affectedStatIds.add(item.statId);
         }
@@ -1123,7 +1122,8 @@ async function syncEvStatus(env: Env, mode: LiveSyncMode) {
           last_start_at=excluded.last_start_at,
           last_end_at=excluded.last_end_at,
           now_start_at=excluded.now_start_at,
-          synced_at=excluded.synced_at`;
+          synced_at=excluded.synced_at
+        WHERE ev_status.status IS NOT excluded.status`;
 
       const statements: D1PreparedStatement[] = [];
       for (let offset = 0; offset < changed.length; offset += 100) {
@@ -1184,7 +1184,13 @@ async function refreshStationLiveSummaries(db: D1Database, statIds: string[], sy
          charging_count=excluded.charging_count,
          unavailable_count=excluded.unavailable_count,
          status_updated_at=excluded.status_updated_at,
-         synced_at=excluded.synced_at`,
+         synced_at=excluded.synced_at
+       WHERE ev_station_live_status.available_count IS NOT excluded.available_count
+          OR ev_station_live_status.available_fast_count IS NOT excluded.available_fast_count
+          OR ev_station_live_status.available_slow_count IS NOT excluded.available_slow_count
+          OR ev_station_live_status.charging_count IS NOT excluded.charging_count
+          OR ev_station_live_status.unavailable_count IS NOT excluded.unavailable_count
+          OR ev_station_live_status.status_updated_at IS NOT excluded.status_updated_at`,
     ).bind(JSON.stringify(chunk), syncedAt).run();
   }
 }
