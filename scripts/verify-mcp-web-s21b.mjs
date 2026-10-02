@@ -148,11 +148,11 @@ assert(
   '현재 위치 미연결 시 Tool fallback 차단이 없습니다.',
 );
 assert(
-  bridge.includes("const BRIDGE_API_VERSION = 'MCP_WEB_S21B_V1'"),
+  bridge.includes("const BRIDGE_API_VERSION = 'MCP_WEB_S21C_V1'"),
   'Bridge가 S2.1-B 버전이 아닙니다.',
 );
 assert(
-  launcher.includes("REQUIRED_BRIDGE_API_VERSION = 'MCP_WEB_S21B_V1'"),
+  launcher.includes("REQUIRED_BRIDGE_API_VERSION = 'MCP_WEB_S21C_V1'"),
   '런처가 S2.1-B Bridge 버전을 강제하지 않습니다.',
 );
 
