@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import KakaoMap from './components/KakaoMap';
+import PwaActions from './components/PwaActions';
 import RecommendationPanel from './components/RecommendationPanel';
 import { mockPlaces } from './mock';
 import { chargerAvailabilityText, chargerSelectionText, hasRestrictedChargerAccess } from './presentation/chargerText';
@@ -302,6 +303,7 @@ export default function App() {
         </a>
         <div className="top-actions">
           <button className={`top-location ${userLocation ? 'active' : ''}`} onClick={locate}>◎ {userLocation ? '내 위치 사용 중' : '내 위치'}</button>
+          <PwaActions />
           {runtimeMode === 'local-fixture' && <span className="local-fixture-badge">LOCAL FIXTURE</span>}
           <div className={`live-badge ${runtimeMode === 'live' ? 'on' : runtimeMode === 'local-fixture' ? 'local' : ''}`}>
             <span />
