@@ -33,6 +33,26 @@ type WebContext = {
 
 type SessionMessages = any[];
 
+type AiPlaceReference = {
+  id: string;
+  name: string;
+  address?: string | null;
+  parking: {
+    capacity: number | null;
+    available: number | null;
+  };
+  charging: {
+    totalAvailable: number | null;
+    fastAvailable: number | null;
+    slowAvailable: number | null;
+  };
+};
+
+type AgentReply = {
+  answer: string;
+  places: AiPlaceReference[];
+};
+
 const SYSTEM_PROMPT = `
 너는 PlugPark의 로컬 AI 도우미다.
 
@@ -257,12 +277,82 @@ function contextNote(context: WebContext) {
   return `\n\n[PlugPark 웹 컨텍스트: 현재 위치 사용 가능${radiusText}. 위치 기반 요청이면 위도 ${context.userLat}, 경도 ${context.userLng}를 사용한다.]`;
 }
 
+function asRecord(value: unknown): Record<string, any> | null {
+  return value && typeof value === 'object' ? value as Record<string, any> : null;
+}
+
+function normalizeAiPlace(value: unknown): AiPlaceReference | null {
+  const source = asRecord(value);
+  if (!source) return null;
+
+  const id = typeof source.id === 'string' ? source.id.trim() : '';
+  const name = typeof source.name === 'string' ? source.name.trim() : '';
+  if (!id || !name) return null;
+
+  const parking = asRecord(source.parking) ?? {};
+  const charging = asRecord(source.charging) ?? {};
+
+  return {
+    id,
+    name,
+    address: typeof source.address === 'string' ? source.address : null,
+    parking: {
+      capacity: numberOrNull(parking.capacity),
+      available: numberOrNull(parking.available),
+    },
+    charging: {
+      totalAvailable: numberOrNull(charging.totalAvailable),
+      fastAvailable: numberOrNull(charging.fastAvailable),
+      slowAvailable: numberOrNull(charging.slowAvailable),
+    },
+  };
+}
+
+function collectToolPlaces(
+  toolName: string,
+  toolText: string,
+  target: Map<string, AiPlaceReference>,
+) {
+  if (!toolText) return;
+
+  let parsed: Record<string, any>;
+
+  try {
+    parsed = JSON.parse(toolText) as Record<string, any>;
+  } catch {
+    return;
+  }
+
+  const candidates: unknown[] = [];
+
+  if (toolName === 'search_places' && Array.isArray(parsed.places)) {
+    candidates.push(...parsed.places);
+  } else if (toolName === 'get_place_detail' && parsed.found === true && parsed.place) {
+    candidates.push(parsed.place);
+  } else if (toolName === 'recommend_places' && Array.isArray(parsed.recommendations)) {
+    for (const item of parsed.recommendations) {
+      const record = asRecord(item);
+      if (record?.place) candidates.push(record.place);
+    }
+  } else if (toolName === 'compare_places' && Array.isArray(parsed.places)) {
+    candidates.push(...parsed.places);
+  }
+
+  for (const candidate of candidates) {
+    const place = normalizeAiPlace(candidate);
+    if (!place || target.has(place.id)) continue;
+    target.set(place.id, place);
+    if (target.size >= 5) break;
+  }
+}
+
 async function runAgent(
   sessionId: string,
   userText: string,
   context: WebContext,
-) {
+): Promise<AgentReply> {
   const messages = getSession(sessionId);
+  const relatedPlaces = new Map<string, AiPlaceReference>();
   const augmentedUserText = `${userText}${contextNote(context)}`;
 
   messages.push({
@@ -283,7 +373,10 @@ async function runAgent(
     const toolCalls = response.message.tool_calls ?? [];
 
     if (toolCalls.length === 0) {
-      return response.message.content || '응답이 없습니다.';
+      return {
+        answer: response.message.content || '응답이 없습니다.',
+        places: [...relatedPlaces.values()],
+      };
     }
 
     for (const toolCall of toolCalls) {
@@ -303,6 +396,8 @@ async function runAgent(
         .map((item: any) => item.text)
         .join('\n');
 
+      collectToolPlaces(toolName, toolText, relatedPlaces);
+
       messages.push({
         role: 'tool',
         tool_name: toolName,
@@ -311,7 +406,10 @@ async function runAgent(
     }
   }
 
-  return 'Tool 호출 횟수가 너무 많아 작업을 중단했습니다.';
+  return {
+    answer: 'Tool 호출 횟수가 너무 많아 작업을 중단했습니다.',
+    places: [...relatedPlaces.values()],
+  };
 }
 
 async function readJsonBody(req: any) {
@@ -438,13 +536,13 @@ const server = createHttpServer(async (req, res) => {
         return;
       }
 
-      const answer = await runAgent(sessionId, message, context);
+      const reply = await runAgent(sessionId, message, context);
 
       res.writeHead(200, {
         'content-type': 'application/json; charset=utf-8',
         'cache-control': 'no-store',
       });
-      res.end(JSON.stringify({ answer }));
+      res.end(JSON.stringify(reply));
       return;
     }
 
