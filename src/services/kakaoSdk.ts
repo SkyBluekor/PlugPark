@@ -132,3 +132,79 @@ export async function kakaoKeywordSearch(
     );
   });
 }
+
+
+export type KakaoAddressAnalyzeType = 'EXACT' | 'SIMILAR';
+
+export async function kakaoAddressSearch(
+  kakao: any,
+  address: string,
+  analyzeType: KakaoAddressAnalyzeType = 'SIMILAR',
+  size = 30,
+): Promise<any[]> {
+  const services = kakao?.maps?.services;
+  const query = address.trim();
+
+  if (!services?.Geocoder || !services?.Status || !query) {
+    return [];
+  }
+
+  return await new Promise<any[]>((resolve) => {
+    const geocoder = new services.Geocoder();
+    const analyze =
+      analyzeType === 'EXACT'
+        ? services.AnalyzeType?.EXACT
+        : services.AnalyzeType?.SIMILAR;
+
+    const options: Record<string, unknown> = {
+      size: Math.max(1, Math.min(30, Math.trunc(size))),
+    };
+
+    if (analyze) options.analyze_type = analyze;
+
+    geocoder.addressSearch(
+      query,
+      (result: any[], status: string) => {
+        resolve(
+          status === services.Status.OK && Array.isArray(result)
+            ? result
+            : [],
+        );
+      },
+      options,
+    );
+  });
+}
+
+export async function kakaoCoord2RegionCode(
+  kakao: any,
+  lng: number,
+  lat: number,
+): Promise<any[]> {
+  const services = kakao?.maps?.services;
+
+  if (
+    !services?.Geocoder ||
+    !services?.Status ||
+    !Number.isFinite(lat) ||
+    !Number.isFinite(lng)
+  ) {
+    return [];
+  }
+
+  return await new Promise<any[]>((resolve) => {
+    const geocoder = new services.Geocoder();
+
+    geocoder.coord2RegionCode(
+      lng,
+      lat,
+      (result: any[], status: string) => {
+        resolve(
+          status === services.Status.OK && Array.isArray(result)
+            ? result
+            : [],
+        );
+      },
+    );
+  });
+}
