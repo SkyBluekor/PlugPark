@@ -45,7 +45,7 @@ assert(
   'Bridge 응답에 구조화 장소 목록이 없습니다.',
 );
 assert(
-  bridge.includes("const BRIDGE_API_VERSION = 'MCP_WEB_S2_V5'"),
+  bridge.includes("const BRIDGE_API_VERSION = 'MCP_WEB_S21_V1'"),
   'S2 Bridge API 버전이 없습니다.',
 );
 assert(
@@ -108,7 +108,7 @@ assert(
   '통합 런처가 최신 Bridge 코드를 자동 반영하지 않습니다.',
 );
 assert(
-  launcher.includes("REQUIRED_BRIDGE_API_VERSION = 'MCP_WEB_S2_V5'"),
+  launcher.includes("REQUIRED_BRIDGE_API_VERSION = 'MCP_WEB_S21_V1'"),
   '통합 런처가 실행 중인 Bridge 버전을 검증하지 않습니다.',
 );
 assert(
@@ -140,15 +140,11 @@ assert(
   '브라우저에서 Kakao 기준 장소 좌표를 해석하지 않습니다.',
 );
 assert(
-  chat.includes('buildLandmarkQueries'),
-  '랜드마크 검색어 후보를 보강하지 않습니다.',
+  chat.includes("from '../services/locationResolver'"),
+  'AI 채팅이 공용 Location Resolver를 사용하지 않습니다.',
 );
 assert(
-  chat.includes('landmarkCandidateScore'),
-  'Kakao 랜드마크 후보를 지역/장소명 기준으로 평가하지 않습니다.',
-);
-assert(
-  chat.includes('targetResolveFailed: Boolean(nearbyLandmark && !targetLocation)'),
+  chat.includes('targetResolveFailed: resolveFailed'),
   '랜드마크 좌표 해석 실패 상태를 Bridge에 전달하지 않습니다.',
 );
 assert(
@@ -156,7 +152,7 @@ assert(
   '랜드마크 해석 실패 시 일반 search_places fallback을 차단하지 않습니다.',
 );
 assert(
-  bridge.includes('[LOC] target='),
+  bridge.includes("'[LOC] OK'"),
   'Bridge에 최종 기준 장소 좌표 진단 로그가 없습니다.',
 );
 assert(
