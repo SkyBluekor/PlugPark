@@ -259,6 +259,16 @@ export default function PlugParkAiChat({
               locationResult && locationResult.ok
                 ? locationResult.score
                 : (locationResult?.bestScore ?? null),
+            targetResolveKind: locationResult?.kind ?? null,
+            targetResolveMethod: locationResult?.method ?? null,
+            targetCanonicalName:
+              locationResult && locationResult.ok
+                ? locationResult.canonicalName
+                : null,
+            targetConfidence:
+              locationResult && locationResult.ok
+                ? locationResult.confidence
+                : null,
             locationIntentInput: message,
             locationIntentSource: effectiveIntent.source,
             locationIntentText: effectiveIntent.locationText,
