@@ -212,6 +212,25 @@ function normalizeContext(value: unknown): WebContext {
   };
 }
 
+function extractLandmarkSearchTerm(userText: string, fallback: unknown) {
+  const compact = userText.replace(/\s+/g, ' ').trim();
+
+  const nearbyMatch = compact.match(
+    /^(?:부산(?:광역시|시)?\s+)?(?:[가-힣]+구\s+)?(.+?)\s*(?:근처|주변|인근)(?:\s|$)/,
+  );
+
+  if (nearbyMatch?.[1]) {
+    const landmark = nearbyMatch[1]
+      .replace(/\s*(?:급속|완속|전기차|EV|충전기?|충전|가능한?|사용 가능한?|공영주차장|주차장)\s*/gi, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    if (landmark.length >= 2) return landmark;
+  }
+
+  return typeof fallback === 'string' ? fallback.trim() : '';
+}
+
 function normalizeToolArguments(
   toolName: string,
   rawArgs: Record<string, unknown>,
@@ -262,21 +281,17 @@ function normalizeToolArguments(
   }
 
   if (toolName === 'search_places') {
-    if (text.includes('급속')) args.fastOnly = true;
-
-    if (
+    args.query = extractLandmarkSearchTerm(userText, args.query);
+    args.fastOnly = text.includes('급속');
+    args.chargingAvailable =
       /충전\s*(?:이\s*)?(?:가능|할\s*수)/.test(compact) ||
-      /사용\s*가능.*충전/.test(compact)
-    ) {
-      args.chargingAvailable = true;
-    }
-
-    if (
+      /충전\s*가능/.test(compact) ||
+      /사용\s*가능.*충전/.test(compact) ||
+      text.includes('급속') ||
+      text.includes('완속');
+    args.parkingAvailable =
       /주차\s*(?:자리|가능|잔여)/.test(compact) ||
-      /남은\s*자리/.test(compact)
-    ) {
-      args.parkingAvailable = true;
-    }
+      /남은\s*자리/.test(compact);
   }
 
   return args;
@@ -367,6 +382,26 @@ function collectToolPlaces(
   }
 }
 
+async function finalizeWithoutTools(
+  messages: SessionMessages,
+  instruction: string,
+) {
+  const response = await ollama.chat({
+    model: MODEL,
+    messages: [
+      ...messages,
+      {
+        role: 'system',
+        content: instruction,
+      },
+    ],
+    stream: false,
+  });
+
+  messages.push(response.message);
+  return response.message.content || '응답이 없습니다.';
+}
+
 async function runAgent(
   sessionId: string,
   userText: string,
@@ -374,6 +409,8 @@ async function runAgent(
 ): Promise<AgentReply> {
   const messages = getSession(sessionId);
   const relatedPlaces = new Map<string, AiPlaceReference>();
+  let searchPlacesCalls = 0;
+  const isComparisonRequest = /비교|차이|(?:랑|와|과)\s+.+(?:랑|와|과)/.test(userText);
   const augmentedUserText = `${userText}${contextNote(context)}`;
 
   messages.push({
@@ -405,6 +442,22 @@ async function runAgent(
       const rawArgs = (toolCall.function.arguments ?? {}) as Record<string, unknown>;
       const args = normalizeToolArguments(toolName, rawArgs, userText, context);
 
+      if (toolName === 'search_places') {
+        searchPlacesCalls += 1;
+
+        if (searchPlacesCalls > 2) {
+          const answer = await finalizeWithoutTools(
+            messages,
+            '같은 요청에서 search_places를 더 호출하지 마세요. 지금까지의 실제 Tool 결과만 사용해 답하고, 결과가 없으면 장소명을 찾지 못했다고 말한 뒤 더 정확한 장소명·주소 또는 현재 위치 사용을 안내하세요. 새로운 지역명이나 장소명을 추측하지 마세요.',
+          );
+
+          return {
+            answer,
+            places: [...relatedPlaces.values()],
+          };
+        }
+      }
+
       console.log(`[MCP] ${toolName}`, args);
 
       const result = await client.callTool({
@@ -424,6 +477,33 @@ async function runAgent(
         tool_name: toolName,
         content: toolText || '결과 없음',
       });
+    }
+
+    const onlySearchCalls = toolCalls.length > 0 &&
+      toolCalls.every((toolCall) => toolCall.function.name === 'search_places');
+
+    if (onlySearchCalls && !isComparisonRequest && relatedPlaces.size > 0) {
+      const answer = await finalizeWithoutTools(
+        messages,
+        '검색 결과를 이미 얻었습니다. search_places를 다시 호출하지 말고 방금 받은 실제 결과만 이용해 사용자의 질문에 짧고 명확하게 답하세요.',
+      );
+
+      return {
+        answer,
+        places: [...relatedPlaces.values()],
+      };
+    }
+
+    if (onlySearchCalls && searchPlacesCalls >= 2 && relatedPlaces.size === 0) {
+      const answer = await finalizeWithoutTools(
+        messages,
+        '두 번 검색했지만 실제 결과가 없습니다. 더 이상 다른 지역명이나 장소명을 추측하지 말고, 현재 조건에서는 찾지 못했다고 설명한 뒤 더 정확한 장소명·주소 또는 현재 위치 사용을 안내하세요.',
+      );
+
+      return {
+        answer,
+        places: [],
+      };
     }
   }
 
