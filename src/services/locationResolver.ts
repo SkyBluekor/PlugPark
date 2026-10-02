@@ -3,6 +3,9 @@ import {
   kakaoKeywordSearch,
   loadKakaoMapSdk,
 } from './kakaoSdk';
+import { extractNearbyLandmark } from './locationIntent';
+
+export { replaceNearbyLandmark } from './locationIntent';
 
 export type LandmarkResolveFailure =
   | 'NOT_NEARBY_REQUEST'
@@ -30,32 +33,6 @@ export type LandmarkResolveResult =
       candidateCount: number;
       bestScore: number | null;
     };
-
-export function extractNearbyLandmark(message: string) {
-  const compact = message.replace(/\s+/g, ' ').trim();
-  const match = compact.match(/^(.+?)\s*(?:근처|주변|인근)(?:\s|$)/);
-  if (!match?.[1]) return '';
-
-  const raw = match[1]
-    .replace(/^(?:부산광역시|부산시|부산)\s*/u, '')
-    .trim();
-
-  if (!raw || /^(?:내|현재\s*위치)$/u.test(raw)) return '';
-  return raw;
-}
-
-export function replaceNearbyLandmark(
-  originalRequest: string,
-  replacementLandmark: string,
-) {
-  const replacement = replacementLandmark.replace(/\s+/g, ' ').trim();
-  if (!replacement) return originalRequest;
-
-  return originalRequest.replace(
-    /^(.+?)(\s*(?:근처|주변|인근)(?:\s|$))/,
-    `${replacement}$2`,
-  );
-}
 
 function normalizePlaceLookupText(value: string) {
   return String(value || '')
