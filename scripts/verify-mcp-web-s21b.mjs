@@ -140,6 +140,14 @@ assert(
   'Bridge에 LOC-PARSE 진단 로그가 없습니다.',
 );
 assert(
+  bridge.includes("context.locationIntentSource === 'none'"),
+  '해석 불가능한 주변 위치 요청의 Tool fallback 차단이 없습니다.',
+);
+assert(
+  bridge.includes("context.locationIntentSource === 'current-location'"),
+  '현재 위치 미연결 시 Tool fallback 차단이 없습니다.',
+);
+assert(
   bridge.includes("const BRIDGE_API_VERSION = 'MCP_WEB_S21B_V1'"),
   'Bridge가 S2.1-B 버전이 아닙니다.',
 );
