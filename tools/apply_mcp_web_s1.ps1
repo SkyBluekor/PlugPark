@@ -14,6 +14,7 @@ if (-not $McpProject) {
 
 $targetSrc = Join-Path $McpProject "src"
 $targetServer = Join-Path $targetSrc "server.ts"
+$targetSync = Join-Path $McpProject "scripts\sync-places.ts"
 $targetBridge = Join-Path $targetSrc "bridge.ts"
 
 if (-not (Test-Path $template)) {
@@ -22,6 +23,10 @@ if (-not (Test-Path $template)) {
 
 if (-not (Test-Path $targetServer)) {
   throw "PlugPark-MCP server.ts not found: $targetServer"
+}
+
+if (-not (Test-Path $targetSync)) {
+  throw "PlugPark-MCP sync-places.ts not found: $targetSync"
 }
 
 New-Item -ItemType Directory -Force -Path $targetSrc | Out-Null
@@ -41,6 +46,7 @@ Write-Host "PLUGPARK MCP-WEB-S1 BRIDGE"
 Write-Host "=============================================================================="
 Write-Host "MCP project         PASS  $McpProject"
 Write-Host "Bridge installed    PASS  $targetBridge"
+Write-Host "Snapshot sync       PASS  $targetSync"
 Write-Host ""
 Write-Host ('Run: cd "' + $McpProject + '"')
 Write-Host "     npx tsc --noEmit"
@@ -48,3 +54,4 @@ Write-Host "     npx tsx src/bridge.ts"
 Write-Host ""
 Write-Host "Default bridge: http://127.0.0.1:3000"
 Write-Host "Default model : qwen3.5:9b"
+Write-Host "Data refresh   : once when bridge starts (set PLUGPARK_SYNC_ON_START=0 to skip)"
