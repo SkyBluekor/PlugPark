@@ -32,6 +32,9 @@ assert(bridge.includes("access-control-allow-origin"), 'CORS 처리가 없습니
 assert(bridge.includes("access-control-allow-private-network"), 'Private Network preflight 처리가 없습니다.');
 assert(bridge.includes("req.url === '/health'"), 'Bridge health endpoint가 없습니다.');
 assert(bridge.includes("req.url === '/api/chat'"), 'Bridge chat endpoint가 없습니다.');
+assert(bridge.includes('syncPlacesSnapshot'), 'Bridge 시작 시 snapshot 동기화가 없습니다.');
+assert(bridge.includes('scripts/sync-places.ts'), '기존 MCP snapshot sync 경로를 사용하지 않습니다.');
+assert(bridge.includes('PLUGPARK_SYNC_ON_START'), 'snapshot 동기화 비활성화 설정이 없습니다.');
 assert(bridge.includes('sessions = new Map'), '대화 세션 분리가 없습니다.');
 
 assert(installer.includes('PlugPark-MCP'), 'PlugPark-MCP 적용 스크립트가 없습니다.');
@@ -46,5 +49,6 @@ console.log({
   modelConfig: 'PASS',
   cors: 'PASS',
   mcpBridgeTemplate: 'PASS',
+  snapshotSyncOnStart: 'PASS',
   siblingInstaller: 'PASS',
 });
