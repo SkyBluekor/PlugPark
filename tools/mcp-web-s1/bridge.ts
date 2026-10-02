@@ -10,7 +10,7 @@ const MODEL = process.env.OLLAMA_MODEL?.trim() || 'qwen3.5:9b';
 const PORT = Number(process.env.AI_BRIDGE_PORT || 3000);
 const HOST = process.env.AI_BRIDGE_HOST?.trim() || '127.0.0.1';
 const SYNC_ON_START = process.env.PLUGPARK_SYNC_ON_START !== '0';
-const BRIDGE_API_VERSION = 'MCP_WEB_S2_V5';
+const BRIDGE_API_VERSION = 'MCP_WEB_S21_V1';
 const TSX_CLI = resolve(process.cwd(), 'node_modules', 'tsx', 'dist', 'cli.mjs');
 
 if (!existsSync(TSX_CLI)) {
@@ -44,6 +44,10 @@ type WebContext = {
   targetName?: string | null;
   targetQuery?: string | null;
   targetResolveFailed?: boolean;
+  targetResolveReason?: string | null;
+  targetResolveQueries?: string[];
+  targetCandidateCount?: number | null;
+  targetScore?: number | null;
 };
 
 type SessionMessages = any[];
@@ -222,6 +226,17 @@ function normalizeContext(value: unknown): WebContext {
     targetName: typeof source.targetName === 'string' ? source.targetName.trim() : null,
     targetQuery: typeof source.targetQuery === 'string' ? source.targetQuery.trim() : null,
     targetResolveFailed: source.targetResolveFailed === true,
+    targetResolveReason:
+      typeof source.targetResolveReason === 'string'
+        ? source.targetResolveReason.trim()
+        : null,
+    targetResolveQueries: Array.isArray(source.targetResolveQueries)
+      ? source.targetResolveQueries
+          .filter((value): value is string => typeof value === 'string')
+          .slice(0, 10)
+      : [],
+    targetCandidateCount: numberOrNull(source.targetCandidateCount),
+    targetScore: numberOrNull(source.targetScore),
   };
 }
 
@@ -572,9 +587,31 @@ async function runAgent(
   });
 
   if (context.targetResolveFailed && context.targetQuery) {
+    console.log(
+      '[LOC] FAIL',
+      JSON.stringify({
+        query: context.targetQuery,
+        reason: context.targetResolveReason || 'UNKNOWN',
+        queries: context.targetResolveQueries || [],
+        candidates: context.targetCandidateCount ?? 0,
+        bestScore: context.targetScore ?? null,
+      }),
+    );
+
+    const reasonText =
+      context.targetResolveReason === 'SDK_UNAVAILABLE'
+        ? '지도 검색 서비스를 불러오지 못했습니다.'
+        : context.targetResolveReason === 'NO_RESULTS'
+          ? '지도 검색 결과가 없습니다.'
+          : context.targetResolveReason === 'OUTSIDE_BUSAN'
+            ? '부산 지역 안에서 일치하는 장소를 찾지 못했습니다.'
+            : context.targetResolveReason === 'LOW_CONFIDENCE'
+              ? '비슷한 장소는 있지만 정확한 장소로 확정하기 어렵습니다.'
+              : '위치를 정확히 확인하지 못했습니다.';
+
     return {
       answer:
-        `"${context.targetQuery}"의 위치를 지도에서 정확히 확인하지 못했습니다. ` +
+        `"${context.targetQuery}" 기준 장소를 확인하지 못했습니다. ${reasonText} ` +
         '장소명을 조금 더 정확히 입력하거나 주소를 함께 적어주세요.',
       places: [],
     };
@@ -582,7 +619,16 @@ async function runAgent(
 
   if (context.targetLat != null && context.targetLng != null) {
     console.log(
-      `[LOC] target="${context.targetName || context.targetQuery || '기준 위치'}" lat=${context.targetLat} lng=${context.targetLng}`,
+      '[LOC] OK',
+      JSON.stringify({
+        query: context.targetQuery || null,
+        target: context.targetName || '기준 위치',
+        lat: context.targetLat,
+        lng: context.targetLng,
+        queries: context.targetResolveQueries || [],
+        candidates: context.targetCandidateCount ?? 0,
+        score: context.targetScore ?? null,
+      }),
     );
   }
 
