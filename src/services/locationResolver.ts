@@ -81,8 +81,8 @@ export function buildLandmarkQueries(rawLandmark: string) {
 
   if (/폴리텍/.test(restText || clean)) {
     const expanded = (restText || clean)
-      .replace(/한국폴리텍대학?/g, '한국폴리텍대학')
-      .replace(/폴리텍대학?/g, '폴리텍대학');
+      .replace(/한국폴리텍(?:대학)?/g, '한국폴리텍대학')
+      .replace(/폴리텍(?:대학)?/g, '폴리텍대학');
 
     queries.push(
       district ? `부산 ${district} ${expanded}` : `부산 ${expanded}`,
