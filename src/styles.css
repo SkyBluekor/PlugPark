@@ -452,3 +452,98 @@ body{overflow-x:hidden}
 }
 .detail-ev-context span,.detail-ev-context strong{display:block}
 .detail-ev-context strong{margin-top:4px;color:#8a6230;font-weight:800}
+
+/* PWA install + QR access */
+.pwa-actions{display:flex;align-items:center;gap:7px}
+.pwa-action-button{
+  min-height:34px;
+  padding:0 11px;
+  border:1px solid #d6e1dc;
+  border-radius:7px;
+  background:#fff;
+  color:#355047;
+  font-size:11px;
+  font-weight:850;
+  cursor:pointer;
+  white-space:nowrap;
+}
+.pwa-action-button:hover{border-color:#94beae;background:#f1f8f5;color:#087451}
+.pwa-action-button.install{border-color:#a7cdbf;color:#087451}
+.pwa-modal-backdrop{
+  position:fixed;
+  inset:0;
+  z-index:120;
+  display:grid;
+  place-items:center;
+  padding:20px;
+  background:rgba(8,18,14,.48);
+  backdrop-filter:blur(5px);
+}
+.pwa-modal{
+  position:relative;
+  width:min(390px,calc(100vw - 32px));
+  padding:30px;
+  border:1px solid #dce5e1;
+  border-radius:16px;
+  background:#fff;
+  box-shadow:0 24px 70px rgba(15,42,32,.24);
+  text-align:center;
+}
+.pwa-modal-close{
+  position:absolute;
+  top:12px;
+  right:12px;
+  width:34px;
+  height:34px;
+  border:1px solid #dbe3e0;
+  border-radius:50%;
+  background:#fff;
+  color:#42554e;
+  font-size:22px;
+  line-height:1;
+  cursor:pointer;
+}
+.pwa-modal-kicker{
+  margin:0 0 7px;
+  color:#0b7654;
+  font-size:10px;
+  font-weight:900;
+  letter-spacing:.14em;
+}
+.pwa-modal h2{margin:0;color:#19372d;font-size:22px;letter-spacing:-.7px}
+.pwa-modal>p:not(.pwa-modal-kicker){margin:10px 0 18px;color:#708079;font-size:12px;line-height:1.6}
+.pwa-qr-frame{
+  width:max-content;
+  margin:0 auto 14px;
+  padding:10px;
+  border:1px solid #dfe7e3;
+  border-radius:12px;
+  background:#fff;
+}
+.pwa-qr-frame svg{display:block}
+.pwa-url{
+  display:block;
+  overflow:hidden;
+  margin:0 0 9px;
+  color:#27493e;
+  font-size:11px;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.pwa-modal small{display:block;color:#84918c;font-size:11px;line-height:1.55}
+.pwa-ios-help{text-align:left}
+.pwa-ios-help h2{text-align:left}
+.pwa-ios-help ol{margin:18px 0 0;padding-left:21px;color:#465b53;font-size:13px;line-height:1.8}
+.pwa-ios-help b{color:#163f32}
+
+@media(max-width:900px){
+  .pwa-action-button.qr{display:none}
+}
+@media(max-width:640px){
+  .pwa-action-button{min-height:32px;padding:0 9px;font-size:10px}
+  .pwa-modal{padding:26px 20px 22px}
+  .pwa-qr-frame svg{width:190px;height:190px}
+}
+@media(max-width:430px){
+  .pwa-actions{display:none}
+}
