@@ -10,7 +10,7 @@ const MODEL = process.env.OLLAMA_MODEL?.trim() || 'qwen3.5:9b';
 const PORT = Number(process.env.AI_BRIDGE_PORT || 3000);
 const HOST = process.env.AI_BRIDGE_HOST?.trim() || '127.0.0.1';
 const SYNC_ON_START = process.env.PLUGPARK_SYNC_ON_START !== '0';
-const BRIDGE_API_VERSION = 'MCP_WEB_S2_V3';
+const BRIDGE_API_VERSION = 'MCP_WEB_S2_V4';
 const TSX_CLI = resolve(process.cwd(), 'node_modules', 'tsx', 'dist', 'cli.mjs');
 
 if (!existsSync(TSX_CLI)) {
@@ -91,6 +91,7 @@ PlugPark는 부산 공영주차장과 전기차 충전 정보를 제공한다.
 - 특정 장소의 상세 정보: get_place_detail
 - 위도/경도 또는 반경을 기준으로 추천: recommend_places
 - 여러 장소의 실제 수치를 비교: compare_places
+- 특정 좌표/랜드마크 주변에서 순수 거리순으로 가까운 장소 찾기: nearby_places
 - 현재 위치 컨텍스트가 있고 "내 근처", "주변", "가까운 곳", "추천" 요청이면 recommend_places를 우선 사용한다.
 - recommend_places가 적합한 요청을 search_places 여러 번 호출해서 처리하지 않는다.
 
@@ -254,7 +255,8 @@ function requestedExplicitRadiusKm(userText: string) {
 function chargerPreferenceFromText(userText: string) {
   if (userText.includes('급속')) return 'fast';
   if (userText.includes('완속')) return 'slow';
-  return 'any';
+  if (/충전|전기차|EV/i.test(userText)) return 'any';
+  return 'none';
 }
 
 function recommendationModeFromText(userText: string) {
@@ -280,7 +282,6 @@ async function progressiveLandmarkRecommendation(
   const explicitRadius = requestedExplicitRadiusKm(userText);
   const radii = explicitRadius != null ? [explicitRadius] : [1, 3, 5, 10, 20];
   const chargerPreference = chargerPreferenceFromText(userText);
-  const mode = recommendationModeFromText(userText);
 
   let lastToolText = '';
   let lastParsed: Record<string, any> | null = null;
@@ -288,14 +289,13 @@ async function progressiveLandmarkRecommendation(
 
   for (const radiusKm of radii) {
     const result = await client.callTool({
-      name: 'recommend_places',
+      name: 'nearby_places',
       arguments: {
         userLat: context.targetLat,
         userLng: context.targetLng,
         radiusKm,
-        mode,
         chargerPreference,
-        limit: 5,
+        limit: requestedCount,
       },
     });
 
@@ -311,38 +311,16 @@ async function progressiveLandmarkRecommendation(
       parsed = null;
     }
 
-    const recommendations = Array.isArray(parsed?.recommendations)
-      ? [...parsed.recommendations]
-          .sort(
-            (a: any, b: any) =>
-              Number(a?.distanceMeters ?? Number.POSITIVE_INFINITY) -
-              Number(b?.distanceMeters ?? Number.POSITIVE_INFINITY),
-          )
-          .slice(0, requestedCount)
-          .map((item: any, index: number) => ({
-            ...item,
-            rank: index + 1,
-          }))
-      : [];
-
-    const normalizedParsed = parsed
-      ? {
-          ...parsed,
-          count: recommendations.length,
-          recommendations,
-        }
-      : parsed;
-
-    lastParsed = normalizedParsed;
-    lastToolText = normalizedParsed ? JSON.stringify(normalizedParsed, null, 2) : toolText;
+    lastToolText = toolText;
+    lastParsed = parsed;
     radiusUsedKm = radiusKm;
 
-    const rawCount = Number(parsed?.count ?? 0);
+    const count = Number(parsed?.count ?? 0);
     console.log(
-      `[MCP] recommend_places progressive radius=${radiusKm}km count=${rawCount} target=${requestedCount}`,
+      `[MCP] nearby_places progressive radius=${radiusKm}km count=${count} target=${requestedCount}`,
     );
 
-    if (rawCount >= requestedCount) break;
+    if (count >= requestedCount) break;
   }
 
   return {
@@ -352,7 +330,6 @@ async function progressiveLandmarkRecommendation(
     requestedCount,
     targetName: context.targetName || '기준 위치',
     chargerPreference,
-    mode,
   };
 }
 
@@ -522,6 +499,16 @@ function collectToolPlaces(
         rank: record.rank,
       });
     }
+  } else if (toolName === 'nearby_places' && Array.isArray(parsed.places)) {
+    for (const item of parsed.places) {
+      const record = asRecord(item);
+      if (!record?.place) continue;
+      candidates.push({
+        value: record.place,
+        distanceMeters: record.distanceMeters,
+        rank: record.rank,
+      });
+    }
   } else if (toolName === 'compare_places' && Array.isArray(parsed.places)) {
     for (const place of parsed.places) candidates.push({ value: place });
   }
@@ -530,6 +517,7 @@ function collectToolPlaces(
     candidates.length > 0 &&
     (toolName === 'get_place_detail' ||
       toolName === 'recommend_places' ||
+      toolName === 'nearby_places' ||
       toolName === 'compare_places')
   ) {
     target.clear();
@@ -583,7 +571,7 @@ async function runAgent(
 
   if (progressive) {
     const relatedPlaces = new Map<string, AiPlaceReference>();
-    collectToolPlaces('recommend_places', progressive.toolText, relatedPlaces);
+    collectToolPlaces('nearby_places', progressive.toolText, relatedPlaces);
 
     messages.push({
       role: 'system',
@@ -603,7 +591,7 @@ async function runAgent(
     const count = orderedPlaces.length;
     const answer =
       count > 0
-        ? `${progressive.targetName} 기준 ${progressive.radiusUsedKm}km 안에서 조건에 맞는 ${count}곳을 가까운 순으로 찾았습니다.`
+        ? `${progressive.targetName} 기준 ${progressive.radiusUsedKm}km 안에서 조건에 맞는 ${count}곳을 거리순으로 찾았습니다.`
         : `${progressive.targetName} 기준 ${progressive.radiusUsedKm}km까지 확인했지만 조건에 맞는 장소를 찾지 못했습니다.`;
 
     return {
