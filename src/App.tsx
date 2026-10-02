@@ -524,7 +524,13 @@ export default function App() {
         </section>
       </main>
 
-      <PlugParkAiChat userLocation={userLocation} radiusKm={radiusKm} />
+      <PlugParkAiChat
+        userLocation={userLocation}
+        radiusKm={radiusKm}
+        places={places}
+        onFocusMap={focusPlaceOnMap}
+        onOpenDetail={openPlaceDetail}
+      />
 
       {selected && (
         <div className="drawer-backdrop" onClick={() => setSelected(null)}>
