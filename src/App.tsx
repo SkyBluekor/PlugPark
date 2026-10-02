@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import KakaoMap from './components/KakaoMap';
 import PwaActions from './components/PwaActions';
 import LocationIcon from './components/LocationIcon';
+import PlugParkAiChat from './components/PlugParkAiChat';
 import RecommendationPanel from './components/RecommendationPanel';
 import { mockPlaces } from './mock';
 import { chargerAvailabilityText, chargerSelectionText, hasRestrictedChargerAccess } from './presentation/chargerText';
@@ -522,6 +523,8 @@ export default function App() {
           </div>
         </section>
       </main>
+
+      <PlugParkAiChat userLocation={userLocation} radiusKm={radiusKm} />
 
       {selected && (
         <div className="drawer-backdrop" onClick={() => setSelected(null)}>
