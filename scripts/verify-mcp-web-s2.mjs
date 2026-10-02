@@ -45,7 +45,7 @@ assert(
   'Bridge 응답에 구조화 장소 목록이 없습니다.',
 );
 assert(
-  bridge.includes("const BRIDGE_API_VERSION = 'MCP_WEB_S21_V1'"),
+  bridge.includes("const BRIDGE_API_VERSION = 'MCP_WEB_S21B_V1'"),
   'S2 Bridge API 버전이 없습니다.',
 );
 assert(
@@ -108,7 +108,7 @@ assert(
   '통합 런처가 최신 Bridge 코드를 자동 반영하지 않습니다.',
 );
 assert(
-  launcher.includes("REQUIRED_BRIDGE_API_VERSION = 'MCP_WEB_S21_V1'"),
+  launcher.includes("REQUIRED_BRIDGE_API_VERSION = 'MCP_WEB_S21B_V1'"),
   '통합 런처가 실행 중인 Bridge 버전을 검증하지 않습니다.',
 );
 assert(
