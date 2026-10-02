@@ -99,54 +99,172 @@ function hasValidCoordinates(place: PlugParkPlace) {
   );
 }
 
-function geocodePlace(kakao: any, place: PlugParkPlace): Promise<{ lat: number; lng: number } | null> {
+function normalizeLookupText(value: string) {
+  return String(value || '')
+    .toLowerCase()
+    .replace(/부산광역시|부산시/g, '부산')
+    .replace(/공영주차장|공영|주차장/g, '')
+    .replace(/[\s,\.·ㆍ()\[\]{}\-_\/]/g, '')
+    .trim();
+}
+
+function diceSimilarity(a: string, b: string) {
+  if (!a || !b) return 0;
+  if (a === b) return 1;
+  if (a.length < 2 || b.length < 2) return 0;
+
+  const pairs = (value: string) => {
+    const map = new Map<string, number>();
+    for (let index = 0; index < value.length - 1; index += 1) {
+      const pair = value.slice(index, index + 2);
+      map.set(pair, (map.get(pair) || 0) + 1);
+    }
+    return map;
+  };
+
+  const left = pairs(a);
+  const right = pairs(b);
+  let intersection = 0;
+  let leftCount = 0;
+  let rightCount = 0;
+  for (const count of left.values()) leftCount += count;
+  for (const count of right.values()) rightCount += count;
+  for (const [pair, count] of left) {
+    intersection += Math.min(count, right.get(pair) || 0);
+  }
+  return (2 * intersection) / (leftCount + rightCount);
+}
+
+function isSpecificAddress(address: string) {
+  const value = String(address || '').trim();
+  if (!value || value === '주소 정보 없음') return false;
+
+  // "해운대구" 같은 행정구역명만으로 geocode하면 구청/구 중심점으로 가기 쉽습니다.
+  // 도로명/지번 숫자가 있는 주소만 위치 근거로 사용합니다.
+  return /\d/.test(value) && /(대로|로|길|동|가|읍|면|리)/.test(value);
+}
+
+function candidateScore(place: PlugParkPlace, item: any) {
+  const lat = Number(item?.y);
+  const lng = Number(item?.x);
+  if (!isBusanCoordinates(lat, lng)) return Number.NEGATIVE_INFINITY;
+
+  const targetName = normalizeLookupText(place.name);
+  const candidateName = normalizeLookupText(String(item?.place_name || ''));
+  if (!targetName || !candidateName) return Number.NEGATIVE_INFINITY;
+
+  let score = diceSimilarity(targetName, candidateName) * 100;
+
+  if (targetName === candidateName) score += 80;
+  else if (candidateName.includes(targetName) || targetName.includes(candidateName)) score += 55;
+
+  const candidateAddress = `${String(item?.road_address_name || '')} ${String(item?.address_name || '')}`;
+  const sourceAddress = String(place.address || '').trim();
+  const sourceAgency = String(place.agency || '').trim();
+
+  if (sourceAddress && sourceAddress !== '주소 정보 없음') {
+    const addressTokens = sourceAddress
+      .split(/\s+/)
+      .filter((token) => token.length >= 2 && !/^부산(?:광역시)?$/.test(token));
+    for (const token of addressTokens) {
+      if (candidateAddress.includes(token)) score += 6;
+    }
+  }
+  if (sourceAgency && candidateAddress.includes(sourceAgency)) score += 8;
+
+  const category = String(item?.category_name || '');
+  if (/주차/.test(category) || /주차/.test(String(item?.place_name || ''))) score += 20;
+
+  return score;
+}
+
+function keywordSearch(kakao: any, keyword: string): Promise<any[]> {
   return new Promise((resolve) => {
     const services = kakao?.maps?.services;
-    if (!services) {
-      resolve(null);
+    if (!services || !keyword.trim()) {
+      resolve([]);
       return;
     }
 
-    const fallbackKeyword = () => {
-      const places = new services.Places();
-      const keyword = `부산 ${place.name}`;
-      places.keywordSearch(
-        keyword,
-        (result: any[], status: string) => {
-          if (status === services.Status.OK && result?.length) {
-            resolve(firstBusanCoordinates(result));
-          } else {
-            resolve(null);
-          }
-        },
-        { size: 5 },
-      );
-    };
+    const places = new services.Places();
+    places.keywordSearch(
+      keyword,
+      (result: any[], status: string) => {
+        resolve(status === services.Status.OK && Array.isArray(result) ? result : []);
+      },
+      { size: 15 },
+    );
+  });
+}
 
-    const address =
-      place.address && place.address !== '주소 정보 없음'
-        ? place.address
-        : '';
-
-    if (!address) {
-      fallbackKeyword();
+function addressSearch(kakao: any, address: string): Promise<{ lat: number; lng: number } | null> {
+  return new Promise((resolve) => {
+    const services = kakao?.maps?.services;
+    if (!services || !isSpecificAddress(address)) {
+      resolve(null);
       return;
     }
 
     const geocoder = new services.Geocoder();
     geocoder.addressSearch(address, (result: any[], status: string) => {
-      if (status === services.Status.OK && result?.length) {
-        const coords = firstBusanCoordinates(result);
-        if (coords) {
-          resolve(coords);
-        } else {
-          fallbackKeyword();
-        }
-      } else {
-        fallbackKeyword();
+      if (status !== services.Status.OK || !result?.length) {
+        resolve(null);
+        return;
       }
+      resolve(firstBusanCoordinates(result));
     });
   });
+}
+
+async function geocodePlace(
+  kakao: any,
+  place: PlugParkPlace,
+): Promise<{ lat: number; lng: number } | null> {
+  const rawName = String(place.name || '').trim();
+  const stem = rawName
+    .replace(/\s*공영주차장\s*$/u, '')
+    .replace(/\s*주차장\s*$/u, '')
+    .trim();
+
+  const queries = [
+    rawName,
+    `부산 ${rawName}`,
+    stem ? `${stem} 공영주차장` : '',
+    stem ? `부산 ${stem}` : '',
+  ].filter(Boolean);
+
+  const seenQueries = [...new Set(queries)];
+  const candidates: any[] = [];
+  const seenCandidates = new Set<string>();
+
+  for (const query of seenQueries) {
+    const results = await keywordSearch(kakao, query);
+    for (const item of results) {
+      const key = `${item?.id || ''}|${item?.x || ''}|${item?.y || ''}|${item?.place_name || ''}`;
+      if (seenCandidates.has(key)) continue;
+      seenCandidates.add(key);
+      candidates.push(item);
+    }
+  }
+
+  const ranked = candidates
+    .map((item) => ({ item, score: candidateScore(place, item) }))
+    .filter((entry) => Number.isFinite(entry.score))
+    .sort((a, b) => b.score - a.score);
+
+  // 이름이 충분히 맞는 POI가 있으면 일반 주소보다 그것을 우선합니다.
+  // 예: "부산기계공고 공영주차장" ↔ "부산기계공고후문 공영주차장".
+  if (ranked[0] && ranked[0].score >= 85) {
+    const lat = Number(ranked[0].item.y);
+    const lng = Number(ranked[0].item.x);
+    return { lat, lng };
+  }
+
+  // 이름 검색이 애매할 때만 구체적인 도로명/지번 주소를 fallback으로 사용합니다.
+  const byAddress = await addressSearch(kakao, String(place.address || ''));
+  if (byAddress) return byAddress;
+
+  return null;
 }
 
 export default function KakaoMap({
