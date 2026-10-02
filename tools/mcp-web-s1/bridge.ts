@@ -615,6 +615,30 @@ async function runAgent(
     );
   }
 
+  if (
+    context.locationIntentNearby === true &&
+    context.locationIntentSource === 'none' &&
+    !context.locationIntentText
+  ) {
+    return {
+      answer:
+        '기준 위치를 확인할 수 없습니다. 부산의 지역명이나 장소명을 알려주세요.',
+      places: [],
+    };
+  }
+
+  if (
+    context.locationIntentNearby === true &&
+    context.locationIntentSource === 'current-location' &&
+    (context.userLat == null || context.userLng == null)
+  ) {
+    return {
+      answer:
+        '현재 위치가 연결되어 있지 않습니다. PlugPark에서 내 위치를 먼저 허용해주세요.',
+      places: [],
+    };
+  }
+
   if (context.targetResolveFailed && context.targetQuery) {
     console.log(
       '[LOC] FAIL',
