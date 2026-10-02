@@ -17,6 +17,33 @@ declare global {
 
 let sdkPromise: Promise<any> | null = null;
 
+const BUSAN_BOUNDS = {
+  minLat: 34.8,
+  maxLat: 35.45,
+  minLng: 128.7,
+  maxLng: 129.4,
+} as const;
+
+function isBusanCoordinates(lat: number, lng: number) {
+  return (
+    Number.isFinite(lat) &&
+    Number.isFinite(lng) &&
+    lat >= BUSAN_BOUNDS.minLat &&
+    lat <= BUSAN_BOUNDS.maxLat &&
+    lng >= BUSAN_BOUNDS.minLng &&
+    lng <= BUSAN_BOUNDS.maxLng
+  );
+}
+
+function firstBusanCoordinates(result: any[]) {
+  for (const item of result || []) {
+    const lat = Number(item?.y);
+    const lng = Number(item?.x);
+    if (isBusanCoordinates(lat, lng)) return { lat, lng };
+  }
+  return null;
+}
+
 function loadKakaoMapSdk(appKey: string) {
   if (window.kakao?.maps) {
     return new Promise<any>((resolve) => window.kakao.maps.load(() => resolve(window.kakao)));
@@ -56,10 +83,7 @@ function hasValidCoordinates(place: PlugParkPlace) {
   return (
     place.lat != null &&
     place.lng != null &&
-    place.lat >= 34 &&
-    place.lat <= 36 &&
-    place.lng >= 128 &&
-    place.lng <= 130
+    isBusanCoordinates(place.lat, place.lng)
   );
 }
 
@@ -78,7 +102,7 @@ function geocodePlace(kakao: any, place: PlugParkPlace): Promise<{ lat: number; 
         keyword,
         (result: any[], status: string) => {
           if (status === services.Status.OK && result?.length) {
-            resolve({ lat: Number(result[0].y), lng: Number(result[0].x) });
+            resolve(firstBusanCoordinates(result));
           } else {
             resolve(null);
           }
@@ -100,7 +124,12 @@ function geocodePlace(kakao: any, place: PlugParkPlace): Promise<{ lat: number; 
     const geocoder = new services.Geocoder();
     geocoder.addressSearch(address, (result: any[], status: string) => {
       if (status === services.Status.OK && result?.length) {
-        resolve({ lat: Number(result[0].y), lng: Number(result[0].x) });
+        const coords = firstBusanCoordinates(result);
+        if (coords) {
+          resolve(coords);
+        } else {
+          fallbackKeyword();
+        }
       } else {
         fallbackKeyword();
       }
