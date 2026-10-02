@@ -87,7 +87,6 @@ body{overflow-x:hidden}
 @media(max-width:900px){
   .topbar{padding-left:14px;padding-right:14px}
   .top-location{display:inline-flex;font-size:0;width:39px;padding:0;align-items:center;justify-content:center}
-  .top-location::first-letter{font-size:13px}
   .search-tools{grid-template-columns:1fr 142px}
   .search-tools select{grid-column:1/-1;height:44px}
   .hero{min-height:0}
@@ -543,4 +542,37 @@ body{overflow-x:hidden}
   .pwa-action-button{min-height:32px;padding:0 9px;font-size:10px}
   .pwa-modal{padding:26px 20px 22px}
   .pwa-qr-frame svg{width:190px;height:190px}
+}
+
+
+/* Current-location icon clarity */
+.location-icon{
+  display:block;
+  flex:0 0 auto;
+  width:18px;
+  height:18px;
+}
+.top-location,
+.location-button,
+.map-location-button{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:6px;
+}
+.top-location.active .location-icon,
+.location-button.active .location-icon{
+  color:#087651;
+}
+.map-location-button .location-icon{
+  width:17px;
+  height:17px;
+  color:#0b7654;
+}
+@media(max-width:900px){
+  .top-location{
+    width:39px;
+    padding:0;
+  }
+  .top-location-label{display:none}
 }
