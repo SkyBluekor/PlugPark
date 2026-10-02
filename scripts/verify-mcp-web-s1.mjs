@@ -15,6 +15,8 @@ const envType = read('src/vite-env.d.ts');
 const envExample = read('.env.example');
 const bridge = read('tools/mcp-web-s1/bridge.ts');
 const installer = read('tools/apply_mcp_web_s1.ps1');
+const launcher = read('scripts/start-ai-stack.mjs');
+const windowsLauncher = read('START_PLUGPARK_AI.cmd');
 
 assert(app.includes('<PlugParkAiChat'), 'App.tsx에 AI 채팅이 연결되지 않았습니다.');
 assert(chat.includes('VITE_LOCAL_AI_BRIDGE_URL'), 'AI bridge URL 환경변수가 연결되지 않았습니다.');
@@ -24,12 +26,12 @@ assert(chat.includes('userLat'), '현재 위치 컨텍스트 전달이 없습니
 assert(envType.includes('VITE_LOCAL_AI_BRIDGE_URL'), 'Vite env 타입이 없습니다.');
 assert(envExample.includes('http://127.0.0.1:3000'), '기본 AI bridge 예제가 없습니다.');
 
-assert(bridge.includes("OLLAMA_MODEL"), '모델 설정 분리가 없습니다.');
-assert(bridge.includes("qwen3.5:9b"), '기본 Qwen 모델이 없습니다.');
-assert(bridge.includes("search_places"), 'MCP Tool 규칙이 없습니다.');
-assert(bridge.includes("recommend_places"), '추천 Tool 규칙이 없습니다.');
-assert(bridge.includes("access-control-allow-origin"), 'CORS 처리가 없습니다.');
-assert(bridge.includes("access-control-allow-private-network"), 'Private Network preflight 처리가 없습니다.');
+assert(bridge.includes('OLLAMA_MODEL'), '모델 설정 분리가 없습니다.');
+assert(bridge.includes('qwen3.5:9b'), '기본 Qwen 모델이 없습니다.');
+assert(bridge.includes('search_places'), 'MCP Tool 규칙이 없습니다.');
+assert(bridge.includes('recommend_places'), '추천 Tool 규칙이 없습니다.');
+assert(bridge.includes('access-control-allow-origin'), 'CORS 처리가 없습니다.');
+assert(bridge.includes('access-control-allow-private-network'), 'Private Network preflight 처리가 없습니다.');
 assert(bridge.includes("req.url === '/health'"), 'Bridge health endpoint가 없습니다.');
 assert(bridge.includes("req.url === '/api/chat'"), 'Bridge chat endpoint가 없습니다.');
 assert(bridge.includes('syncPlacesSnapshot'), 'Bridge 시작 시 snapshot 동기화가 없습니다.');
@@ -39,6 +41,11 @@ assert(bridge.includes('sessions = new Map'), '대화 세션 분리가 없습니
 
 assert(installer.includes('PlugPark-MCP'), 'PlugPark-MCP 적용 스크립트가 없습니다.');
 assert(installer.includes('src\\bridge.ts'), 'Bridge 설치 대상이 올바르지 않습니다.');
+
+assert(launcher.includes('ollama'), '통합 런처가 Ollama를 시작하지 않습니다.');
+assert(launcher.includes('src/bridge.ts'), '통합 런처가 AI Bridge를 시작하지 않습니다.');
+assert(launcher.includes('PlugPark AI is ready'), '통합 런처 준비 상태가 없습니다.');
+assert(windowsLauncher.includes('npm run ai:start'), 'Windows 원클릭 런처가 ai:start를 호출하지 않습니다.');
 
 console.log('MCP-WEB-S1 STATIC VERIFY PASS');
 console.log({
@@ -51,4 +58,6 @@ console.log({
   mcpBridgeTemplate: 'PASS',
   snapshotSyncOnStart: 'PASS',
   siblingInstaller: 'PASS',
+  oneCommandLauncher: 'PASS',
+  windowsOneClickLauncher: 'PASS',
 });
