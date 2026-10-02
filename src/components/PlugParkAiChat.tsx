@@ -52,6 +52,96 @@ function createSessionId() {
   return `plugpark-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
+const BUSAN_BOUNDS = {
+  minLat: 34.8,
+  maxLat: 35.45,
+  minLng: 128.7,
+  maxLng: 129.4,
+} as const;
+
+function isBusanCoordinates(lat: number, lng: number) {
+  return (
+    Number.isFinite(lat) &&
+    Number.isFinite(lng) &&
+    lat >= BUSAN_BOUNDS.minLat &&
+    lat <= BUSAN_BOUNDS.maxLat &&
+    lng >= BUSAN_BOUNDS.minLng &&
+    lng <= BUSAN_BOUNDS.maxLng
+  );
+}
+
+function extractNearbyLandmark(message: string) {
+  const compact = message.replace(/\s+/g, ' ').trim();
+  const match = compact.match(/^(.+?)\s*(?:근처|주변|인근)(?:\s|$)/);
+  if (!match?.[1]) return '';
+
+  let landmark = match[1]
+    .replace(/^(?:부산(?:광역시|시)?\s*)?/u, '')
+    .replace(/^(?:내|현재\s*위치)\s*$/u, '')
+    .trim();
+
+  if (!landmark || /^(?:내|현재\s*위치)$/u.test(landmark)) return '';
+
+  if (!/^부산/u.test(match[1].trim())) {
+    landmark = `부산 ${landmark}`;
+  } else {
+    landmark = match[1].trim();
+  }
+
+  return landmark;
+}
+
+async function waitForKakaoServices(timeoutMs = 2500) {
+  const started = Date.now();
+
+  while (Date.now() - started < timeoutMs) {
+    const services = window.kakao?.maps?.services;
+    if (services?.Places && services?.Status) return services;
+    await new Promise((resolve) => window.setTimeout(resolve, 80));
+  }
+
+  return null;
+}
+
+async function resolveNearbyLandmark(message: string) {
+  const query = extractNearbyLandmark(message);
+  if (!query) return null;
+
+  const services = await waitForKakaoServices();
+  if (!services) return null;
+
+  return await new Promise<{ name: string; lat: number; lng: number } | null>((resolve) => {
+    const placesService = new services.Places();
+
+    placesService.keywordSearch(
+      query,
+      (result: any[], status: string) => {
+        if (status !== services.Status.OK || !Array.isArray(result)) {
+          resolve(null);
+          return;
+        }
+
+        for (const item of result) {
+          const lat = Number(item?.y);
+          const lng = Number(item?.x);
+
+          if (!isBusanCoordinates(lat, lng)) continue;
+
+          resolve({
+            name: String(item?.place_name || query).trim() || query,
+            lat,
+            lng,
+          });
+          return;
+        }
+
+        resolve(null);
+      },
+      { size: 10 },
+    );
+  });
+}
+
 function compactPlaceStatus(place: AiPlaceReference) {
   const parts: string[] = [];
   const available = place.parking?.available;
@@ -165,6 +255,8 @@ export default function PlugParkAiChat({
     setSending(true);
 
     try {
+      const targetLocation = await resolveNearbyLandmark(message);
+
       const response = await fetch(`${bridgeUrl}/api/chat`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
@@ -175,6 +267,9 @@ export default function PlugParkAiChat({
             userLat: userLocation?.lat ?? null,
             userLng: userLocation?.lng ?? null,
             radiusKm,
+            targetLat: targetLocation?.lat ?? null,
+            targetLng: targetLocation?.lng ?? null,
+            targetName: targetLocation?.name ?? null,
           },
         }),
       });
