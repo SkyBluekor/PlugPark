@@ -10,6 +10,41 @@ export type LocationIntent = {
   source: LocationIntentSource;
 };
 
+
+export type LocationKind =
+  | 'administrative'
+  | 'address'
+  | 'poi'
+  | 'current-location'
+  | 'unknown';
+
+export function classifyLocationText(value: string | null | undefined): LocationKind {
+  const text = String(value || '').replace(/\s+/g, ' ').trim();
+  if (!text) return 'unknown';
+
+  if (/^(?:내|현재\s*위치|여기)$/u.test(text)) {
+    return 'current-location';
+  }
+
+  const addressLike =
+    /\d/.test(text) &&
+    (
+      /(?:대로|로|길|번길|동|가|읍|면|리)\s*\d/u.test(text) ||
+      /\d+\s*-\s*\d+/u.test(text)
+    );
+
+  if (addressLike) return 'address';
+
+  const tokens = text.split(/\s+/).filter(Boolean);
+  const last = tokens[tokens.length - 1] || '';
+
+  if (/^[가-힣0-9]+(?:동|읍|면|리|구|군|시)$/u.test(last)) {
+    return 'administrative';
+  }
+
+  return 'poi';
+}
+
 function compactText(value: string) {
   return String(value || '')
     .replace(/[\r\n\t]+/g, ' ')
