@@ -110,6 +110,26 @@ assert(
   launcher.includes("REQUIRED_BRIDGE_API_VERSION = 'MCP_WEB_S2_V1'"),
   '통합 런처가 실행 중인 Bridge 버전을 검증하지 않습니다.',
 );
+assert(
+  launcher.includes("node_modules', 'tsx', 'dist', 'cli.mjs"),
+  '통합 런처가 PlugPark-MCP의 local tsx CLI를 사용하지 않습니다.',
+);
+assert(
+  !launcher.includes("executable('npx')"),
+  'Windows에서 EINVAL을 유발할 수 있는 npx.cmd spawn이 남아 있습니다.',
+);
+assert(
+  bridge.includes("const TSX_CLI = resolve(process.cwd(), 'node_modules', 'tsx', 'dist', 'cli.mjs')"),
+  'Bridge가 local tsx CLI를 사용하지 않습니다.',
+);
+assert(
+  bridge.includes("command: process.execPath"),
+  'MCP stdio transport가 Node 실행 파일을 사용하지 않습니다.',
+);
+assert(
+  !bridge.includes("process.platform === 'win32' ? 'npx.cmd' : 'npx'"),
+  'Bridge에 Windows npx.cmd spawn이 남아 있습니다.',
+);
 
 console.log('MCP-WEB-S2 STATIC VERIFY PASS');
 console.log({
@@ -121,4 +141,5 @@ console.log({
   compactPlaceCards: 'PASS',
   autoBridgeUpdate: 'PASS',
   bridgeVersionGuard: 'PASS',
+  windowsSpawnCompatibility: 'PASS',
 });
