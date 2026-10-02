@@ -1,4 +1,5 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
+import type { PlugParkPlace } from '../types';
 
 type UserLocation = { lat: number; lng: number } | null;
 type RadiusKm = 1 | 3 | 5 | null;
@@ -7,12 +8,31 @@ type BridgeStatus = 'idle' | 'checking' | 'online' | 'offline';
 type Props = {
   userLocation: UserLocation;
   radiusKm: RadiusKm;
+  places: PlugParkPlace[];
+  onFocusMap: (place: PlugParkPlace) => void;
+  onOpenDetail: (place: PlugParkPlace) => void;
+};
+
+type AiPlaceReference = {
+  id: string;
+  name: string;
+  address?: string | null;
+  parking?: {
+    capacity?: number | null;
+    available?: number | null;
+  };
+  charging?: {
+    totalAvailable?: number | null;
+    fastAvailable?: number | null;
+    slowAvailable?: number | null;
+  };
 };
 
 type ChatMessage = {
   id: string;
   role: 'user' | 'assistant';
   text: string;
+  places?: AiPlaceReference[];
 };
 
 type HealthResponse = {
@@ -32,7 +52,38 @@ function createSessionId() {
   return `plugpark-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
-export default function PlugParkAiChat({ userLocation, radiusKm }: Props) {
+function compactPlaceStatus(place: AiPlaceReference) {
+  const parts: string[] = [];
+  const available = place.parking?.available;
+  const capacity = place.parking?.capacity;
+  const fast = place.charging?.fastAvailable;
+  const slow = place.charging?.slowAvailable;
+  const total = place.charging?.totalAvailable;
+
+  if (available != null) {
+    parts.push(`주차 ${available}${capacity != null ? ` / ${capacity}면` : '면'}`);
+  } else if (capacity != null) {
+    parts.push(`주차 총 ${capacity}면`);
+  }
+
+  if (fast != null && fast > 0) {
+    parts.push(`급속 ${fast}기 가능`);
+  } else if (slow != null && slow > 0) {
+    parts.push(`완속 ${slow}기 가능`);
+  } else if (total != null) {
+    parts.push(`충전 ${total}기 가능`);
+  }
+
+  return parts.join(' · ');
+}
+
+export default function PlugParkAiChat({
+  userLocation,
+  radiusKm,
+  places,
+  onFocusMap,
+  onOpenDetail,
+}: Props) {
   const bridgeUrl = useMemo(
     () => import.meta.env.VITE_LOCAL_AI_BRIDGE_URL?.trim() || DEFAULT_BRIDGE_URL,
     [],
@@ -128,7 +179,11 @@ export default function PlugParkAiChat({ userLocation, radiusKm }: Props) {
         }),
       });
 
-      const data = (await response.json()) as { answer?: string; error?: string };
+      const data = (await response.json()) as {
+        answer?: string;
+        places?: AiPlaceReference[];
+        error?: string;
+      };
 
       if (!response.ok) {
         throw new Error(data.error || 'AI 응답을 가져오지 못했습니다.');
@@ -140,6 +195,7 @@ export default function PlugParkAiChat({ userLocation, radiusKm }: Props) {
           id: createSessionId(),
           role: 'assistant',
           text: data.answer?.trim() || '응답이 없습니다.',
+          places: Array.isArray(data.places) ? data.places : [],
         },
       ]);
     } catch {
@@ -218,7 +274,54 @@ export default function PlugParkAiChat({ userLocation, radiusKm }: Props) {
             {messages.map((message) => (
               <div className={`ai-chat-message ${message.role}`} key={message.id}>
                 <span>{message.role === 'user' ? '나' : 'AI'}</span>
-                <p>{message.text}</p>
+                <div className="ai-chat-message-content">
+                  <p>{message.text}</p>
+
+                  {message.role === 'assistant' && message.places && message.places.length > 0 && (
+                    <div className="ai-place-cards" aria-label="AI 관련 장소">
+                      {message.places.map((placeRef) => {
+                        const currentPlace = places.find((place) => place.id === placeRef.id);
+                        const statusText = compactPlaceStatus(placeRef);
+
+                        return (
+                          <article className={`ai-place-card ${currentPlace ? '' : 'unavailable'}`} key={placeRef.id}>
+                            <div className="ai-place-card-copy">
+                              <strong>{placeRef.name}</strong>
+                              {statusText && <span>{statusText}</span>}
+                              {!currentPlace && (
+                                <small>AI 데이터에는 있지만 현재 화면 데이터에서는 찾을 수 없습니다.</small>
+                              )}
+                            </div>
+                            <div className="ai-place-card-actions">
+                              <button
+                                type="button"
+                                disabled={!currentPlace}
+                                onClick={() => {
+                                  if (!currentPlace) return;
+                                  setOpen(false);
+                                  onFocusMap(currentPlace);
+                                }}
+                              >
+                                지도
+                              </button>
+                              <button
+                                type="button"
+                                disabled={!currentPlace}
+                                onClick={() => {
+                                  if (!currentPlace) return;
+                                  setOpen(false);
+                                  onOpenDetail(currentPlace);
+                                }}
+                              >
+                                상세
+                              </button>
+                            </div>
+                          </article>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
               </div>
             ))}
 
