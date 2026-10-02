@@ -46,7 +46,8 @@
     "preflight:v080-r1": "node scripts/preflight-v080-r1.mjs",
     "release:v080-r1": "node scripts/release-v080-r1.mjs",
     "verify:release:v080-r1": "node scripts/verify-release-v080-r1.mjs",
-    "verify:pwa-s1": "node scripts/verify-pwa-s1.mjs"
+    "verify:pwa-s1": "node scripts/verify-pwa-s1.mjs",
+    "verify:mcp-web-s1": "node scripts/verify-mcp-web-s1.mjs"
   },
   "dependencies": {
     "react": "^19.1.1",
