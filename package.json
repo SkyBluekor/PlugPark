@@ -51,7 +51,8 @@
     "ai:start": "node scripts/start-ai-stack.mjs",
     "verify:mcp-web-s2": "node scripts/verify-mcp-web-s2.mjs",
     "verify:mcp-web-s21": "node scripts/verify-mcp-web-s21.mjs",
-    "verify:mcp-web-s21b": "node scripts/verify-mcp-web-s21b.mjs"
+    "verify:mcp-web-s21b": "node scripts/verify-mcp-web-s21b.mjs",
+    "verify:mcp-web-s21c": "node scripts/verify-mcp-web-s21c.mjs"
   },
   "dependencies": {
     "react": "^19.1.1",
