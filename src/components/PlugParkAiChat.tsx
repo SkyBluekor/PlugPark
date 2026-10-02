@@ -217,13 +217,20 @@ export default function PlugParkAiChat({
         locationResult &&
         !locationResult.ok,
       );
+      const unresolvedNearbyLocation =
+        effectiveIntent.isNearbyRequest &&
+        effectiveIntent.source === 'none' &&
+        !nearbyLandmark;
 
-      if (resolveFailed) {
+      if (resolveFailed || unresolvedNearbyLocation) {
         setPendingNearby({
           originalRequest: effectiveMessage,
           failedLandmark: nearbyLandmark,
         });
-      } else if (nearbyLandmark) {
+      } else if (
+        nearbyLandmark ||
+        effectiveIntent.source === 'current-location'
+      ) {
         setPendingNearby(null);
       }
 
