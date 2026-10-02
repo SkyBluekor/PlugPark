@@ -58,6 +58,43 @@ npm run verify:pwa-s1
 ```
 
 
+## 로컬 AI 채팅 (MCP-WEB-S1)
+
+PlugPark 웹에는 선택형 로컬 AI 채팅 패널이 포함됩니다. AI가 꺼져 있어도 검색·지도·추천 등 기존 기능은 그대로 동작합니다.
+
+구조:
+
+```text
+PlugPark React
+  → http://127.0.0.1:3000
+  → Local AI Bridge
+  → Ollama / qwen3.5:9b
+  → MCP Client
+  → search_places / get_place_detail / recommend_places / compare_places
+```
+
+기존 `D:\Projects\PlugPark-MCP`에 Bridge를 설치하려면 PlugPark에서 다음을 실행합니다.
+
+```powershell
+.\tools\apply_mcp_web_s1.ps1
+```
+
+그 다음 별도 PowerShell에서:
+
+```powershell
+cd D:\Projects\PlugPark-MCP
+npx tsc --noEmit
+npx tsx src\bridge.ts
+```
+
+기본 모델은 `qwen3.5:9b`이며 `OLLAMA_MODEL` 환경변수로 교체할 수 있습니다. Bridge 기본 주소는 `http://127.0.0.1:3000`이고, 프런트의 `VITE_LOCAL_AI_BRIDGE_URL`로 변경할 수 있습니다. 웹에서 현재 위치를 허용한 경우 “내 근처” 요청에 위치 컨텍스트를 전달합니다.
+
+정적 검증:
+
+```bash
+npm run verify:mcp-web-s1
+```
+
 ## 데이터 처리 구조
 
 사용자 화면의 `/api/places` 요청은 먼저 D1 읽기 모델을 조회합니다. 저장된 실시간 상태가 오래된 경우에만 같은 사용자 요청을 계기로 백그라운드 동기화를 예약합니다. 사용자가 페이지를 사용하지 않는 동안에는 주기 수집을 수행하지 않습니다. 추천 계산은 프런트엔드에서 수행합니다.
