@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import KakaoMap from './components/KakaoMap';
 import PwaActions from './components/PwaActions';
+import LocationIcon from './components/LocationIcon';
 import RecommendationPanel from './components/RecommendationPanel';
 import { mockPlaces } from './mock';
 import { chargerAvailabilityText, chargerSelectionText, hasRestrictedChargerAccess } from './presentation/chargerText';
@@ -302,7 +303,10 @@ export default function App() {
           <span className="brand-mark">P</span><span>PlugPark</span>
         </a>
         <div className="top-actions">
-          <button className={`top-location ${userLocation ? 'active' : ''}`} onClick={locate}>◎ {userLocation ? '내 위치 사용 중' : '내 위치'}</button>
+          <button className={`top-location ${userLocation ? 'active' : ''}`} onClick={locate} aria-label={userLocation ? '내 위치 다시 찾기' : '내 위치 찾기'}>
+            <LocationIcon className="location-icon" />
+            <span className="top-location-label">{userLocation ? '내 위치 사용 중' : '내 위치'}</span>
+          </button>
           <PwaActions />
           {runtimeMode === 'local-fixture' && <span className="local-fixture-badge">LOCAL FIXTURE</span>}
           <div className={`live-badge ${runtimeMode === 'live' ? 'on' : runtimeMode === 'local-fixture' ? 'local' : ''}`}>
@@ -355,7 +359,7 @@ export default function App() {
           <div className="search-tools">
             <label className="search-box"><span>⌕</span><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="주차장명·주소 검색" /></label>
             <button className={`location-button ${userLocation ? 'active' : ''}`} onClick={locate}>
-              <span>◎</span>{userLocation ? '내 위치 다시 찾기' : '내 위치 기준'}
+              <LocationIcon className="location-icon" />{userLocation ? '내 위치 다시 찾기' : '내 위치 기준'}
             </button>
             <select value={sort} onChange={(e) => setSort(e.target.value as SortKey)} aria-label="정렬">
               <option value="charger">충전 가능순</option>
