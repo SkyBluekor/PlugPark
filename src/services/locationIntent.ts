@@ -35,10 +35,19 @@ export function classifyLocationText(value: string | null | undefined): Location
 
   if (addressLike) return 'address';
 
-  const tokens = text.split(/\s+/).filter(Boolean);
-  const last = tokens[tokens.length - 1] || '';
+  const tokens = text
+    .split(/\s+/)
+    .filter(Boolean)
+    .filter((token) => !/^(?:부산|부산시|부산광역시)$/u.test(token));
 
-  if (/^[가-힣0-9]+(?:동|읍|면|리|구|군|시)$/u.test(last)) {
+  const administrativeTokens = tokens.filter((token) =>
+    /^[가-힣0-9]+(?:동|읍|면|리|구|군|시)$/u.test(token),
+  );
+
+  if (
+    tokens.length > 0 &&
+    administrativeTokens.length === tokens.length
+  ) {
     return 'administrative';
   }
 
