@@ -1,5 +1,5 @@
 import { spawn, spawnSync } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 
@@ -116,6 +116,27 @@ function killTree(child) {
   }
 }
 
+function syncBridgeTemplate() {
+  const source = path.resolve(root, 'tools', 'mcp-web-s1', 'bridge.ts');
+  const target = path.resolve(mcpDir, 'src', 'bridge.ts');
+
+  if (!existsSync(source)) {
+    throw new Error(`Bridge template을 찾지 못했습니다: ${source}`);
+  }
+
+  const sourceText = readFileSync(source, 'utf8');
+  const targetText = existsSync(target) ? readFileSync(target, 'utf8') : '';
+
+  if (sourceText === targetText) {
+    console.log('AI Bridge code    PASS  current');
+    return target;
+  }
+
+  writeFileSync(target, sourceText, 'utf8');
+  console.log('AI Bridge code    UPDATE');
+  return target;
+}
+
 function openBrowser(url) {
   if (noBrowser) return;
 
@@ -175,7 +196,6 @@ async function main() {
   console.log(`Bridge            ${bridgeUrl}`);
   console.log('');
 
-  const bridgePath = path.join(mcpDir, 'src', 'bridge.ts');
   const serverPath = path.join(mcpDir, 'src', 'server.ts');
 
   if (!existsSync(serverPath)) {
@@ -185,12 +205,7 @@ async function main() {
     );
   }
 
-  if (!existsSync(bridgePath)) {
-    throw new Error(
-      `AI Bridge가 아직 적용되지 않았습니다: ${bridgePath}\n` +
-      'PlugPark에서 먼저 .\\tools\\apply_mcp_web_s1.ps1 을 한 번 실행해주세요.',
-    );
-  }
+  syncBridgeTemplate();
 
   assertCommand('ollama');
 
