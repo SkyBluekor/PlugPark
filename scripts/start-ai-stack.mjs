@@ -10,6 +10,7 @@ const model = process.env.OLLAMA_MODEL?.trim() || 'qwen3.5:9b';
 const bridgeUrl = process.env.VITE_LOCAL_AI_BRIDGE_URL?.trim() || 'http://127.0.0.1:3000';
 const webUrl = process.env.PLUGPARK_WEB_URL?.trim() || 'https://plugpark.dtdt4865.workers.dev';
 const noBrowser = process.env.PLUGPARK_NO_BROWSER === '1';
+const REQUIRED_BRIDGE_API_VERSION = 'MCP_WEB_S2_V1';
 
 const children = new Set();
 let shuttingDown = false;
@@ -245,7 +246,10 @@ async function main() {
 
   const existingBridge = await getBridgeHealth();
 
-  if (existingBridge.ok) {
+  if (
+    existingBridge.ok &&
+    existingBridge.body?.apiVersion === REQUIRED_BRIDGE_API_VERSION
+  ) {
     console.log('AI Bridge         PASS  already running');
     console.log('');
     console.log('PlugPark AI is ready.');
@@ -259,6 +263,16 @@ async function main() {
     }
 
     return;
+  }
+
+  if (
+    existingBridge.ok &&
+    existingBridge.body?.apiVersion !== REQUIRED_BRIDGE_API_VERSION
+  ) {
+    throw new Error(
+      '예전 AI Bridge가 아직 3000번 포트에서 실행 중입니다. ' +
+      '기존 PlugPark AI 창을 한 번 닫고 START_PLUGPARK_AI.cmd를 다시 실행해주세요.',
+    );
   }
 
   if (existingBridge.reachable && existingBridge.body?.reason === 'model_not_installed') {
