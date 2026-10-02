@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import KakaoMap from './components/KakaoMap';
 import RecommendationPanel from './components/RecommendationPanel';
 import { mockPlaces } from './mock';
@@ -106,6 +106,28 @@ export default function App() {
     setNotice(message);
     setNoticeTone(tone);
   }
+
+  const applyCoordinateCorrection = useCallback(
+    (placeId: string, coords: { lat: number; lng: number }) => {
+      const patchPlace = (place: PlugParkPlace) => {
+        if (place.id !== placeId) return place;
+        if (
+          place.lat != null &&
+          place.lng != null &&
+          Math.abs(place.lat - coords.lat) < 0.000001 &&
+          Math.abs(place.lng - coords.lng) < 0.000001
+        ) {
+          return place;
+        }
+        return { ...place, lat: coords.lat, lng: coords.lng };
+      };
+
+      setPlaces((current) => current.map(patchPlace));
+      setSelected((current) => (current ? patchPlace(current) : current));
+      setMapFocus((current) => (current ? patchPlace(current) : current));
+    },
+    [],
+  );
 
   async function load() {
     setLoading(true);
@@ -489,6 +511,7 @@ export default function App() {
               userLocation={userLocation}
               onSelect={openPlaceDetail}
               onLocate={locate}
+              onCoordinateCorrection={applyCoordinateCorrection}
             />
           </div>
         </section>
