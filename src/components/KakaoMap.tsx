@@ -7,6 +7,7 @@ type Props = {
   userLocation: { lat: number; lng: number } | null;
   onSelect: (place: PlugParkPlace) => void;
   onLocate: () => void;
+  onCoordinateCorrection: (placeId: string, coords: { lat: number; lng: number }) => void;
 };
 
 declare global {
@@ -42,6 +43,17 @@ function firstBusanCoordinates(result: any[]) {
     if (isBusanCoordinates(lat, lng)) return { lat, lng };
   }
   return null;
+}
+
+function haversineMeters(aLat: number, aLng: number, bLat: number, bLng: number) {
+  const radius = 6371000;
+  const rad = (value: number) => (value * Math.PI) / 180;
+  const dLat = rad(bLat - aLat);
+  const dLng = rad(bLng - aLng);
+  const h =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(rad(aLat)) * Math.cos(rad(bLat)) * Math.sin(dLng / 2) ** 2;
+  return 2 * radius * Math.asin(Math.sqrt(h));
 }
 
 function loadKakaoMapSdk(appKey: string) {
@@ -137,13 +149,21 @@ function geocodePlace(kakao: any, place: PlugParkPlace): Promise<{ lat: number; 
   });
 }
 
-export default function KakaoMap({ places, focusedPlace, userLocation, onSelect, onLocate }: Props) {
+export default function KakaoMap({
+  places,
+  focusedPlace,
+  userLocation,
+  onSelect,
+  onLocate,
+  onCoordinateCorrection,
+}: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<any>(null);
   const kakaoRef = useRef<any>(null);
   const overlaysRef = useRef<any[]>([]);
   const userOverlayRef = useRef<any>(null);
   const resolvedPositionsRef = useRef<Map<string, { lat: number; lng: number }>>(new Map());
+  const verifiedPositionKeysRef = useRef<Set<string>>(new Set());
   const [resolvedVersion, setResolvedVersion] = useState(0);
   const [renderedMarkerCount, setRenderedMarkerCount] = useState(0);
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
@@ -185,19 +205,24 @@ export default function KakaoMap({ places, focusedPlace, userLocation, onSelect,
     let cancelled = false;
     const kakao = kakaoRef.current;
 
-    const unresolved = places
-      .filter((place) => !hasValidCoordinates(place) && !resolvedPositionsRef.current.has(place.id))
-      .slice(0, 60);
+    // Public parking feeds can contain coordinates that are inside Busan but still
+    // point to the wrong facility. Validate visible places against their address.
+    const candidates = places
+      .filter((place) => {
+        const key = `${place.id}|${place.address || ''}`;
+        return !verifiedPositionKeysRef.current.has(key);
+      })
+      .slice(0, 150);
 
-    if (!unresolved.length) return;
+    if (!candidates.length) return;
 
     const run = async () => {
-      // Kakao local 호출을 한꺼번에 몰아치지 않도록 4개씩 처리합니다.
-      for (let i = 0; i < unresolved.length; i += 4) {
-        const batch = unresolved.slice(i, i + 4);
+      // Kakao local calls are throttled in small batches.
+      for (let i = 0; i < candidates.length; i += 4) {
+        const batch = candidates.slice(i, i + 4);
         const results = await Promise.all(
           batch.map(async (place) => ({
-            id: place.id,
+            place,
             coords: await geocodePlace(kakao, place),
           })),
         );
@@ -205,15 +230,28 @@ export default function KakaoMap({ places, focusedPlace, userLocation, onSelect,
         if (cancelled) return;
 
         let changed = false;
-        for (const result of results) {
-          if (result.coords) {
-            resolvedPositionsRef.current.set(result.id, result.coords);
+        for (const { place, coords } of results) {
+          const key = `${place.id}|${place.address || ''}`;
+          verifiedPositionKeysRef.current.add(key);
+
+          if (!coords) continue;
+
+          const sourceValid = hasValidCoordinates(place);
+          const sourceDistance = sourceValid
+            ? haversineMeters(place.lat as number, place.lng as number, coords.lat, coords.lng)
+            : Number.POSITIVE_INFINITY;
+
+          // Small offsets are normal for large parking lots/buildings. A large
+          // disagreement means the address-derived Kakao position is safer.
+          if (!sourceValid || sourceDistance > 250) {
+            resolvedPositionsRef.current.set(place.id, coords);
+            onCoordinateCorrection(place.id, coords);
             changed = true;
           }
         }
 
         if (changed) setResolvedVersion((version) => version + 1);
-        await new Promise((resolve) => window.setTimeout(resolve, 60));
+        await new Promise((resolve) => window.setTimeout(resolve, 80));
       }
     };
 
@@ -222,7 +260,7 @@ export default function KakaoMap({ places, focusedPlace, userLocation, onSelect,
     return () => {
       cancelled = true;
     };
-  }, [places, status]);
+  }, [places, status, onCoordinateCorrection]);
 
   useEffect(() => {
     if (status !== 'ready' || !mapRef.current || !kakaoRef.current) return;
@@ -241,9 +279,11 @@ export default function KakaoMap({ places, focusedPlace, userLocation, onSelect,
     let markerCount = 0;
 
     places.slice(0, 150).forEach((place) => {
-      const coords = hasValidCoordinates(place)
-        ? { lat: place.lat as number, lng: place.lng as number }
-        : resolvedPositionsRef.current.get(place.id);
+      const coords =
+        resolvedPositionsRef.current.get(place.id) ??
+        (hasValidCoordinates(place)
+          ? { lat: place.lat as number, lng: place.lng as number }
+          : undefined);
 
       if (!coords) return;
 
@@ -288,9 +328,11 @@ export default function KakaoMap({ places, focusedPlace, userLocation, onSelect,
 
   useEffect(() => {
     if (!focusedPlace || status !== 'ready' || !mapRef.current || !kakaoRef.current) return;
-    const coords = hasValidCoordinates(focusedPlace)
-      ? { lat: focusedPlace.lat as number, lng: focusedPlace.lng as number }
-      : resolvedPositionsRef.current.get(focusedPlace.id);
+    const coords =
+      resolvedPositionsRef.current.get(focusedPlace.id) ??
+      (hasValidCoordinates(focusedPlace)
+        ? { lat: focusedPlace.lat as number, lng: focusedPlace.lng as number }
+        : undefined);
     if (!coords) return;
     const position = new kakaoRef.current.maps.LatLng(coords.lat, coords.lng);
     mapRef.current.panTo(position);
