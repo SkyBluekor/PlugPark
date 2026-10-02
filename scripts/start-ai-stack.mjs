@@ -10,7 +10,7 @@ const model = process.env.OLLAMA_MODEL?.trim() || 'qwen3.5:9b';
 const bridgeUrl = process.env.VITE_LOCAL_AI_BRIDGE_URL?.trim() || 'http://127.0.0.1:3000';
 const webUrl = process.env.PLUGPARK_WEB_URL?.trim() || 'https://plugpark.dtdt4865.workers.dev';
 const noBrowser = process.env.PLUGPARK_NO_BROWSER === '1';
-const REQUIRED_BRIDGE_API_VERSION = 'MCP_WEB_S2_V2';
+const REQUIRED_BRIDGE_API_VERSION = 'MCP_WEB_S2_V3';
 
 const children = new Set();
 let shuttingDown = false;
