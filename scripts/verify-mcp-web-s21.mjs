@@ -88,15 +88,15 @@ assert(
 );
 
 assert(
-  bridge.includes("const BRIDGE_API_VERSION = 'MCP_WEB_S21B_V1'"),
+  bridge.includes("const BRIDGE_API_VERSION = 'MCP_WEB_S21C_V1'"),
   'S2.1 Bridge API 버전이 아닙니다.',
 );
 assert(
-  bridge.includes("'[LOC] FAIL'"),
+  bridge.includes("'[LOC-RESOLVE] FAIL'"),
   '랜드마크 실패 진단 로그가 없습니다.',
 );
 assert(
-  bridge.includes("'[LOC] OK'"),
+  bridge.includes("'[LOC-RESOLVE] OK'"),
   '랜드마크 성공 진단 로그가 없습니다.',
 );
 assert(
@@ -104,7 +104,7 @@ assert(
   '랜드마크 실패 시 일반 Tool fallback 차단이 없습니다.',
 );
 assert(
-  launcher.includes("REQUIRED_BRIDGE_API_VERSION = 'MCP_WEB_S21B_V1'"),
+  launcher.includes("REQUIRED_BRIDGE_API_VERSION = 'MCP_WEB_S21C_V1'"),
   '런처가 S2.1 Bridge 버전을 요구하지 않습니다.',
 );
 
