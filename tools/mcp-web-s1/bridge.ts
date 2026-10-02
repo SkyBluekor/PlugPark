@@ -39,6 +39,9 @@ type WebContext = {
   userLat?: number | null;
   userLng?: number | null;
   radiusKm?: number | null;
+  targetLat?: number | null;
+  targetLng?: number | null;
+  targetName?: string | null;
 };
 
 type SessionMessages = any[];
@@ -209,6 +212,9 @@ function normalizeContext(value: unknown): WebContext {
     userLat: numberOrNull(source.userLat),
     userLng: numberOrNull(source.userLng),
     radiusKm: numberOrNull(source.radiusKm),
+    targetLat: numberOrNull(source.targetLat),
+    targetLng: numberOrNull(source.targetLng),
+    targetName: typeof source.targetName === 'string' ? source.targetName.trim() : null,
   };
 }
 
@@ -229,6 +235,101 @@ function extractLandmarkSearchTerm(userText: string, fallback: unknown) {
   }
 
   return typeof fallback === 'string' ? fallback.trim() : '';
+}
+
+function requestedPlaceCount(userText: string) {
+  const match = userText.match(/([1-5])\s*(?:곳|개)/);
+  return match ? Number(match[1]) : 3;
+}
+
+function requestedExplicitRadiusKm(userText: string) {
+  const match = userText.match(/(?:반경\s*)?(\d+(?:\.\d+)?)\s*km/i);
+  if (!match) return null;
+  const value = Number(match[1]);
+  return Number.isFinite(value) && value > 0 ? value : null;
+}
+
+function chargerPreferenceFromText(userText: string) {
+  if (userText.includes('급속')) return 'fast';
+  if (userText.includes('완속')) return 'slow';
+  return 'any';
+}
+
+function recommendationModeFromText(userText: string) {
+  if (/주차\s*(?:를\s*)?(?:우선|중심)/.test(userText)) return 'parking';
+  return 'charging';
+}
+
+function isNearbyLandmarkRequest(userText: string, context: WebContext) {
+  return (
+    context.targetLat != null &&
+    context.targetLng != null &&
+    /근처|주변|인근/.test(userText)
+  );
+}
+
+async function progressiveLandmarkRecommendation(
+  userText: string,
+  context: WebContext,
+) {
+  if (!isNearbyLandmarkRequest(userText, context)) return null;
+
+  const requestedCount = requestedPlaceCount(userText);
+  const explicitRadius = requestedExplicitRadiusKm(userText);
+  const radii = explicitRadius != null ? [explicitRadius] : [1, 3, 5, 10, 20];
+  const chargerPreference = chargerPreferenceFromText(userText);
+  const mode = recommendationModeFromText(userText);
+
+  let lastToolText = '';
+  let lastParsed: Record<string, any> | null = null;
+  let radiusUsedKm = radii[0];
+
+  for (const radiusKm of radii) {
+    const result = await client.callTool({
+      name: 'recommend_places',
+      arguments: {
+        userLat: context.targetLat,
+        userLng: context.targetLng,
+        radiusKm,
+        mode,
+        chargerPreference,
+        limit: requestedCount,
+      },
+    });
+
+    const toolText = result.content
+      .filter((item: any) => item.type === 'text')
+      .map((item: any) => item.text)
+      .join('\n');
+
+    let parsed: Record<string, any> | null = null;
+    try {
+      parsed = JSON.parse(toolText) as Record<string, any>;
+    } catch {
+      parsed = null;
+    }
+
+    lastToolText = toolText;
+    lastParsed = parsed;
+    radiusUsedKm = radiusKm;
+
+    const count = Number(parsed?.count ?? 0);
+    console.log(
+      `[MCP] recommend_places progressive radius=${radiusKm}km count=${count} target=${requestedCount}`,
+    );
+
+    if (count >= requestedCount) break;
+  }
+
+  return {
+    toolText: lastToolText,
+    parsed: lastParsed,
+    radiusUsedKm,
+    requestedCount,
+    targetName: context.targetName || '기준 위치',
+    chargerPreference,
+    mode,
+  };
 }
 
 function normalizeToolArguments(
@@ -272,8 +373,16 @@ function normalizeToolArguments(
       args.mode = 'charging';
     }
 
-    const nearbyRequest = /내\s*(?:근처|주변)|가까운|근처|주변|추천/.test(compact);
-    if (nearbyRequest && context.userLat != null && context.userLng != null) {
+    const nearbyRequest = /내\s*(?:근처|주변)|가까운|근처|주변|인근|추천/.test(compact);
+
+    if (
+      /근처|주변|인근/.test(compact) &&
+      context.targetLat != null &&
+      context.targetLng != null
+    ) {
+      args.userLat = context.targetLat;
+      args.userLng = context.targetLng;
+    } else if (nearbyRequest && context.userLat != null && context.userLng != null) {
       if (args.userLat == null) args.userLat = context.userLat;
       if (args.userLng == null) args.userLng = context.userLng;
       if (args.radiusKm == null && context.radiusKm != null) args.radiusKm = context.radiusKm;
@@ -298,10 +407,24 @@ function normalizeToolArguments(
 }
 
 function contextNote(context: WebContext) {
-  if (context.userLat == null || context.userLng == null) return '';
+  const notes: string[] = [];
 
-  const radiusText = context.radiusKm != null ? `, 현재 선택 반경 ${context.radiusKm}km` : '';
-  return `\n\n[PlugPark 웹 컨텍스트: 현재 위치 사용 가능${radiusText}. 위치 기반 요청이면 위도 ${context.userLat}, 경도 ${context.userLng}를 사용한다.]`;
+  if (context.userLat != null && context.userLng != null) {
+    const radiusText = context.radiusKm != null ? `, 현재 선택 반경 ${context.radiusKm}km` : '';
+    notes.push(
+      `현재 위치 사용 가능${radiusText}. "내 근처" 요청이면 위도 ${context.userLat}, 경도 ${context.userLng}를 사용한다.`,
+    );
+  }
+
+  if (context.targetLat != null && context.targetLng != null) {
+    notes.push(
+      `사용자가 말한 기준 장소는 "${context.targetName || '기준 위치'}"이며 위도 ${context.targetLat}, 경도 ${context.targetLng}로 해석했다.`,
+    );
+  }
+
+  return notes.length > 0
+    ? `\n\n[PlugPark 웹 컨텍스트: ${notes.join(' ')}]`
+    : '';
 }
 
 function asRecord(value: unknown): Record<string, any> | null {
@@ -417,6 +540,30 @@ async function runAgent(
     role: 'user',
     content: augmentedUserText,
   });
+
+  const progressive = await progressiveLandmarkRecommendation(userText, context);
+
+  if (progressive) {
+    const relatedPlaces = new Map<string, AiPlaceReference>();
+    collectToolPlaces('recommend_places', progressive.toolText, relatedPlaces);
+
+    messages.push({
+      role: 'system',
+      content:
+        `[PlugPark 위치 기반 검색 결과] 기준 장소: ${progressive.targetName}, 최종 반경: ${progressive.radiusUsedKm}km, 요청 개수: ${progressive.requestedCount}.\n` +
+        `${progressive.toolText || '결과 없음'}`,
+    });
+
+    const answer = await finalizeWithoutTools(
+      messages,
+      '방금 제공된 PlugPark 위치 기반 결과만 사용하세요. 기준 장소에서 반경을 점차 넓혀 찾은 최종 결과입니다. 다른 장소명이나 지역을 새로 추측하지 마세요. 몇 km 반경에서 몇 곳을 찾았는지 짧게 밝히고, 실제 결과가 있으면 가까운 순서대로 설명하세요. 결과가 3곳 미만이면 실제 찾은 수만 그대로 말하세요.',
+    );
+
+    return {
+      answer,
+      places: [...relatedPlaces.values()],
+    };
+  }
 
   for (let step = 0; step < 5; step++) {
     const response = await ollama.chat({
