@@ -134,12 +134,15 @@ AI: 기준 장소 확인 필요
 → search_places fallback 금지
 ```
 
+S2.1-B에서는 `src/services/locationIntent.ts`가 자연어 위치 표현을 먼저 정규화합니다. 예를 들어 `내가 사는곳이 화명동인데 주변에 주차장 찾아줘`, `나는 화명동 사는데 근처 급속 충전소 있어?`는 모두 기준 위치 `화명동`으로 해석합니다. `내 근처`, `현재 위치 근처`는 장소명 검색으로 보내지 않고 브라우저 현재 위치를 사용하며, `우리 집 근처`처럼 실제 위치를 확정할 수 없는 표현은 Tool 호출 전에 추가 위치 입력을 요청합니다. Bridge에는 `[LOC-PARSE]` 진단 로그가 남습니다.
+
 정적 검증:
 
 ```bash
 npm run verify:mcp-web-s1
 npm run verify:mcp-web-s2
 npm run verify:mcp-web-s21
+npm run verify:mcp-web-s21b
 ```
 
 ## 데이터 처리 구조
