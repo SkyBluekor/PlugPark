@@ -108,11 +108,38 @@ MCP Tool 결과에서 장소 ID를 구조화해서 함께 반환합니다. Qwen�
 - MCP snapshot에는 있지만 현재 웹 데이터에 없는 ID는 이름으로 억지 매칭하지 않고 버튼을 비활성화합니다.
 - 지도/상세 버튼을 누르면 AI 패널을 닫아 지도와 상세 화면을 가리지 않습니다.
 
+### Location Resolver 안정화 (MCP-WEB-S2.1)
+
+랜드마크 주변 검색은 Qwen의 `search_places` 추측에 맡기지 않습니다.
+
+```text
+사용자 자연어
+  → 공용 Kakao SDK loader
+  → Location Resolver
+  → 기준 장소 좌표 확정
+  → nearby_places
+  → 1km → 3km → 5km → 10km → 20km
+  → 목표 개수를 찾으면 즉시 종료
+```
+
+`KakaoMap`과 AI 채팅이 같은 `src/services/kakaoSdk.ts`를 사용하므로, AI가 지도 컴포넌트가 우연히 SDK를 먼저 로드해주기를 기다리지 않습니다. Resolver 실패는 `SDK_UNAVAILABLE`, `NO_RESULTS`, `OUTSIDE_BUSAN`, `LOW_CONFIDENCE`로 구분하고 Bridge 터미널에 `[LOC] OK` / `[LOC] FAIL` 진단 로그를 남깁니다.
+
+위치 확인에 실패한 뒤 사용자가 장소명만 다시 입력해도 직전 주변검색 조건을 유지합니다.
+
+```text
+나: 폴리텍 북구 주변 급속 충전소 찾아줘
+AI: 기준 장소 확인 필요
+나: 부산 북구 폴리텍
+→ 원래 "주변 + 급속 + 3곳" 조건으로 다시 위치 해석
+→ search_places fallback 금지
+```
+
 정적 검증:
 
 ```bash
 npm run verify:mcp-web-s1
 npm run verify:mcp-web-s2
+npm run verify:mcp-web-s21
 ```
 
 ## 데이터 처리 구조
