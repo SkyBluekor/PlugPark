@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { PlugParkPlace } from '../types';
+import LocationIcon from './LocationIcon';
 
 type Props = {
   places: PlugParkPlace[];
@@ -502,8 +503,9 @@ export default function KakaoMap({
               <span>검색 조건이나 반경을 바꿔보세요.</span>
             </div>
           )}
-          <button className="map-location-button" type="button" onClick={onLocate}>
-            ◎ 내 위치
+          <button className="map-location-button" type="button" onClick={onLocate} aria-label="내 위치 찾기">
+            <LocationIcon className="location-icon" />
+            <span>내 위치</span>
           </button>
           <div className="map-caption">
             <span>P</span> 공영주차장
