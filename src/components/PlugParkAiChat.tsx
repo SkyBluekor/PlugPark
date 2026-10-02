@@ -17,6 +17,8 @@ type AiPlaceReference = {
   id: string;
   name: string;
   address?: string | null;
+  distanceMeters?: number | null;
+  rank?: number | null;
   parking?: {
     capacity?: number | null;
     available?: number | null;
@@ -140,6 +142,12 @@ async function resolveNearbyLandmark(message: string) {
       { size: 10 },
     );
   });
+}
+
+function formatAiDistance(distanceMeters?: number | null) {
+  if (distanceMeters == null || !Number.isFinite(distanceMeters)) return '';
+  if (distanceMeters < 1000) return `${Math.round(distanceMeters)}m`;
+  return `${(distanceMeters / 1000).toFixed(1)}km`;
 }
 
 function compactPlaceStatus(place: AiPlaceReference) {
@@ -381,8 +389,17 @@ export default function PlugParkAiChat({
                         return (
                           <article className={`ai-place-card ${currentPlace ? '' : 'unavailable'}`} key={placeRef.id}>
                             <div className="ai-place-card-copy">
-                              <strong>{placeRef.name}</strong>
-                              {statusText && <span>{statusText}</span>}
+                              <strong>
+                                {placeRef.rank != null ? `${placeRef.rank}. ` : ''}
+                                {placeRef.name}
+                              </strong>
+                              {(formatAiDistance(placeRef.distanceMeters) || statusText) && (
+                                <span>
+                                  {[formatAiDistance(placeRef.distanceMeters), statusText]
+                                    .filter(Boolean)
+                                    .join(' · ')}
+                                </span>
+                              )}
                               {!currentPlace && (
                                 <small>AI 데이터에는 있지만 현재 화면 데이터에서는 찾을 수 없습니다.</small>
                               )}
