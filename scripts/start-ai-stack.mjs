@@ -16,8 +16,15 @@ const children = new Set();
 let shuttingDown = false;
 let startedOllama = false;
 
-function executable(base) {
-  return process.platform === 'win32' ? `${base}.cmd` : base;
+function mcpTsxCli() {
+  const cli = path.resolve(mcpDir, 'node_modules', 'tsx', 'dist', 'cli.mjs');
+  if (!existsSync(cli)) {
+    throw new Error(
+      `PlugPark-MCP의 tsx 실행 파일을 찾지 못했습니다: ${cli}\n` +
+      'D:\\Projects\\PlugPark-MCP에서 npm install을 한 번 실행해주세요.',
+    );
+  }
+  return cli;
 }
 
 function sleep(ms) {
@@ -282,13 +289,14 @@ async function main() {
   console.log('AI Bridge         START');
 
   const bridge = track(
-    spawn(executable('npx'), ['tsx', 'src/bridge.ts'], {
+    spawn(process.execPath, [mcpTsxCli(), 'src/bridge.ts'], {
       cwd: mcpDir,
       env: {
         ...process.env,
         OLLAMA_MODEL: model,
       },
       stdio: 'inherit',
+      windowsHide: true,
       shell: false,
     }),
   );
