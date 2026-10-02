@@ -2,10 +2,13 @@ import ollama, { type Tool } from 'ollama';
 import { Client } from '@modelcontextprotocol/client';
 import { StdioClientTransport } from '@modelcontextprotocol/client/stdio';
 import { createServer as createHttpServer } from 'node:http';
+import { spawn } from 'node:child_process';
+import { existsSync } from 'node:fs';
 
 const MODEL = process.env.OLLAMA_MODEL?.trim() || 'qwen3.5:9b';
 const PORT = Number(process.env.AI_BRIDGE_PORT || 3000);
 const HOST = process.env.AI_BRIDGE_HOST?.trim() || '127.0.0.1';
+const SYNC_ON_START = process.env.PLUGPARK_SYNC_ON_START !== '0';
 
 const allowedOrigins = new Set(
   (
@@ -72,6 +75,48 @@ PlugPark는 부산 공영주차장과 전기차 충전 정보를 제공한다.
 - 웹 컨텍스트의 좌표값 자체를 불필요하게 답변에 노출하지 않는다.
 `;
 
+async function syncPlacesSnapshot() {
+  if (!SYNC_ON_START) return;
+
+  const syncScript = 'scripts/sync-places.ts';
+  if (!existsSync(syncScript)) {
+    console.warn('[SYNC] scripts/sync-places.ts가 없어 기존 MCP 데이터 상태를 유지합니다.');
+    return;
+  }
+
+  console.log('[SYNC] PlugPark 운영 데이터를 로컬 snapshot으로 동기화합니다.');
+
+  await new Promise<void>((resolve, reject) => {
+    const child = spawn(
+      process.platform === 'win32' ? 'npx.cmd' : 'npx',
+      ['tsx', syncScript],
+      {
+        cwd: process.cwd(),
+        env: process.env,
+        stdio: 'inherit',
+      },
+    );
+
+    child.once('error', reject);
+    child.once('exit', (code) => {
+      if (code === 0) {
+        resolve();
+        return;
+      }
+
+      if (existsSync('data/places.json')) {
+        console.warn(
+          `[SYNC] 최신 동기화 실패(code=${code}). 기존 data/places.json으로 계속합니다.`,
+        );
+        resolve();
+        return;
+      }
+
+      reject(new Error(`PlugPark snapshot 동기화 실패(code=${code})`));
+    });
+  });
+}
+
 const client = new Client({
   name: 'plugpark-web-bridge',
   version: '1.0.0',
@@ -82,6 +127,8 @@ const transport = new StdioClientTransport({
   args: ['tsx', 'src/server.ts'],
   cwd: process.cwd(),
 });
+
+await syncPlacesSnapshot();
 
 await client.connect(transport);
 
