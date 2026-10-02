@@ -265,6 +265,19 @@ assert(stationResult.ok === true, '부산역 POI 해석 실패');
 assert(stationResult.kind === 'poi', '부산역 kind가 poi가 아님');
 assert(stationResult.method === 'places', '부산역이 Places를 사용하지 않음');
 
+resetCalls();
+const mismatchResult = await resolver.resolveNearbyLandmark(
+  'fake-key',
+  '만덕동 주변 주차장 찾아줘',
+);
+assert(mismatchResult.ok === false, '행정지역 역검증 mismatch가 통과함');
+assert(
+  mismatchResult.reason === 'REGION_MISMATCH',
+  `행정지역 mismatch 사유가 잘못됨: ${mismatchResult.reason}`,
+);
+assert(calls.reverse.length > 0, 'mismatch 검증에서 coord2RegionCode가 호출되지 않음');
+assert(calls.keyword.length === 0, '행정지역 mismatch가 Places로 fallback됨');
+
 const kakaoSdkSource = read('src/services/kakaoSdk.ts');
 const resolverSource = read('src/services/locationResolver.ts');
 const chat = read('src/components/PlugParkAiChat.tsx');
@@ -323,6 +336,7 @@ console.log({
   addressGeocoder: 'PASS',
   poiPlacesRegression: 'PASS',
   reverseRegionVerification: 'PASS',
+  regionMismatchGuard: 'PASS',
   currentLocationBypass: 'STATIC PASS',
   typedResolverDiagnostics: 'PASS',
 });
