@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { PlugParkPlace } from '../types';
 import LocationIcon from './LocationIcon';
+import { isBusanCoordinates, kakaoKeywordSearch, loadKakaoMapSdk } from '../services/kakaoSdk';
 
 type Props = {
   places: PlugParkPlace[];
@@ -10,32 +11,6 @@ type Props = {
   onLocate: () => void;
   onCoordinateCorrection: (placeId: string, coords: { lat: number; lng: number }) => void;
 };
-
-declare global {
-  interface Window {
-    kakao?: any;
-  }
-}
-
-let sdkPromise: Promise<any> | null = null;
-
-const BUSAN_BOUNDS = {
-  minLat: 34.8,
-  maxLat: 35.45,
-  minLng: 128.7,
-  maxLng: 129.4,
-} as const;
-
-function isBusanCoordinates(lat: number, lng: number) {
-  return (
-    Number.isFinite(lat) &&
-    Number.isFinite(lng) &&
-    lat >= BUSAN_BOUNDS.minLat &&
-    lat <= BUSAN_BOUNDS.maxLat &&
-    lng >= BUSAN_BOUNDS.minLng &&
-    lng <= BUSAN_BOUNDS.maxLng
-  );
-}
 
 function firstBusanCoordinates(result: any[]) {
   for (const item of result || []) {
@@ -55,40 +30,6 @@ function haversineMeters(aLat: number, aLng: number, bLat: number, bLng: number)
     Math.sin(dLat / 2) ** 2 +
     Math.cos(rad(aLat)) * Math.cos(rad(bLat)) * Math.sin(dLng / 2) ** 2;
   return 2 * radius * Math.asin(Math.sqrt(h));
-}
-
-function loadKakaoMapSdk(appKey: string) {
-  if (window.kakao?.maps) {
-    return new Promise<any>((resolve) => window.kakao.maps.load(() => resolve(window.kakao)));
-  }
-  if (sdkPromise) return sdkPromise;
-
-  sdkPromise = new Promise((resolve, reject) => {
-    const existing = document.querySelector<HTMLScriptElement>('script[data-plugpark-kakao-map]');
-    if (existing) {
-      existing.addEventListener('load', () => {
-        window.kakao?.maps?.load(() => resolve(window.kakao));
-      }, { once: true });
-      existing.addEventListener('error', () => reject(new Error('Kakao Map SDK 로드 실패')), { once: true });
-      return;
-    }
-
-    const script = document.createElement('script');
-    script.dataset.plugparkKakaoMap = 'true';
-    script.async = true;
-    script.src = `https://dapi.kakao.com/v2/maps/sdk.js?appkey=${encodeURIComponent(appKey)}&autoload=false&libraries=services`;
-    script.onload = () => {
-      if (!window.kakao?.maps) {
-        reject(new Error('Kakao Map SDK 객체를 찾을 수 없습니다.'));
-        return;
-      }
-      window.kakao.maps.load(() => resolve(window.kakao));
-    };
-    script.onerror = () => reject(new Error('Kakao Map SDK 로드 실패'));
-    document.head.appendChild(script);
-  });
-
-  return sdkPromise;
 }
 
 
@@ -179,25 +120,6 @@ function candidateScore(place: PlugParkPlace, item: any) {
   return score;
 }
 
-function keywordSearch(kakao: any, keyword: string): Promise<any[]> {
-  return new Promise((resolve) => {
-    const services = kakao?.maps?.services;
-    if (!services || !keyword.trim()) {
-      resolve([]);
-      return;
-    }
-
-    const places = new services.Places();
-    places.keywordSearch(
-      keyword,
-      (result: any[], status: string) => {
-        resolve(status === services.Status.OK && Array.isArray(result) ? result : []);
-      },
-      { size: 15 },
-    );
-  });
-}
-
 function addressSearch(kakao: any, address: string): Promise<{ lat: number; lng: number } | null> {
   return new Promise((resolve) => {
     const services = kakao?.maps?.services;
@@ -239,7 +161,7 @@ async function geocodePlace(
   const seenCandidates = new Set<string>();
 
   for (const query of seenQueries) {
-    const results = await keywordSearch(kakao, query);
+    const results = await kakaoKeywordSearch(kakao, query);
     for (const item of results) {
       const key = `${item?.id || ''}|${item?.x || ''}|${item?.y || ''}|${item?.place_name || ''}`;
       if (seenCandidates.has(key)) continue;
