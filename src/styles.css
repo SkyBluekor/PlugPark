@@ -661,6 +661,7 @@ body{overflow-x:hidden}
 .ai-chat-welcome strong{display:block;margin-bottom:7px;color:#24453a;font-size:13px}
 .ai-chat-state span,
 .ai-chat-welcome span{display:block;font-size:11px;line-height:1.6}
+.ai-chat-state small{display:block;margin-top:8px;color:#8d8272;font-size:10px;line-height:1.5}
 .ai-chat-welcome small{display:block;margin-top:9px;color:#0b7654;font-size:10px;line-height:1.5}
 .ai-chat-state.offline{border-color:#eadfd0;background:#fcfaf6}
 .ai-chat-state.offline strong{color:#76572b}
