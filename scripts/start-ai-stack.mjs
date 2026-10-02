@@ -145,6 +145,52 @@ function syncBridgeTemplate() {
   return target;
 }
 
+function syncNearbyMcpTool() {
+  const source = path.resolve(root, 'tools', 'mcp-web-s1', 'nearby-tool.ts');
+  const target = path.resolve(mcpDir, 'src', 'nearby-tool.ts');
+  const serverPath = path.resolve(mcpDir, 'src', 'server.ts');
+
+  if (!existsSync(source)) {
+    throw new Error(`nearby-tool 템플릿을 찾지 못했습니다: ${source}`);
+  }
+
+  if (!existsSync(serverPath)) {
+    throw new Error(`PlugPark-MCP server.ts를 찾지 못했습니다: ${serverPath}`);
+  }
+
+  const sourceText = readFileSync(source, 'utf8');
+  const targetText = existsSync(target) ? readFileSync(target, 'utf8') : '';
+
+  if (sourceText !== targetText) {
+    writeFileSync(target, sourceText, 'utf8');
+    console.log('Nearby MCP tool   UPDATE');
+  } else {
+    console.log('Nearby MCP tool   PASS  current');
+  }
+
+  let serverText = readFileSync(serverPath, 'utf8');
+  const importLine = "import { registerNearbyPlacesTool } from './nearby-tool.ts';";
+
+  if (!serverText.includes(importLine)) {
+    serverText = `${importLine}\n${serverText}`;
+  }
+
+  if (!serverText.includes('// PLUGPARK_MCP_WEB_NEARBY_TOOL')) {
+    const match = serverText.match(/(const server = new McpServer\(\{[\s\S]*?\}\);)/);
+
+    if (!match) {
+      throw new Error('PlugPark-MCP server.ts에서 McpServer 생성 위치를 찾지 못했습니다.');
+    }
+
+    serverText = serverText.replace(
+      match[1],
+      `${match[1]}\n\n  // PLUGPARK_MCP_WEB_NEARBY_TOOL\n  registerNearbyPlacesTool(server);`,
+    );
+  }
+
+  writeFileSync(serverPath, serverText, 'utf8');
+}
+
 function openBrowser(url) {
   if (noBrowser) return;
 
@@ -213,6 +259,7 @@ async function main() {
     );
   }
 
+  syncNearbyMcpTool();
   syncBridgeTemplate();
 
   assertCommand('ollama');
