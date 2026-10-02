@@ -1,10 +1,11 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import type { PlugParkPlace } from '../types';
+import { resolveNearbyLandmark } from '../services/locationResolver';
 import {
-  extractNearbyLandmark,
+  isLikelyLocationClarification,
+  parseLocationIntent,
   replaceNearbyLandmark,
-  resolveNearbyLandmark,
-} from '../services/locationResolver';
+} from '../services/locationIntent';
 
 type UserLocation = { lat: number; lng: number } | null;
 type RadiusKm = 1 | 3 | 5 | null;
@@ -185,17 +186,26 @@ export default function PlugParkAiChat({
     setSending(true);
 
     try {
-      const messageHasNearbyLandmark = Boolean(extractNearbyLandmark(message));
+      const inputIntent = parseLocationIntent(message);
+      const useClarification =
+        Boolean(pendingNearby) &&
+        !inputIntent.isNearbyRequest &&
+        isLikelyLocationClarification(message);
+
       const effectiveMessage =
-        pendingNearby && !messageHasNearbyLandmark
+        useClarification && pendingNearby
           ? replaceNearbyLandmark(pendingNearby.originalRequest, message)
           : message;
 
-      const nearbyLandmark = extractNearbyLandmark(effectiveMessage);
+      const effectiveIntent = parseLocationIntent(effectiveMessage);
+      const nearbyLandmark = effectiveIntent.locationText ?? '';
       const appKey = import.meta.env.VITE_KAKAO_MAP_JS_KEY?.trim() || '';
-      const locationResult = nearbyLandmark
-        ? await resolveNearbyLandmark(appKey, effectiveMessage)
-        : null;
+      const locationResult =
+        effectiveIntent.isNearbyRequest &&
+        effectiveIntent.source !== 'current-location' &&
+        nearbyLandmark
+          ? await resolveNearbyLandmark(appKey, effectiveMessage)
+          : null;
 
       const targetLocation =
         locationResult && locationResult.ok
@@ -242,6 +252,10 @@ export default function PlugParkAiChat({
               locationResult && locationResult.ok
                 ? locationResult.score
                 : (locationResult?.bestScore ?? null),
+            locationIntentInput: message,
+            locationIntentSource: effectiveIntent.source,
+            locationIntentText: effectiveIntent.locationText,
+            locationIntentNearby: effectiveIntent.isNearbyRequest,
           },
         }),
       });
