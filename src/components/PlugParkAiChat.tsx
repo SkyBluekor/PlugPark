@@ -198,6 +198,7 @@ export default function PlugParkAiChat({ userLocation, radiusKm }: Props) {
               <div className="ai-chat-state offline">
                 <strong>로컬 AI가 연결되어 있지 않습니다.</strong>
                 <span>PC에서 Ollama와 PlugPark AI Bridge를 실행하면 이 채팅을 사용할 수 있습니다.</span>
+                <small>브라우저가 로컬 네트워크 또는 이 기기의 로컬 서비스 접근 권한을 묻는 경우 허용해주세요.</small>
                 <button type="button" onClick={() => void checkHealth()}>다시 연결</button>
               </div>
             )}
