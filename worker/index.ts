@@ -504,7 +504,8 @@ export default {
 
     if (url.pathname === '/api/admin/d1/prepare-read-models') {
       if (request.method !== 'POST') {
-        return json({ ok: false, error: 'POST 요청만 허용됩니다.' }, 405);      }
+        return json({ ok: false, error: 'POST 요청만 허용됩니다.' }, 405);
+      }
       if (!env.DB) return d1ConfigError();
       const authError = validateIngestAdmin(request, env);
       if (authError) return authError;
@@ -1040,7 +1041,8 @@ async function fetchEvStatusPages(env: Env, mode: LiveSyncMode) {
   if (isLocalFixtureMode(env)) {
     return { items: localEvStatusFixture(), apiCalls: 0, totalCount: 3, pages: 1 };
   }
-  if (!env.EV_CHARGER_API_KEY) throw new Error('EV_CHARGER_API_KEY가 설정되지 않았습니다.');  if (!env.DB) throw new Error('D1 binding DB가 없습니다.');
+  if (!env.EV_CHARGER_API_KEY) throw new Error('EV_CHARGER_API_KEY가 설정되지 않았습니다.');
+  if (!env.DB) throw new Error('D1 binding DB가 없습니다.');
 
   await assertApiSafetyBudget(env.DB, 'ev_status', EV_STATUS_DAILY_SAFETY_BUDGET);
 
@@ -1539,7 +1541,8 @@ async function upsertParkingRealtimeLinks(
       json_extract(j.value, '$.realtime_name'),
       json_extract(j.value, '$.parking_id'),
       json_extract(j.value, '$.match_method'),
-      json_extract(j.value, '$.match_score'),      json_extract(j.value, '$.updated_at')
+      json_extract(j.value, '$.match_score'),
+      json_extract(j.value, '$.updated_at')
     FROM json_each(?1) j
     WHERE true
     ON CONFLICT(parking_code) DO UPDATE SET
@@ -2038,7 +2041,8 @@ async function rebuildEvStations(db: D1Database) {
        MAX(c.normalized_station_name),
        MAX(COALESCE(c.address, '')),
        AVG(c.lat),
-       AVG(c.lng),       COUNT(*),
+       AVG(c.lng),
+       COUNT(*),
        SUM(CASE WHEN COALESCE(s.status, c.info_status) = '2' THEN 1 ELSE 0 END),
        SUM(CASE WHEN COALESCE(s.status, c.info_status) = '2' AND ${FAST_CHARGER_SQL} THEN 1 ELSE 0 END),
        SUM(CASE WHEN COALESCE(s.status, c.info_status) = '2' AND ${SLOW_CHARGER_SQL} THEN 1 ELSE 0 END),
@@ -2543,7 +2547,8 @@ async function ensureParkingFacilityCatalog(
   endpoint: string,
 ) {
   const state = await db.prepare(
-    `SELECT COUNT(*) AS n, MAX(refreshed_at) AS refreshed_at       FROM parking_facility_catalog`,
+    `SELECT COUNT(*) AS n, MAX(refreshed_at) AS refreshed_at
+       FROM parking_facility_catalog`,
   ).first<{ n: number; refreshed_at: string | null }>();
 
   const count = Number(state?.n || 0);
@@ -3042,7 +3047,8 @@ function parkingRowQuality(item: ParkingBase) {
 }
 
 function dedupeParkingById(items: ParkingBase[]) {
-  const byId = new Map<string, ParkingBase>();  let duplicateCount = 0;
+  const byId = new Map<string, ParkingBase>();
+  let duplicateCount = 0;
 
   for (const item of items) {
     const id = String(item.id || '').trim();
@@ -3541,7 +3547,8 @@ async function fetchEvInfoPageForD1(
   }
 
   const rawItems = extractKnownItems(payload);
-  const parsed = parseEvInfoItems(rawItems);  if (parsed.invalid.length > 0) {
+  const parsed = parseEvInfoItems(rawItems);
+  if (parsed.invalid.length > 0) {
     const sample = parsed.invalid.slice(0, 3).map((item) => ({
       index: item.index,
       missing: item.schema.missing,
@@ -4055,7 +4062,8 @@ function longitudeField(value: string) {
 
 function normalizeParkingName(value: string) {
   return value
-    .toLowerCase()    .replace(/부산광역시|부산시/g, '')
+    .toLowerCase()
+    .replace(/부산광역시|부산시/g, '')
     .replace(/공영주차장|노외공영주차장|노상공영주차장|공영|주차장/g, '')
     .replace(/[\s,\.·ㆍ()\[\]{}\-_\/]/g, '')
     .trim();
