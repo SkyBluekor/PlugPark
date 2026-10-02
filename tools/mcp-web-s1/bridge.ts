@@ -54,202 +54,408 @@ PlugParkëŠ” ë¶€ì‚° ê³µì˜ì£¼ì°¨ì¥ê³¼ ì „ê¸°ì°¨ ì¶©ì „ ì •ë³´ë¥¼ ì œê³µí•œë‹¤.
 - ìœ„ë„/ê²½ë„ ë˜ëŠ” ë°˜ê²½ì„ ê¸°ì¤€ìœ¼ë¡œ ì¶”ì²œ: recommend_places
 - ì—¬ëŸ¬ ì¥ì†Œì˜ ì‹¤ì œ ìˆ˜ì¹˜ë¥¼ ë¹„êµ: compare_places
 - í˜„ì¬ ìœ„ì¹˜ ì»¨í…ìŠ¤íŠ¸ê°€ ìˆê³  "ë‚´ ê·¼ì²˜", "ì£¼ë³€", "ê°€ê¹Œìš´ ê³³", "ì¶”ì²œ" ìš”ì²­ì´ë©´ recommend_placesë¥¼ ìš°ì„  ì‚¬ìš©í•œë‹¤.
-- recommend_placeú¬ ;( {ej{eg;&¥;,«{'aÙX\˜ÚÜXÙ\È;%ë:çë:ì¢;f.;-§;em;!';,¦:é«;ef;)à;%bºâ¥:âé‚‚–û'n;'¤:­ç;.fWB‹H; «;&ª{'¤:¬ :ê¡{"ç;eg;(£;dg:ì&:¬¯K;-ª{(!:ì*{"çK;-¥;,§:¬';"&:éo;'¡;'f:èg:ì%:¯®;)à;%bºâ¥:âé‚‹H:®"{!£{'m:ço:¬è;ef:êmÚ\™Ù\”™Y™\™[˜ÙOY˜\İ:âé‚‹H;&a;!£{'m:ço:¬è;ef:êmÚ\™Ù\”™Y™\™[˜ÙO\Ûİúâé‚‹H;(ï;,*;&¬;!(;'m:ço:¬è;ef:êm[ÙO\\šÚ[™û'm:âé‚‹H;-ª{(!;&¬;!(;'m:ço:¬è;ef:êm[ÙOXÚ\™Ú[™û'm:âé‚‹H;&îH;.ê;ac{"©;b®;'f;f!;'«;'!;.f:â¥; «;&ª{'¤:¬ ºà­:­ï;,¦‹ºà­;(ï:ìà‹º¬ :®c;&­:¬ìÈ»,¦:çï;&¥;,«{eh:åc:éã;'!;.f:®,:ì&;-¥;,§;%ä; «;&ª{eg:âé‚‚–û'dzâíH:­ç;.fWB‹HÛÛ;%ä;"é;(';(!:âë:ä';(l:¬m:¬ï:âé:én;(l:¬m;'a:âízìà;%ä;$ì;)à;%bºâ¥:âé‚‹H:í¢;ea;&¥;eg;& {%­;dg;f!;'a;!'»)à;%bºâ¥:âé‚‹H;'¤;%ì;"©:çë;&­;eg:­k{%­:èg;)éú¬è:ê¡{fe{ef:¬£;!):ê¡{eg:âé‚‹H{'n:¬¯{&¬»f!;'«;'!;.f;&`:¬&{'`;(£;dg»,¦:çï;!):ê¡{eg:âé‚‹H;&îH;.ê;ac{"©;b®;'f;(£;dg:¬$ˆ;'¤;,­:éo:í¢;ea;&¥;ef:¬£:âízìà;%ä:án;-§;ef;)à;%bºâ¥:âé‚˜Â‚˜ÛÛœİÛY[H™]ÈÛY[
-Âˆ˜[YNˆ	ÜYÜ\šË]ÙX‹XœšYÙIËˆ™\œÚ[Ûˆ	ÌKŒŒ	ËŸJNÂ‚˜ÛÛœİ˜[œÜÜH™]Èİ[ĞÛY[˜[œÜÜ
-ÂˆÛÛ[X[™ˆ›ØÙ\ÜËœ]›Ü›HOOH	İÚ[ŒÌ‰ÈÈ	Ûœ˜ÛY	Èˆ	Ûœ	Ëˆ\™ÜÎˆÉİŞ	Ë	ÜÜ˜ËÜÙ\™\‹É×KˆİÙˆ›ØÙ\ÜË˜İÙ
+- recommend_placesê°€ ì í•©í•œ ìš”ì²­ì„ search_places ì—¬ëŸ¬ ë²ˆ í˜¸ì¶œí•´ì„œ ì²˜ë¦¬í•˜ì§€ ì•ŠëŠ”ë‹¤.
 
-KŸJNÂ‚˜]ØZ]ÛY[˜ÛÛ›™Xİ
-˜[œÜÜ
-NÂ‚˜ÛÛœİÈÛÛÎˆXÜÛÛÈHH]ØZ]ÛY[›\İÛÛÊ
-NÂ‚˜ÛÛœİÛ[XUÛÛÎˆÛÛ×HHXÜÛÛË›X\
+[ì¸ì ê·œì¹™]
+- ì‚¬ìš©ìê°€ ëª…ì‹œí•œ ì¢Œí‘œ, ë°˜ê²½, ì¶©ì „ ë°©ì‹, ì¶”ì²œ ê°œìˆ˜ë¥¼ ì„ì˜ë¡œ ë°”ê¾¸ì§€ ì•ŠëŠ”ë‹¤.
+- ê¸‰ì†ì´ë¼ê³  í•˜ë©´ chargerPreference=fastë‹¤.
+- ì™„ì†ì´ë¼ê³  í•˜ë©´ chargerPreference=slowë‹¤.
+- ì£¼ì°¨ ìš°ì„ ì´ë¼ê³  í•˜ë©´ mode=parkingì´ë‹¤.
+- ì¶©ì „ ìš°ì„ ì´ë¼ê³  í•˜ë©´ mode=chargingì´ë‹¤.
+- ì›¹ ì»¨í…ìŠ¤íŠ¸ì˜ í˜„ì¬ ìœ„ì¹˜ëŠ” ì‚¬ìš©ìê°€ "ë‚´ ê·¼ì²˜", "ë‚´ ì£¼ë³€", "ê°€ê¹Œìš´ ê³³"ì²˜ëŸ¼ ìš”ì²­í•  ë•Œë§Œ ìœ„ì¹˜ ê¸°ë°˜ ì¶”ì²œì— ì‚¬ìš©í•œë‹¤.
 
-ÛÛ
-HOˆ
-Âˆ\Nˆ	Ù[˜İ[Û‰Ëˆ[˜İ[ÛˆÂˆ˜[YNˆÛÛ›˜[YKˆ\ØÜš\[ÛˆÛÛ™\ØÜš\[ÛˆÏÈ	ÉËˆ\˜[Y]\œÎˆÛÛš[œ]ØÚ[XH\ÈÛÛÉÙ[˜İ[Û‰×VÉÜ\˜[Y]\œÉ×KˆKŸJJNÂ‚˜ÛÛœİÙ\ÜÚ[ÛœÈH™]ÈX\İš[™ËÙ\ÜÚ[Û“Y\ÜØYÙ\ÏŠ
-NÂ‚™[˜İ[ÛˆÙ]Ù\ÜÚ[ÛŠÙ\ÜÚ[Û’Yˆİš[™ÊHÂˆÛÛœİÙ^HHÙ\ÜÚ[Û’Y	ÙY˜][	ÎÂˆ]Y\ÜØYÙ\ÈHÙ\ÜÚ[ÛœË™Ù]
-Ù^JNÂ‚ˆYˆ
-[Y\ÜØYÙ\ÊHÂˆY\ÜØYÙ\ÈHŞÈ›ÛNˆ	ÜŞ\İ[IËÛÛ[ˆÖTÕSWÔ“ÓTWNÂˆÙ\ÜÚ[ÛœËœÙ]
-Ù^KY\ÜØYÙ\ÊNÂˆB‚ˆYˆ
-Ù\ÜÚ[ÛœËœÚ^™HˆŒ
-HÂˆÛÛœİÛ\İHÙ\ÜÚ[ÛœËšÙ^\Ê
-K›™^
+[ì‘ë‹µ ê·œì¹™]
+- Toolì— ì‹¤ì œ ì „ë‹¬ëœ ì¡°ê±´ê³¼ ë‹¤ë¥¸ ì¡°ê±´ì„ ë‹µë³€ì— ì“°ì§€ ì•ŠëŠ”ë‹¤.
+- ë¶ˆí•„ìš”í•œ ì˜ì–´ í‘œí˜„ì„ ì„ì§€ ì•ŠëŠ”ë‹¤.
+- ìì—°ìŠ¤ëŸ¬ìš´ í•œêµ­ì–´ë¡œ ì§§ê³  ëª…í™•í•˜ê²Œ ì„¤ëª…í•œë‹¤.
+- 0mì¸ ê²½ìš° "í˜„ì¬ ìœ„ì¹˜ì™€ ê°™ì€ ì¢Œí‘œ"ì²˜ëŸ¼ ì„¤ëª…í•œë‹¤.
+- ì›¹ ì»¨í…ìŠ¤íŠ¸ì˜ ì¢Œí‘œê°’ ìì²´ë¥¼ ë¶ˆí•„ìš”í•˜ê²Œ ë‹µë³€ì— ë…¸ì¶œí•˜ì§€ ì•ŠëŠ”ë‹¤.
+`;
 
-K˜[YNÂˆYˆ
-Û\İ	‰ˆÛ\İOOHÙ^JHÙ\ÜÚ[ÛœË™[]JÛ\İ
-NÂˆB‚ˆ™]\›ˆY\ÜØYÙ\ÎÂŸB‚™[˜İ[Ûˆ[X™\“Ü“[
-˜[YNˆ[šÛ›İÛŠHÂˆYˆ
-˜[YHOH[˜[YHOOH	ÉÊH™]\›ˆ[ÂˆÛÛœİ\œÙYH[X™\Š˜[YJNÂˆ™]\›ˆ[X™\‹š\Ñš[š]J\œÙY
-HÈ\œÙYˆ[ÂŸB‚™[˜İ[Ûˆ›Ü›X[^™PÛÛ^
-˜[YNˆ[šÛ›İÛŠNˆÙXÛÛ^ÂˆYˆ
-]˜[YH\[Ùˆ˜[YHOOH	ÛØš™Xİ	ÊH™]\›ˆßNÂ‚ˆÛÛœİÛİ\˜ÙHH˜[YH\È™XÛÜ™İš[™Ë[šÛ›İÛÂ‚ˆ™]\›ˆÂˆ\Ù\“]ˆ[X™\“Ü“[
-Ûİ\˜ÙK\Ù\“]
-Kˆ\Ù\“™Îˆ[X™\“Ü“[
-Ûİ\˜ÙK\Ù\“™ÊKˆ˜Y]\ÒÛNˆ[X™\“Ü“[
-Ûİ\˜ÙKœ˜Y]\ÒÛJKˆNÂŸB‚™[˜İ[Ûˆ›Ü›X[^™UÛÛ\™İ[Y[ÊˆÛÛ˜[YNˆİš[™Ëˆ˜]Ğ\™ÜÎˆ™XÛÜ™İš[™Ë[šÛ›İÛ‹ˆ\Ù\•^ˆİš[™ËˆÛÛ^ˆÙXÛÛ^ŠHÂˆÛÛœİ\™ÜÎˆ™XÛÜ™İš[™Ë[šÛ›İÛˆHÈ‹‹œ˜]Ğ\™ÜÈNÂˆÛÛœİ^H\Ù\•^ÂˆÛÛœİÛÛ\XİH\Ù\•^œ™\XÙJ×ÊËÙË	È	ÊKš[J
-NÂ‚ˆYˆ
-ÛÛ˜[YHOOH	Ü™XÛÛ[Y[™ÜXÙ\ÉÊHÂˆÛÛœİ]X]ÚHÛÛ\Xİ›X]Ú
-û'!:ãáÊ–ÎWO×ÊŠÊËWO×
-ÊÎ——
-ÊOÊKÚJNÂˆÛÛœİ™ÓX]ÚHÛÛ\Xİ›X]Ú
-ú¬¯zãáÊ–ÎWO×ÊŠÊËWO×
-ÊÎ——
-ÊOÊKÚJNÂ‚ˆYˆ
-]X]Ú
-H\™ÜË\Ù\“]H[X™\Š]X]ÚÌWJNÂˆYˆ
-™ÓX]Ú
-H\™ÜË\Ù\“™ÈH[X™\Š™ÓX]ÚÌWJNÂ‚ˆÛÛœİ˜Y]\ÓX]ÚHÛÛ\Xİ›X]Ú
-ÊÎºì&:¬¯WÊŠOÊ_ßJWÊšÛKÚJNÂˆYˆ
-˜Y]\ÓX]Ú
-H\™ÜËœ˜Y]\ÒÛHH[X™\Š˜Y]\ÓX]ÚÌWJNÂ‚ˆÛÛœİ[Z]X]ÚHÛÛ\Xİ›X]Ú
-ÊÌKMWJWÊº¬ìËÊNÂˆYˆ
-[Z]X]Ú
-H\™ÜË›[Z]H[X™\Š[Z]X]ÚÌWJNÂ‚ˆYˆ
-^š[˜ÛY\Ê	ú®"{!£IÊJHÂˆ\™ÜË˜Ú\™Ù\”™Y™\™[˜ÙHH	Ù˜\İ	ÎÂˆH[ÙHYˆ
-^š[˜ÛY\Ê	û&a;!£IÊJHÂˆ\™ÜË˜Ú\™Ù\”™Y™\™[˜ÙHH	ÜÛİÉÎÂˆH[ÙHYˆ
-û àz­ Ê»%áŸ;%a:ë-:¬l:à¦;-ª{(!Êºì*{"çKŠºë-:­ Ë\İ
-ÛÛ\Xİ
-JHÂˆ\™ÜË˜Ú\™Ù\”™Y™\™[˜ÙHH	Ø[IÎÂˆB‚ˆYˆ
-û(ï;,*ÊŠÎºéoÊŠOÊÎ»&¬;!(;)${"ë
-KË\İ
-ÛÛ\Xİ
-JHÂˆ\™ÜË›[ÙHH	Ü\šÚ[™ÉÎÂˆH[ÙHYˆ
-ˆû-ª{(!ÊŠÎ»'aÊŠOÊÎ»&¬;!(;)${"ë
-KË\İ
-ÛÛ\Xİ
-Hˆ^š[˜ÛY\Ê	ú®"{!£IÊHˆ^š[˜ÛY\Ê	û&a;!£IÊBˆ
-HÂˆ\™ÜË›[ÙHH	ØÚ\™Ú[™ÉÎÂˆB‚ˆÛÛœİ™X\˜T™\]Y\İHúà­ÊŠÎº­ï;,¦;(ï:ìà
-_:¬ :®c;&­:­ï;,¦;(ï:ìà;-¥;,§Ë\İ
-ÛÛ\Xİ
-NÂˆYˆ
-™X\˜T™\]Y\İ	‰ˆÛÛ^\Ù\“]OH[	‰ˆÛÛ^\Ù\“™ÈOH[
-HÂˆYˆ
-\™ÜË\Ù\“]OH[
-H\™ÜË\Ù\“]HÛÛ^\Ù\“]ÂˆYˆ
-\™ÜË\Ù\“™ÈOH[
-H\™ÜË\Ù\“™ÈHÛÛ^\Ù\“™ÎÂˆYˆ
-\™ÜËœ˜Y]\ÒÛHOH[	‰ˆÛÛ^œ˜Y]\ÒÛHOH[
-H\™ÜËœ˜Y]\ÒÛHHÛÛ^œ˜Y]\ÒÛNÂˆBˆB‚ˆYˆ
-ÛÛ˜[YHOOH	ÜÙX\˜ÚÜXÙ\ÉÊHÂˆYˆ
-^š[˜ÛY\Ê	ú®"{!£IÊJH\™ÜË™˜\İÛ›HHYNÂ‚ˆYˆ
-ˆû-ª{(!ÊŠÎ»'mÊŠOÊÎº¬ :â©_;ehÊ»"&
-KË\İ
-ÛÛ\Xİ
-Hˆû «;&ªWÊº¬ :â©KŠ»-ª{(!Ë\İ
-ÛÛ\Xİ
-Bˆ
-HÂˆ\™ÜË˜Ú\™Ú[™Ğ]˜Z[X›HHYNÂˆB‚ˆYˆ
-ˆû(ï;,*ÊŠÎ»'¤:é«:¬ :â©_;'¥;%ë
-KË\İ
-ÛÛ\Xİ
-Hˆúàª;'`Ê»'¤:é«Ë\İ
-ÛÛ\Xİ
-Bˆ
-HÂˆ\™ÜËœ\šÚ[™Ğ]˜Z[X›HHYNÂˆBˆB‚ˆ™]\›ˆ\™ÜÎÂŸB‚™[˜İ[ÛˆÛÛ^›İJÛÛ^ˆÙXÛÛ^
-HÂˆYˆ
-ÛÛ^\Ù\“]OH[ÛÛ^\Ù\“™ÈOH[
-H™]\›ˆ	ÉÎÂ‚ˆÛÛœİ˜Y]\Õ^HÛÛ^œ˜Y]\ÒÛHOH[È;f!;'«;!(;`çH:ì&:¬¯H	ØÛÛ^œ˜Y]\ÒÛ_ZÛXˆ	ÉÎÂˆ™]\›ˆ—–ÔYÔ\šÈ;&îH;.ê;ac{"©;b®ˆ;f!;'«;'!;.f; «;&ªH:¬ :â©IÜ˜Y]\Õ^Kˆ;'!;.f:®,:ì&;&¥;,«{'m:êm;'!:ãá	ØÛÛ^\Ù\“]K:¬¯zãá	ØÛÛ^\Ù\“™ßzéo; «;&ª{eg:âé—XÂŸB‚˜\Ş[˜È[˜İ[Ûˆ[YÙ[
-ˆÙ\ÜÚ[Û’Yˆİš[™Ëˆ\Ù\•^ˆİš[™ËˆÛÛ^ˆÙXÛÛ^ŠHÂˆÛÛœİY\ÜØYÙ\ÈHÙ]Ù\ÜÚ[ÛŠÙ\ÜÚ[Û’Y
-NÂˆÛÛœİ]YÛY[Y\Ù\•^H	İ\Ù\•^IØÛÛ^›İJÛÛ^
-_XÂ‚ˆY\ÜØYÙ\Ëœ\Ú
-Âˆ›ÛNˆ	İ\Ù\‰ËˆÛÛ[ˆ]YÛY[Y\Ù\•^ˆJNÂ‚ˆ›Üˆ
-]İ\HÈİ\NÈİ\
-ÊÊHÂˆÛÛœİ™\ÜÛœÙHH]ØZ]Û[XK˜Ú]
-Âˆ[Ù[ˆSÑSˆY\ÜØYÙ\ËˆÛÛÎˆÛ[XUÛÛËˆİ™X[Nˆ˜[ÙKˆJNÂ‚ˆY\ÜØYÙ\Ëœ\Ú
-™\ÜÛœÙK›Y\ÜØYÙJNÂ‚ˆÛÛœİÛÛØ[ÈH™\ÜÛœÙK›Y\ÜØYÙKÛÛØØ[ÈÏÈ×NÂ‚ˆYˆ
-ÛÛØ[Ë›[™İOOH
-HÂˆ™]\›ˆ™\ÜÛœÙK›Y\ÜØYÙK˜ÛÛ[	û'dzâí{'m;%á»"­zââ:âé‰ÎÂˆB‚ˆ›Üˆ
-ÛÛœİÛÛØ[ÙˆÛÛØ[ÊHÂˆÛÛœİÛÛ˜[YHHÛÛØ[™[˜İ[Û‹›˜[YNÂˆÛÛœİ˜]Ğ\™ÜÈH
-ÛÛØ[™[˜İ[Û‹˜\™İ[Y[ÈÏÈßJH\È™XÛÜ™İš[™Ë[šÛ›İÛÂˆÛÛœİ\™ÜÈH›Ü›X[^™UÛÛ\™İ[Y[ÊÛÛ˜[YK˜]Ğ\™ÜË\Ù\•^ÛÛ^
-NÂ‚ˆÛÛœÛÛK›ÙÊÓPÔH	İÛÛ˜[Y_X\™ÜÊNÂ‚ˆÛÛœİ™\İ[H]ØZ]ÛY[˜Ø[ÛÛ
-Âˆ˜[YNˆÛÛ˜[YKˆ\™İ[Y[Îˆ\™ÜËˆJNÂ‚ˆÛÛœİÛÛ^H™\İ[˜ÛÛ[ˆ™š[\Š
-][Nˆ[JHOˆ][K\HOOH	İ^	ÊBˆ›X\
+const client = new Client({
+  name: 'plugpark-web-bridge',
+  version: '1.0.0',
+});
 
-][Nˆ[JHOˆ][K^
-Bˆš›Ú[Š	×‰ÊNÂ‚ˆY\ÜØYÙ\Ëœ\Ú
-Âˆ›ÛNˆ	İÛÛ	ËˆÛÛÛ˜[YNˆÛÛ˜[YKˆÛÛ[ˆÛÛ^	ú¬¬:¬ï;%á»'c	ËˆJNÂˆBˆB‚ˆ™]\›ˆ	ÕÛÛ;f.;-§;f§û"&:¬ :á":ë-:éã»%a;'¤{%á{'a;)$zâê;e¢;"­zââ:âé‰ÎÂŸB‚˜\Ş[˜È[˜İ[Ûˆ™XYœÛÛ›ÙJ™\Nˆ[JHÂˆ™]\›ˆ]ØZ]™]È›ÛZ\ÙO[OŠ
-™\ÛÛ™K™Z™Xİ
-HOˆÂˆ]›ÙHH	ÉÎÂ‚ˆ™\K›ÛŠ	Ù]IË
-Ú[šÎˆY™™\ŠHOˆÂˆ›ÙH
-ÏHÚ[šËÔİš[™Ê	İ]	ÊNÂ‚ˆYˆ
-›ÙK›[™İˆWÌÌ
-HÂˆ™Z™Xİ
-™]È\œ›ÜŠ	û&¥;,«{'m:á":ë-;`ozââ:âé‰ÊJNÂˆ™\K™\İ›ŞJ
-NÂˆBˆJNÂ‚ˆ™\K›ÛŠ	Ù[™	Ë
+const transport = new StdioClientTransport({
+  command: process.platform === 'win32' ? 'npx.cmd' : 'npx',
+  args: ['tsx', 'src/server.ts'],
+  cwd: process.cwd(),
+});
 
-HOˆÂˆYˆ
-X›ÙJHÂˆ™\ÛÛ™JßJNÂˆ™]\›ÂˆB‚ˆHÂˆ™\ÛÛ™J”ÓÓ‹œ\œÙJ›ÙJJNÂˆHØ]ÚÂˆ™Z™Xİ
-™]È\œ›ÜŠ	Ò”ÓÓˆ;f%{"ç{'m;&+:ì%:ém;)à;%b»"­zââ:âé‰ÊJNÂˆBˆJNÂ‚ˆ™\K›ÛŠ	Ù\œ›Ü‰Ë™Z™Xİ
-NÂˆJNÂŸB‚™[˜İ[Ûˆ\ÓÜšYÚ[[İÙY
-ÜšYÚ[ˆİš[™È[™Yš[™Y
-HÂˆYˆ
-[ÜšYÚ[ŠH™]\›ˆYNÂˆ™]\›ˆ[İÙYÜšYÚ[œËš\ÊÜšYÚ[ŠNÂŸB‚™[˜İ[Ûˆ\PÛÜœÊ™\Nˆ[K™\Îˆ[JHÂˆÛÛœİÜšYÚ[ˆH\[Ùˆ™\KšXY\œË›ÜšYÚ[ˆOOH	Üİš[™ÉÈÈ™\KšXY\œË›ÜšYÚ[ˆˆ[™Yš[™YÂ‚ˆYˆ
-ÜšYÚ[ˆ	‰ˆ\ÓÜšYÚ[[İÙY
-ÜšYÚ[ŠJHÂˆ™\ËœÙ]XY\Š	ØXØÙ\ÜËXÛÛ›ÛX[İË[ÜšYÚ[‰ËÜšYÚ[ŠNÂˆ™\ËœÙ]XY\Š	İ˜\IË	ÓÜšYÚ[‰ÊNÂˆB‚ˆ™\ËœÙ]XY\Š	ØXØÙ\ÜËXÛÛ›ÛX[İË[Y]ÙÉË	ÑÑUÔÕÔSÓ”ÉÊNÂˆ™\ËœÙ]XY\Š	ØXØÙ\ÜËXÛÛ›ÛX[İËZXY\œÉË	ØÛÛ[]\IÊNÂ‚ˆYˆ
-™\KšXY\œÖÉØXØÙ\ÜËXÛÛ›Û\™\]Y\İ\š]˜]K[™]ÛÜšÉ×HOOH	İYIÊHÂˆ™\ËœÙ]XY\Š	ØXÙ\ÜËXÛÛ›ÛX[İË\š]˜]K[™]ÛÜšÉË	İYIÊNÂˆBŸB‚˜\Ş[˜È[˜İ[ÛˆX[^[ØY
+await client.connect(transport);
 
-HÂˆHÂˆÛÛœİ\İH]ØZ]Û[XK›\İ
+const { tools: mcpTools } = await client.listTools();
 
-NÂˆÛÛœİ[Ù[ÈH\œ˜^Kš\Ğ\œ˜^J
-\İ\È[JOË›[Ù[ÊHÈ
-\İ\È[JK›[Ù[Èˆ×NÂˆÛÛœİ[Ù[[œİ[YH[Ù[ËœÛÛYJˆ
-][Nˆ[JHOˆ][OË›[Ù[OOHSÑS][OË›˜[YHOOHSÑSˆ
-NÂ‚ˆ™]\›ˆÂˆİ]\Îˆ[Ù[[œİ[YÈŒˆLËˆ›ÙNˆÂˆÚÎˆ[Ù[[œİ[Yˆ›İšY\ˆ	ÛÛ[XIËˆ[Ù[ˆSÑSˆXÜˆYKˆÛÛÎˆXÜÛÛË›X\
+const ollamaTools: Tool[] = mcpTools.map((tool) => ({
+  type: 'function',
+  function: {
+    name: tool.name,
+    description: tool.description ?? '',
+    parameters: tool.inputSchema as Tool['function']['parameters'],
+  },
+}));
 
-ÛÛ
-HOˆÛÛ›˜[YJKˆ™X\ÛÛˆ[Ù[[œİ[YÈ[™Yš[™Yˆ	Û[Ù[Û›İÚ[œİ[Y	ËˆKˆNÂˆHØ]ÚÂˆ™]\›ˆÂˆİ]\ÎˆLËˆ›ÙNˆÂˆÚÎˆ˜[ÙKˆ›İšY\ˆ	ÛÛ[XIËˆ[Ù[ˆSÑSˆXÜˆYKˆ™X\ÛÛˆ	ÛÛ[XWİ[œ™XXÚX›IËˆKˆNÂˆBŸB‚˜ÛÛœİÙ\™\ˆHÜ™X]RÙ\™\Š\Ş[˜È
-™\K™\ÊHOˆÂˆHÂˆÛÛœİÜšYÚ[ˆH\[Ùˆ™\KšXY\œË›ÜšYÚ[ˆOOH	Üİš[™ÉÈÈ™\KšXY\œË›ÜšYÚ[ˆˆ[™Yš[™YÂ‚ˆYˆ
-Z\ÓÜšYÚ[[İÙY
-ÜšYÚ[ŠJHÂˆ™\ËÜš]RXY
-ËÈ	ØÛÛ[]\IÎˆ	Ø\XØ][Û‹ÚœÛÛÈÚ\œÙ]]]‹N	ÈJNÂˆ™\Ë™[™
-”ÓÓ‹œİš[™ÚYJÈ\œ›Üˆ	ÛH;h#:â!;ef;)à;%bˆÜšYÚ[»'¡zââ:âé‰ÈJJNÂˆ™]\›ÂˆB‚ˆ\PÛÜœÊ™\K™\ÊNÂ‚ˆYˆ
-™\K›Y]ÙOOH	ÓÔSÓ”ÉÊHÂˆ™\ËÜš]RXY
-Œ
-NÂˆ™\Ë™[™
+const sessions = new Map<string, SessionMessages>();
 
-NÂˆ™]\›ÂˆB‚ˆYˆ
-™\K›Y]ÙOOH	ÑÑU	È	‰ˆ™\K\›OOH	ËÚX[	ÊHÂˆÛÛœİX[H]ØZ]X[^[ØY
+function getSession(sessionId: string) {
+  const key = sessionId || 'default';
+  let messages = sessions.get(key);
 
-NÂˆ™\ËÜš]RXY
-X[œİ]\ËÂˆ	ØÛÛ[]\IÎˆ	Ø\XØ][Û‹ÚœÛÛÈÚ\œÙ]]]‹N	Ëˆ	ØØXÚKXÛÛ›Û	Îˆ	Û›Ë\İÜ™IËˆJNÂˆ™\Ë™[™
-”ÓÓ‹œİš[™ÚYJX[˜›ÙJJNÂˆ™]\›ÂˆB‚ˆYˆ
-™\K›Y]ÙOOH	ÔÔÕ	È	‰ˆ™\K\›OOH	ËØ\KØÚ]	ÊHÂˆÛÛœİ›ÙHH]ØZ]™XYœÛÛ›ÙJ™\JNÂˆÛÛœİÙ\ÜÚ[Û’YHİš[™Ê›ÙKœÙ\ÜÚ[Û’YÏÈ	ÙY˜][	ÊKš[J
-KœÛXÙJLŒ
-H	ÙY˜][	ÎÂˆÛÛœİY\ÜØYÙHHİš[™Ê›ÙK›Y\ÜØYÙHÏÈ	ÉÊKš[J
-NÂˆÛÛœİÛÛ^H›Ü›X[^™PÛÛ^
-›ÙK˜ÛÛ^
-NÂ‚ˆYˆ
-[Y\ÜØYÙJHÂˆ™\ËÜš]RXY
-È	ØÛÛ[]\IÎˆ	Ø\XØ][Û‹ÚœÛÛÈÚ\œÙ]]]‹N	ÈJNÂˆ™\Ë™[™
-”ÓÓ‹œİš[™ÚYJÈ\œ›Üˆ	úêe;"ç;)à:¬ :îa;%ä;'b;"­zââ:âé‰ÈJJNÂˆ™]\›ÂˆB‚ˆÛÛœİ[œİÙ\ˆH]ØZ][YÙ[
-Ù\ÜÚ[Û’YY\ÜØYÙKÛÛ^
-NÂ‚ˆ™\ËÜš]RXY
-ŒÂˆ	ØÛÛ[]\IÎˆ	Ø\XØ][Û‹ÚœÛÛÈÚ\œÙ]]]‹N	Ëˆ	ØØXÚKXÛÛ›Û	Îˆ	Û›Ë\İÜ™IËˆJNÂˆ™\Ë™[™
-”ÓÓ‹œİš[™ÚYJÈ[œİÙ\ˆJJNÂˆ™]\›ÂˆB‚ˆYˆ
-™\K›Y]ÙOOH	ÔÔÕ	È	‰ˆ™\K\›OOH	ËØ\KÜ™\Ù]	ÊHÂˆÛÛœİ›ÙHH]ØZ]™XYœÛÛ›ÙJ™\JNÂˆÛÛœİÙ\ÜÚ[Û’YHİš[™Ê›ÙKœÙ\ÜÚ[Û’YÏÈ	ÉÊKš[J
-NÂ‚ˆYˆ
-Ù\ÜÚ[Û’Y
-HÂˆÙ\ÜÚ[ÛœË™[]JÙ\ÜÚ[Û’Y
-NÂˆB‚ˆ™\ËÜš]RXY
-ŒÂˆ	ØÛÛ[]\IÎˆ	Ø\XØ][Û‹ÚœÛÛÈÚ\œÙ]]]‹N	Ëˆ	ØØXÚKXÛÛ›Û	Îˆ	Û›Ë\İÜ™IËˆJNÂˆ™\Ë™[™
-”ÓÓ‹œİš[™ÚYJÈÚÎˆYHJJNÂˆ™]\›ÂˆB‚ˆYˆ
-™\K›Y]ÙOOH	ÑÑU	È	‰ˆ™\K\›OOH	ËÉÊHÂˆ™\ËÜš]RXY
-ŒÂˆ	ØÛÛ[]\IÎˆ	Ø\XØ][Û‹ÚœÛÛÈÚ\œÙ]]]‹N	Ëˆ	ØØXÚKXÛÛ›Û	Îˆ	Û›Ë\İÜ™IËˆJNÂˆ™\Ë™[™
-”ÓÓ‹œİš[™ÚYJÂˆÚÎˆYKˆÙ\šXÙNˆ	ÔYÔ\šÈØØ[RHœšYÙIËˆX[ˆ	ËÚX[	ËˆJJNÂˆ™]\›ÂˆB‚ˆ™\ËÜš]RXY
-È	ØÛÛ[]\IÎˆ	Ø\XØ][Û‹ÚœÛÛÈÚ\œÙ]]]‹N	ÈJNÂˆ™\Ë™[™
-”ÓÓ‹œİš[™ÚYJÈ\œ›Üˆ	Ó›İ›İ[™	ÈJJNÂˆHØ]Ú
-\œ›ÜŠHÂˆÛÛœÛÛK™\œ›ÜŠ\œ›ÜŠNÂ‚ˆ™\ËÜš]RXY
-LÈ	ØÛÛ[]\IÎˆ	Ø\XØ][Û‹ÚœÛÛÈÚ\œÙ]]]‹N	ÈJNÂˆ™\Ë™[™
-”ÓÓ‹œİš[™ÚYJÂˆ\œ›Üˆ\œ›Üˆ[œİ[˜Ù[Ùˆ\œ›ÜˆÈ\œ›Ü‹›Y\ÜØYÙHˆİš[™Ê\œ›ÜŠKˆJJNÂˆBŸJNÂ‚œÙ\™\‹›\İ[ŠÔ•ÔÕ
+  if (!messages) {
+    messages = [{ role: 'system', content: SYSTEM_PROMPT }];
+    sessions.set(key, messages);
+  }
 
-HOˆÂˆÛÛœÛÛK›ÙÊ	ÉÊNÂˆÛÛœÛÛK›ÙÊ	ÔYÔ\šÈØØ[RHœšYÙIÊNÂˆÛÛœÛÛK›ÙÊ‹ËÉÒÔÕN‰ÔÔ•X
-NÂˆÛÛœÛÛK›ÙÊ[Ù[ˆ	ÓSÑSX
-NÂˆÛÛœÛÛK›ÙÊPÔÛÛÎˆ	ÛXÜÛÛË›X\
+  if (sessions.size > 20) {
+    const oldest = sessions.keys().next().value;
+    if (oldest && oldest !== key) sessions.delete(oldest);
+  }
 
-ÛÛ
-HOˆÛÛ›˜[YJKš›Ú[Š	Ë	Ê_X
-NÂˆÛÛœÛÛK›ÙÊ	ÉÊNÂŸJNÂ‚˜\Ş[˜È[˜İ[ÛˆÚ]İÛŠ
-HÂˆÙ\™\‹˜ÛÜÙJ
-NÂˆ]ØZ]ÛY[˜ÛÜÙJ
-NÂˆ›ØÙ\ÜË™^]
-
-NÂŸB‚œ›ØÙ\ÜË›ÛŠ	ÔÒQÒS•	ËÚ]İÛŠNÂœ›ØÙ\ÜË›ÛŠ	ÔÒQÕT“IËÚ]İÛŠNÂ
+  return messages;
+}
+
+function numberOrNull(value: unknown) {
+  if (value == null || value === '') return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function normalizeContext(value: unknown): WebContext {
+  if (!value || typeof value !== 'object') return {};
+
+  const source = value as Record<string, unknown>;
+
+  return {
+    userLat: numberOrNull(source.userLat),
+    userLng: numberOrNull(source.userLng),
+    radiusKm: numberOrNull(source.radiusKm),
+  };
+}
+
+function normalizeToolArguments(
+  toolName: string,
+  rawArgs: Record<string, unknown>,
+  userText: string,
+  context: WebContext,
+) {
+  const args: Record<string, unknown> = { ...rawArgs };
+  const text = userText;
+  const compact = userText.replace(/\s+/g, ' ').trim();
+
+  if (toolName === 'recommend_places') {
+    const latMatch = compact.match(/ìœ„ë„\s*[:=]?\s*([+-]?\d+(?:\.\d+)?)/i);
+    const lngMatch = compact.match(/ê²½ë„\s*[:=]?\s*([+-]?\d+(?:\.\d+)?)/i);
+
+    if (latMatch) args.userLat = Number(latMatch[1]);
+    if (lngMatch) args.userLng = Number(lngMatch[1]);
+
+    const radiusMatch = compact.match(/(?:ë°˜ê²½\s*)?(1|3|5)\s*km/i);
+    if (radiusMatch) args.radiusKm = Number(radiusMatch[1]);
+
+    const limitMatch = compact.match(/([1-5])\s*ê³³/);
+    if (limitMatch) args.limit = Number(limitMatch[1]);
+
+    if (text.includes('ê¸‰ì†')) {
+      args.chargerPreference = 'fast';
+    } else if (text.includes('ì™„ì†')) {
+      args.chargerPreference = 'slow';
+    } else if (/ìƒê´€\s*ì—†|ì•„ë¬´ê±°ë‚˜|ì¶©ì „\s*ë°©ì‹.*ë¬´ê´€/.test(compact)) {
+      args.chargerPreference = 'any';
+    }
+
+    if (/ì£¼ì°¨\s*(?:ë¥¼\s*)?(?:ìš°ì„ |ì¤‘ì‹¬)/.test(compact)) {
+      args.mode = 'parking';
+    } else if (
+      /ì¶©ì „\s*(?:ì„\s*)?(?:ìš°ì„ |ì¤‘ì‹¬)/.test(compact) ||
+      text.includes('ê¸‰ì†') ||
+      text.includes('ì™„ì†')
+    ) {
+      args.mode = 'charging';
+    }
+
+    const nearbyRequest = /ë‚´\s*(?:ê·¼ì²˜|ì£¼ë³€)|ê°€ê¹Œìš´|ê·¼ì²˜|ì£¼ë³€|ì¶”ì²œ/.test(compact);
+    if (nearbyRequest && context.userLat != null && context.userLng != null) {
+      if (args.userLat == null) args.userLat = context.userLat;
+      if (args.userLng == null) args.userLng = context.userLng;
+      if (args.radiusKm == null && context.radiusKm != null) args.radiusKm = context.radiusKm;
+    }
+  }
+
+  if (toolName === 'search_places') {
+    if (text.includes('ê¸‰ì†')) args.fastOnly = true;
+
+    if (
+      /ì¶©ì „\s*(?:ì´\s*)?(?:ê°€ëŠ¥|í• \s*ìˆ˜)/.test(compact) ||
+      /ì‚¬ìš©\s*ê°€ëŠ¥.*ì¶©ì „/.test(compact)
+    ) {
+      args.chargingAvailable = true;
+    }
+
+    if (
+      /ì£¼ì°¨\s*(?:ìë¦¬|ê°€ëŠ¥|ì”ì—¬)/.test(compact) ||
+      /ë‚¨ì€\s*ìë¦¬/.test(compact)
+    ) {
+      args.parkingAvailable = true;
+    }
+  }
+
+  return args;
+}
+
+function contextNote(context: WebContext) {
+  if (context.userLat == null || context.userLng == null) return '';
+
+  const radiusText = context.radiusKm != null ? `, í˜„ì¬ ì„ íƒ ë°˜ê²½ ${context.radiusKm}km` : '';
+  return `\n\n[PlugPark ì›¹ ì»¨í…ìŠ¤íŠ¸: í˜„ì¬ ìœ„ì¹˜ ì‚¬ìš© ê°€ëŠ¥${radiusText}. ìœ„ì¹˜ ê¸°ë°˜ ìš”ì²­ì´ë©´ ìœ„ë„ ${context.userLat}, ê²½ë„ ${context.userLng}ë¥¼ ì‚¬ìš©í•œë‹¤.]`;
+}
+
+async function runAgent(
+  sessionId: string,
+  userText: string,
+  context: WebContext,
+) {
+  const messages = getSession(sessionId);
+  const augmentedUserText = `${userText}${contextNote(context)}`;
+
+  messages.push({
+    role: 'user',
+    content: augmentedUserText,
+  });
+
+  for (let step = 0; step < 5; step++) {
+    const response = await ollama.chat({
+      model: MODEL,
+      messages,
+      tools: ollamaTools,
+      stream: false,
+    });
+
+    messages.push(response.message);
+
+    const toolCalls = response.message.tool_calls ?? [];
+
+    if (toolCalls.length === 0) {
+      return response.message.content || 'ì‘ë‹µì´ ì—†ìŠµë‹ˆë‹¤.';
+    }
+
+    for (const toolCall of toolCalls) {
+      const toolName = toolCall.function.name;
+      const rawArgs = (toolCall.function.arguments ?? {}) as Record<string, unknown>;
+      const args = normalizeToolArguments(toolName, rawArgs, userText, context);
+
+      console.log(`[MCP] ${toolName}`, args);
+
+      const result = await client.callTool({
+        name: toolName,
+        arguments: args,
+      });
+
+      const toolText = result.content
+        .filter((item: any) => item.type === 'text')
+        .map((item: any) => item.text)
+        .join('\n');
+
+      messages.push({
+        role: 'tool',
+        tool_name: toolName,
+        content: toolText || 'ê²°ê³¼ ì—†ìŒ',
+      });
+    }
+  }
+
+  return 'Tool í˜¸ì¶œ íšŸìˆ˜ê°€ ë„ˆë¬´ ë§ì•„ ì‘ì—…ì„ ì¤‘ë‹¨í–ˆìŠµë‹ˆë‹¤.';
+}
+
+async function readJsonBody(req: any) {
+  return await new Promise<any>((resolve, reject) => {
+    let body = '';
+
+    req.on('data', (chunk: Buffer) => {
+      body += chunk.toString('utf8');
+
+      if (body.length > 1_000_000) {
+        reject(new Error('ìš”ì²­ì´ ë„ˆë¬´ í½ë‹ˆë‹¤.'));
+        req.destroy();
+      }
+    });
+
+    req.on('end', () => {
+      if (!body) {
+        resolve({});
+        return;
+      }
+
+      try {
+        resolve(JSON.parse(body));
+      } catch {
+        reject(new Error('JSON í˜•ì‹ì´ ì˜¬ë°”ë¥´ì§€ ì•ŠìŠµë‹ˆë‹¤.'));
+      }
+    });
+
+    req.on('error', reject);
+  });
+}
+
+function isOriginAllowed(origin: string | undefined) {
+  if (!origin) return true;
+  return allowedOrigins.has(origin);
+}
+
+function applyCors(req: any, res: any) {
+  const origin = typeof req.headers.origin === 'string' ? req.headers.origin : undefined;
+
+  if (origin && isOriginAllowed(origin)) {
+    res.setHeader('access-control-allow-origin', origin);
+    res.setHeader('vary', 'Origin');
+  }
+
+  res.setHeader('access-control-allow-methods', 'GET, POST, OPTIONS');
+  res.setHeader('access-control-allow-headers', 'content-type');
+
+  if (req.headers['access-control-request-private-network'] === 'true') {
+    res.setHeader('access-control-allow-private-network', 'true');
+  }
+}
+
+async function healthPayload() {
+  try {
+    const list = await ollama.list();
+    const models = Array.isArray((list as any)?.models) ? (list as any).models : [];
+    const modelInstalled = models.some(
+      (item: any) => item?.model === MODEL || item?.name === MODEL,
+    );
+
+    return {
+      status: modelInstalled ? 200 : 503,
+      body: {
+        ok: modelInstalled,
+        provider: 'ollama',
+        model: MODEL,
+        mcp: true,
+        tools: mcpTools.map((tool) => tool.name),
+        reason: modelInstalled ? undefined : 'model_not_installed',
+      },
+    };
+  } catch {
+    return {
+      status: 503,
+      body: {
+        ok: false,
+        provider: 'ollama',
+        model: MODEL,
+        mcp: true,
+        reason: 'ollama_unreachable',
+      },
+    };
+  }
+}
+
+const server = createHttpServer(async (req, res) => {
+  try {
+    const origin = typeof req.headers.origin === 'string' ? req.headers.origin : undefined;
+
+    if (!isOriginAllowed(origin)) {
+      res.writeHead(403, { 'content-type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ error: 'í—ˆìš©ë˜ì§€ ì•Šì€ Originì…ë‹ˆë‹¤.' }));
+      return;
+    }
+
+    applyCors(req, res);
+
+    if (req.method === 'OPTIONS') {
+      res.writeHead(204);
+      res.end();
+      return;
+    }
+
+    if (req.method === 'GET' && req.url === '/health') {
+      const health = await healthPayload();
+      res.writeHead(health.status, {
+        'content-type': 'application/json; charset=utf-8',
+        'cache-control': 'no-store',
+      });
+      res.end(JSON.stringify(health.body));
+      return;
+    }
+
+    if (req.method === 'POST' && req.url === '/api/chat') {
+      const body = await readJsonBody(req);
+      const sessionId = String(body.sessionId ?? 'default').trim().slice(0, 120) || 'default';
+      const message = String(body.message ?? '').trim();
+      const context = normalizeContext(body.context);
+
+      if (!message) {
+        res.writeHead(400, { 'content-type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({ error: 'ë©”ì‹œì§€ê°€ ë¹„ì–´ ìˆìŠµë‹ˆë‹¤.' }));
+        return;
+      }
+
+      const answer = await runAgent(sessionId, message, context);
+
+      res.writeHead(200, {
+        'content-type': 'application/json; charset=utf-8',
+        'cache-control': 'no-store',
+      });
+      res.end(JSON.stringify({ answer }));
+      return;
+    }
+
+    if (req.method === 'POST' && req.url === '/api/reset') {
+      const body = await readJsonBody(req);
+      const sessionId = String(body.sessionId ?? '').trim();
+
+      if (sessionId) {
+        sessions.delete(sessionId);
+      }
+
+      res.writeHead(200, {
+        'content-type': 'application/json; charset=utf-8',
+        'cache-control': 'no-store',
+      });
+      res.end(JSON.stringify({ ok: true }));
+      return;
+    }
+
+    if (req.method === 'GET' && req.url === '/') {
+      res.writeHead(200, {
+        'content-type': 'application/json; charset=utf-8',
+        'cache-control': 'no-store',
+      });
+      res.end(JSON.stringify({
+        ok: true,
+        service: 'PlugPark Local AI Bridge',
+        health: '/health',
+      }));
+      return;
+    }
+
+    res.writeHead(404, { 'content-type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify({ error: 'Not Found' }));
+  } catch (error) {
+    console.error(error);
+
+    res.writeHead(500, { 'content-type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify({
+      error: error instanceof Error ? error.message : String(error),
+    }));
+  }
+});
+
+server.listen(PORT, HOST, () => {
+  console.log('');
+  console.log('PlugPark Local AI Bridge');
+  console.log(`http://${HOST}:${PORT}`);
+  console.log(`Model: ${MODEL}`);
+  console.log(`MCP Tools: ${mcpTools.map((tool) => tool.name).join(', ')}`);
+  console.log('');
+});
+
+async function shutdown() {
+  server.close();
+  await client.close();
+  process.exit(0);
+}
+
+process.on('SIGINT', shutdown);
+process.on('SIGTERM', shutdown);
