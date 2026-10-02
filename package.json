@@ -48,7 +48,8 @@
     "verify:release:v080-r1": "node scripts/verify-release-v080-r1.mjs",
     "verify:pwa-s1": "node scripts/verify-pwa-s1.mjs",
     "verify:mcp-web-s1": "node scripts/verify-mcp-web-s1.mjs",
-    "ai:start": "node scripts/start-ai-stack.mjs"
+    "ai:start": "node scripts/start-ai-stack.mjs",
+    "verify:mcp-web-s2": "node scripts/verify-mcp-web-s2.mjs"
   },
   "dependencies": {
     "react": "^19.1.1",
