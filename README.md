@@ -95,12 +95,24 @@ npx tsx src\bridge.ts
 npm run ai:start
 ```
 
-Windows에서는 프로젝트 루트의 `START_PLUGPARK_AI.cmd`를 더블클릭해도 됩니다. 런처가 Ollama 실행 여부를 확인하고, 필요하면 Ollama를 시작한 뒤 PlugPark-MCP의 `bridge.ts`를 실행하고 웹페이지까지 엽니다. 이미 실행 중인 서비스는 다시 띄우지 않습니다.
+Windows에서는 프로젝트 루트의 `START_PLUGPARK_AI.cmd`를 더블클릭해도 됩니다. 런처가 최신 Bridge 템플릿을 `PlugPark-MCP/src/bridge.ts`에 자동 반영하고, Ollama 실행 여부를 확인한 뒤 필요한 서비스만 시작하고 PlugPark 웹까지 엽니다. 이미 실행 중인 서비스는 다시 띄우지 않습니다.
+
+### AI 결과 → 지도/상세 연결 (MCP-WEB-S2)
+
+MCP Tool 결과에서 장소 ID를 구조화해서 함께 반환합니다. Qwen의 자연어 답변을 다시 문자열 분석하지 않고, 현재 PlugPark 화면의 `places`와 **정확한 ID**로 매칭합니다.
+
+- `search_places`, `get_place_detail`, `recommend_places`, `compare_places` 결과에서 관련 장소를 수집합니다.
+- AI 답변 아래에 최대 5개의 작은 장소 카드를 표시합니다.
+- **지도** 버튼은 기존 `focusPlaceOnMap()`을 호출해 지도 위치와 마커 포커스를 이동합니다.
+- **상세** 버튼은 기존 `openPlaceDetail()`을 호출해 현재 상세 패널을 엽니다.
+- MCP snapshot에는 있지만 현재 웹 데이터에 없는 ID는 이름으로 억지 매칭하지 않고 버튼을 비활성화합니다.
+- 지도/상세 버튼을 누르면 AI 패널을 닫아 지도와 상세 화면을 가리지 않습니다.
 
 정적 검증:
 
 ```bash
 npm run verify:mcp-web-s1
+npm run verify:mcp-web-s2
 ```
 
 ## 데이터 처리 구조
