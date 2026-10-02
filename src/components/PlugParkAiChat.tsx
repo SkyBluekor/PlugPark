@@ -80,6 +80,7 @@ export default function PlugParkAiChat({ userLocation, radiusKm }: Props) {
   }
 
   async function resetConversation() {
+    const previousSessionId = sessionIdRef.current;
     sessionIdRef.current = createSessionId();
     setMessages([]);
 
@@ -89,7 +90,7 @@ export default function PlugParkAiChat({ userLocation, radiusKm }: Props) {
       await fetch(`${bridgeUrl}/api/reset`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ sessionId: sessionIdRef.current }),
+        body: JSON.stringify({ sessionId: previousSessionId }),
       });
     } catch {
       // Local AI is optional. A failed reset must not affect PlugPark itself.
