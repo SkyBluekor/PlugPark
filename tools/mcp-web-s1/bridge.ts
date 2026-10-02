@@ -10,7 +10,7 @@ const MODEL = process.env.OLLAMA_MODEL?.trim() || 'qwen3.5:9b';
 const PORT = Number(process.env.AI_BRIDGE_PORT || 3000);
 const HOST = process.env.AI_BRIDGE_HOST?.trim() || '127.0.0.1';
 const SYNC_ON_START = process.env.PLUGPARK_SYNC_ON_START !== '0';
-const BRIDGE_API_VERSION = 'MCP_WEB_S2_V4';
+const BRIDGE_API_VERSION = 'MCP_WEB_S2_V5';
 const TSX_CLI = resolve(process.cwd(), 'node_modules', 'tsx', 'dist', 'cli.mjs');
 
 if (!existsSync(TSX_CLI)) {
@@ -42,6 +42,8 @@ type WebContext = {
   targetLat?: number | null;
   targetLng?: number | null;
   targetName?: string | null;
+  targetQuery?: string | null;
+  targetResolveFailed?: boolean;
 };
 
 type SessionMessages = any[];
@@ -218,6 +220,8 @@ function normalizeContext(value: unknown): WebContext {
     targetLat: numberOrNull(source.targetLat),
     targetLng: numberOrNull(source.targetLng),
     targetName: typeof source.targetName === 'string' ? source.targetName.trim() : null,
+    targetQuery: typeof source.targetQuery === 'string' ? source.targetQuery.trim() : null,
+    targetResolveFailed: source.targetResolveFailed === true,
   };
 }
 
@@ -566,6 +570,21 @@ async function runAgent(
     role: 'user',
     content: augmentedUserText,
   });
+
+  if (context.targetResolveFailed && context.targetQuery) {
+    return {
+      answer:
+        `"${context.targetQuery}"의 위치를 지도에서 정확히 확인하지 못했습니다. ` +
+        '장소명을 조금 더 정확히 입력하거나 주소를 함께 적어주세요.',
+      places: [],
+    };
+  }
+
+  if (context.targetLat != null && context.targetLng != null) {
+    console.log(
+      `[LOC] target="${context.targetName || context.targetQuery || '기준 위치'}" lat=${context.targetLat} lng=${context.targetLng}`,
+    );
+  }
 
   const progressive = await progressiveLandmarkRecommendation(userText, context);
 
