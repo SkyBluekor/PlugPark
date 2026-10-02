@@ -73,10 +73,13 @@ function busanScopedQueries(raw: string) {
   const clean = raw.replace(/\s+/g, ' ').trim();
   const withoutBusan = stripBusanPrefix(clean);
 
+  const alreadyBusanScoped = /^(?:부산광역시|부산시|부산)\s/u.test(clean);
+
   return normalizedQueryList([
-    clean,
+    alreadyBusanScoped ? clean : '',
     withoutBusan ? `부산광역시 ${withoutBusan}` : '',
     withoutBusan ? `부산 ${withoutBusan}` : '',
+    clean,
     withoutBusan,
   ]);
 }
