@@ -1,0 +1,32 @@
+{
+  "name": "PlugPark — 부산 EV 주차 + 충전",
+  "short_name": "PlugPark",
+  "description": "부산 공영주차장과 전기차 충전소를 한 번에 찾는 PlugPark",
+  "lang": "ko",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#f4f6f5",
+  "theme_color": "#0b6b4f",
+  "icons": [
+    {
+      "src": "/icons/plugpark-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/plugpark-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/plugpark-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
