@@ -130,6 +130,22 @@ assert(
   !bridge.includes("process.platform === 'win32' ? 'npx.cmd' : 'npx'"),
   'Bridge에 Windows npx.cmd spawn이 남아 있습니다.',
 );
+assert(
+  bridge.includes('extractLandmarkSearchTerm'),
+  '근처/주변 질의에서 핵심 장소명을 정규화하지 않습니다.',
+);
+assert(
+  bridge.includes('searchPlacesCalls > 2'),
+  'search_places 반복 호출 상한이 없습니다.',
+);
+assert(
+  bridge.includes('finalizeWithoutTools'),
+  '검색 결과 이후 Tool 없이 답변을 종료하는 경로가 없습니다.',
+);
+assert(
+  bridge.includes("args.parkingAvailable ="),
+  '검색 조건의 주차 잔여 여부를 사용자 의도 기준으로 고정하지 않습니다.',
+);
 
 console.log('MCP-WEB-S2 STATIC VERIFY PASS');
 console.log({
@@ -142,4 +158,6 @@ console.log({
   autoBridgeUpdate: 'PASS',
   bridgeVersionGuard: 'PASS',
   windowsSpawnCompatibility: 'PASS',
+  searchLoopGuard: 'PASS',
+  landmarkQueryNormalization: 'PASS',
 });
