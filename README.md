@@ -89,6 +89,14 @@ npx tsx src\bridge.ts
 
 기본 모델은 `qwen3.5:9b`이며 `OLLAMA_MODEL` 환경변수로 교체할 수 있습니다. Bridge 기본 주소는 `http://127.0.0.1:3000`이고, 프런트의 `VITE_LOCAL_AI_BRIDGE_URL`로 변경할 수 있습니다. 웹에서 현재 위치를 허용한 경우 “내 근처” 요청에 위치 컨텍스트를 전달합니다. Bridge를 시작할 때 기존 `PlugPark-MCP/scripts/sync-places.ts`를 **한 번만** 실행해 운영 `/api/places`를 `data/places.json`으로 갱신한 뒤 MCP가 로컬 snapshot을 읽습니다. 질문마다 운영 API를 반복 호출하지 않으며, `PLUGPARK_SYNC_ON_START=0`으로 시작 시 동기화를 끌 수 있습니다.
 
+한 번 설정한 뒤에는 서버를 여러 개 열 필요가 없습니다.
+
+```powershell
+npm run ai:start
+```
+
+Windows에서는 프로젝트 루트의 `START_PLUGPARK_AI.cmd`를 더블클릭해도 됩니다. 런처가 Ollama 실행 여부를 확인하고, 필요하면 Ollama를 시작한 뒤 PlugPark-MCP의 `bridge.ts`를 실행하고 웹페이지까지 엽니다. 이미 실행 중인 서비스는 다시 띄우지 않습니다.
+
 정적 검증:
 
 ```bash
