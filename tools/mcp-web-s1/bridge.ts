@@ -9,6 +9,7 @@ const MODEL = process.env.OLLAMA_MODEL?.trim() || 'qwen3.5:9b';
 const PORT = Number(process.env.AI_BRIDGE_PORT || 3000);
 const HOST = process.env.AI_BRIDGE_HOST?.trim() || '127.0.0.1';
 const SYNC_ON_START = process.env.PLUGPARK_SYNC_ON_START !== '0';
+const BRIDGE_API_VERSION = 'MCP_WEB_S2_V1';
 
 const allowedOrigins = new Set(
   (
@@ -338,6 +339,15 @@ function collectToolPlaces(
     candidates.push(...parsed.places);
   }
 
+  if (
+    candidates.length > 0 &&
+    (toolName === 'get_place_detail' ||
+      toolName === 'recommend_places' ||
+      toolName === 'compare_places')
+  ) {
+    target.clear();
+  }
+
   for (const candidate of candidates) {
     const place = normalizeAiPlace(candidate);
     if (!place || target.has(place.id)) continue;
@@ -478,6 +488,7 @@ async function healthPayload() {
         provider: 'ollama',
         model: MODEL,
         mcp: true,
+        apiVersion: BRIDGE_API_VERSION,
         tools: mcpTools.map((tool) => tool.name),
         reason: modelInstalled ? undefined : 'model_not_installed',
       },
@@ -490,6 +501,7 @@ async function healthPayload() {
         provider: 'ollama',
         model: MODEL,
         mcp: true,
+        apiVersion: BRIDGE_API_VERSION,
         reason: 'ollama_unreachable',
       },
     };
