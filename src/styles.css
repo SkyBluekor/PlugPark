@@ -784,3 +784,55 @@ body{overflow-x:hidden}
     padding-bottom:env(safe-area-inset-bottom,0px);
   }
 }
+
+/* MCP-WEB-S2 structured place actions */
+.ai-chat-message-content{min-width:0}
+.ai-chat-message-content>p{width:100%}
+.ai-place-cards{display:grid;gap:8px;margin-top:8px}
+.ai-place-card{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto;
+  gap:10px;
+  align-items:center;
+  padding:10px 10px 10px 11px;
+  border:1px solid #dce6e2;
+  border-radius:9px;
+  background:#fff;
+}
+.ai-place-card.unavailable{background:#f7f8f7;border-style:dashed}
+.ai-place-card-copy{min-width:0;display:flex;flex-direction:column;gap:3px}
+.ai-place-card-copy strong{
+  overflow:hidden;
+  color:#214239;
+  font-size:11px;
+  line-height:1.35;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.ai-place-card-copy span{color:#687b73;font-size:10px;line-height:1.4}
+.ai-place-card-copy small{color:#978978;font-size:9px;line-height:1.45}
+.ai-place-card-actions{display:flex;gap:5px}
+.ai-place-card-actions button{
+  min-width:44px;
+  min-height:31px;
+  padding:0 8px;
+  border:1px solid #b8cec5;
+  border-radius:6px;
+  background:#fff;
+  color:#155d47;
+  font-size:10px;
+  font-weight:850;
+  cursor:pointer;
+}
+.ai-place-card-actions button:last-child{background:#0d7655;border-color:#0d7655;color:#fff}
+.ai-place-card-actions button:disabled{
+  border-color:#d9dfdc;
+  background:#eef1ef;
+  color:#9da7a3;
+  cursor:not-allowed;
+}
+
+@media(max-width:420px){
+  .ai-place-card{grid-template-columns:1fr}
+  .ai-place-card-actions{justify-content:flex-end}
+}
