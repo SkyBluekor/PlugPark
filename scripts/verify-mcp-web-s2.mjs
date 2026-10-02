@@ -44,7 +44,7 @@ assert(
   'Bridge 응답에 구조화 장소 목록이 없습니다.',
 );
 assert(
-  bridge.includes("const BRIDGE_API_VERSION = 'MCP_WEB_S2_V1'"),
+  bridge.includes("const BRIDGE_API_VERSION = 'MCP_WEB_S2_V2'"),
   'S2 Bridge API 버전이 없습니다.',
 );
 assert(
@@ -107,7 +107,7 @@ assert(
   '통합 런처가 최신 Bridge 코드를 자동 반영하지 않습니다.',
 );
 assert(
-  launcher.includes("REQUIRED_BRIDGE_API_VERSION = 'MCP_WEB_S2_V1'"),
+  launcher.includes("REQUIRED_BRIDGE_API_VERSION = 'MCP_WEB_S2_V2'"),
   '통합 런처가 실행 중인 Bridge 버전을 검증하지 않습니다.',
 );
 assert(
@@ -135,6 +135,26 @@ assert(
   '근처/주변 질의에서 핵심 장소명을 정규화하지 않습니다.',
 );
 assert(
+  chat.includes('resolveNearbyLandmark'),
+  '브라우저에서 Kakao 기준 장소 좌표를 해석하지 않습니다.',
+);
+assert(
+  chat.includes('targetLat: targetLocation?.lat ?? null'),
+  '해석한 기준 장소 좌표를 Bridge에 전달하지 않습니다.',
+);
+assert(
+  bridge.includes('progressiveLandmarkRecommendation'),
+  '기준 장소 주변 반경을 점진적으로 확장하지 않습니다.',
+);
+assert(
+  bridge.includes('[1, 3, 5, 10, 20]'),
+  '점진적 주변 검색 반경 정책이 없습니다.',
+);
+assert(
+  bridge.includes('count >= requestedCount'),
+  '목표 장소 수를 찾았을 때 검색을 종료하지 않습니다.',
+);
+assert(
   bridge.includes('searchPlacesCalls > 2'),
   'search_places 반복 호출 상한이 없습니다.',
 );
@@ -160,4 +180,6 @@ console.log({
   windowsSpawnCompatibility: 'PASS',
   searchLoopGuard: 'PASS',
   landmarkQueryNormalization: 'PASS',
+  kakaoLandmarkResolution: 'PASS',
+  progressiveRadiusSearch: 'PASS',
 });
