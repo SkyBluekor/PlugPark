@@ -10,7 +10,7 @@ const MODEL = process.env.OLLAMA_MODEL?.trim() || 'qwen3.5:9b';
 const PORT = Number(process.env.AI_BRIDGE_PORT || 3000);
 const HOST = process.env.AI_BRIDGE_HOST?.trim() || '127.0.0.1';
 const SYNC_ON_START = process.env.PLUGPARK_SYNC_ON_START !== '0';
-const BRIDGE_API_VERSION = 'MCP_WEB_S21B_V1';
+const BRIDGE_API_VERSION = 'MCP_WEB_S21C_V1';
 const TSX_CLI = resolve(process.cwd(), 'node_modules', 'tsx', 'dist', 'cli.mjs');
 
 if (!existsSync(TSX_CLI)) {
@@ -48,6 +48,10 @@ type WebContext = {
   targetResolveQueries?: string[];
   targetCandidateCount?: number | null;
   targetScore?: number | null;
+  targetResolveKind?: string | null;
+  targetResolveMethod?: string | null;
+  targetCanonicalName?: string | null;
+  targetConfidence?: string | null;
   locationIntentInput?: string | null;
   locationIntentSource?: string | null;
   locationIntentText?: string | null;
@@ -241,6 +245,22 @@ function normalizeContext(value: unknown): WebContext {
       : [],
     targetCandidateCount: numberOrNull(source.targetCandidateCount),
     targetScore: numberOrNull(source.targetScore),
+    targetResolveKind:
+      typeof source.targetResolveKind === 'string'
+        ? source.targetResolveKind.trim()
+        : null,
+    targetResolveMethod:
+      typeof source.targetResolveMethod === 'string'
+        ? source.targetResolveMethod.trim()
+        : null,
+    targetCanonicalName:
+      typeof source.targetCanonicalName === 'string'
+        ? source.targetCanonicalName.trim()
+        : null,
+    targetConfidence:
+      typeof source.targetConfidence === 'string'
+        ? source.targetConfidence.trim()
+        : null,
     locationIntentInput:
       typeof source.locationIntentInput === 'string'
         ? source.locationIntentInput.trim()
@@ -641,9 +661,11 @@ async function runAgent(
 
   if (context.targetResolveFailed && context.targetQuery) {
     console.log(
-      '[LOC] FAIL',
+      '[LOC-RESOLVE] FAIL',
       JSON.stringify({
         query: context.targetQuery,
+        kind: context.targetResolveKind || 'unknown',
+        method: context.targetResolveMethod || null,
         reason: context.targetResolveReason || 'UNKNOWN',
         queries: context.targetResolveQueries || [],
         candidates: context.targetCandidateCount ?? 0,
@@ -660,7 +682,13 @@ async function runAgent(
             ? '부산 지역 안에서 일치하는 장소를 찾지 못했습니다.'
             : context.targetResolveReason === 'LOW_CONFIDENCE'
               ? '비슷한 장소는 있지만 정확한 장소로 확정하기 어렵습니다.'
-              : '위치를 정확히 확인하지 못했습니다.';
+              : context.targetResolveReason === 'ADDRESS_NOT_FOUND'
+                ? '주소 또는 행정지역 검색 결과가 없습니다.'
+                : context.targetResolveReason === 'REGION_MISMATCH'
+                  ? '검색된 좌표의 부산 행정지역이 입력한 위치와 일치하지 않습니다.'
+                  : context.targetResolveReason === 'AMBIGUOUS_REGION'
+                    ? '행정지역 후보를 하나로 확정하기 어렵습니다.'
+                    : '위치를 정확히 확인하지 못했습니다.';
 
     return {
       answer:
@@ -672,9 +700,13 @@ async function runAgent(
 
   if (context.targetLat != null && context.targetLng != null) {
     console.log(
-      '[LOC] OK',
+      '[LOC-RESOLVE] OK',
       JSON.stringify({
         query: context.targetQuery || null,
+        kind: context.targetResolveKind || 'unknown',
+        method: context.targetResolveMethod || null,
+        canonical: context.targetCanonicalName || context.targetName || '기준 위치',
+        confidence: context.targetConfidence || null,
         target: context.targetName || '기준 위치',
         lat: context.targetLat,
         lng: context.targetLng,
