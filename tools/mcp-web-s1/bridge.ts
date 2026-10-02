@@ -10,7 +10,7 @@ const MODEL = process.env.OLLAMA_MODEL?.trim() || 'qwen3.5:9b';
 const PORT = Number(process.env.AI_BRIDGE_PORT || 3000);
 const HOST = process.env.AI_BRIDGE_HOST?.trim() || '127.0.0.1';
 const SYNC_ON_START = process.env.PLUGPARK_SYNC_ON_START !== '0';
-const BRIDGE_API_VERSION = 'MCP_WEB_S21_V1';
+const BRIDGE_API_VERSION = 'MCP_WEB_S21B_V1';
 const TSX_CLI = resolve(process.cwd(), 'node_modules', 'tsx', 'dist', 'cli.mjs');
 
 if (!existsSync(TSX_CLI)) {
@@ -48,6 +48,10 @@ type WebContext = {
   targetResolveQueries?: string[];
   targetCandidateCount?: number | null;
   targetScore?: number | null;
+  locationIntentInput?: string | null;
+  locationIntentSource?: string | null;
+  locationIntentText?: string | null;
+  locationIntentNearby?: boolean;
 };
 
 type SessionMessages = any[];
@@ -237,6 +241,19 @@ function normalizeContext(value: unknown): WebContext {
       : [],
     targetCandidateCount: numberOrNull(source.targetCandidateCount),
     targetScore: numberOrNull(source.targetScore),
+    locationIntentInput:
+      typeof source.locationIntentInput === 'string'
+        ? source.locationIntentInput.trim()
+        : null,
+    locationIntentSource:
+      typeof source.locationIntentSource === 'string'
+        ? source.locationIntentSource.trim()
+        : null,
+    locationIntentText:
+      typeof source.locationIntentText === 'string'
+        ? source.locationIntentText.trim()
+        : null,
+    locationIntentNearby: source.locationIntentNearby === true,
   };
 }
 
@@ -287,7 +304,7 @@ function isNearbyLandmarkRequest(userText: string, context: WebContext) {
   return (
     context.targetLat != null &&
     context.targetLng != null &&
-    /근처|주변|인근/.test(userText)
+    /근처|주변|인근|가장\s*가까운|가까운|가까이/.test(userText)
   );
 }
 
@@ -585,6 +602,18 @@ async function runAgent(
     role: 'user',
     content: augmentedUserText,
   });
+
+  if (context.locationIntentInput) {
+    console.log(
+      '[LOC-PARSE]',
+      JSON.stringify({
+        input: context.locationIntentInput,
+        source: context.locationIntentSource || 'none',
+        location: context.locationIntentText || null,
+        nearby: context.locationIntentNearby === true,
+      }),
+    );
+  }
 
   if (context.targetResolveFailed && context.targetQuery) {
     console.log(
