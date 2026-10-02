@@ -1,5 +1,10 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import type { PlugParkPlace } from '../types';
+import {
+  extractNearbyLandmark,
+  replaceNearbyLandmark,
+  resolveNearbyLandmark,
+} from '../services/locationResolver';
 
 type UserLocation = { lat: number; lng: number } | null;
 type RadiusKm = 1 | 3 | 5 | null;
@@ -54,180 +59,10 @@ function createSessionId() {
   return `plugpark-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
-const BUSAN_BOUNDS = {
-  minLat: 34.8,
-  maxLat: 35.45,
-  minLng: 128.7,
-  maxLng: 129.4,
-} as const;
-
-function isBusanCoordinates(lat: number, lng: number) {
-  return (
-    Number.isFinite(lat) &&
-    Number.isFinite(lng) &&
-    lat >= BUSAN_BOUNDS.minLat &&
-    lat <= BUSAN_BOUNDS.maxLat &&
-    lng >= BUSAN_BOUNDS.minLng &&
-    lng <= BUSAN_BOUNDS.maxLng
-  );
-}
-
-function extractNearbyLandmark(message: string) {
-  const compact = message.replace(/\s+/g, ' ').trim();
-  const match = compact.match(/^(.+?)\s*(?:근처|주변|인근)(?:\s|$)/);
-  if (!match?.[1]) return '';
-
-  const raw = match[1]
-    .replace(/^(?:부산광역시|부산시|부산)\s*/u, '')
-    .trim();
-
-  if (!raw || /^(?:내|현재\s*위치)$/u.test(raw)) return '';
-
-  return raw;
-}
-
-function normalizePlaceLookupText(value: string) {
-  return value
-    .toLowerCase()
-    .replace(/부산광역시|부산시/g, '부산')
-    .replace(/[\s,\.·ㆍ()\[\]{}\-_\/]/g, '')
-    .trim();
-}
-
-function buildLandmarkQueries(rawLandmark: string) {
-  const clean = rawLandmark.replace(/\s+/g, ' ').trim();
-  const tokens = clean.split(' ').filter(Boolean);
-  const district = tokens.find((token) => /^[가-힣]+구$/.test(token)) || '';
-  const rest = tokens.filter((token) => token !== district);
-  const restText = rest.join(' ').trim();
-
-  const queries = [
-    `부산 ${clean}`,
-    district && restText ? `부산 ${district} ${restText}` : '',
-    district && restText ? `부산 ${restText} ${district}` : '',
-    clean,
-  ];
-
-  if (/폴리텍/.test(restText || clean) && !/대학/.test(restText || clean)) {
-    const expanded = (restText || clean).replace(/폴리텍/g, '폴리텍대학');
-    queries.push(
-      district ? `부산 ${district} ${expanded}` : `부산 ${expanded}`,
-      district ? `부산 ${expanded} ${district}` : '',
-      '한국폴리텍대학 부산캠퍼스',
-    );
-  }
-
-  return [...new Set(queries.map((query) => query.trim()).filter(Boolean))];
-}
-
-function landmarkCandidateScore(rawLandmark: string, item: any) {
-  const lat = Number(item?.y);
-  const lng = Number(item?.x);
-  if (!isBusanCoordinates(lat, lng)) return Number.NEGATIVE_INFINITY;
-
-  const rawTokens = rawLandmark
-    .replace(/^(?:부산광역시|부산시|부산)\s*/u, '')
-    .split(/\s+/)
-    .map((token) => token.trim())
-    .filter((token) => token.length >= 2);
-
-  const name = String(item?.place_name || '');
-  const address = `${String(item?.road_address_name || '')} ${String(item?.address_name || '')}`;
-  const haystack = `${name} ${address}`;
-  const normalizedHaystack = normalizePlaceLookupText(haystack);
-
-  let score = 0;
-
-  for (const token of rawTokens) {
-    const normalizedToken = normalizePlaceLookupText(token);
-    if (!normalizedToken) continue;
-
-    if (normalizePlaceLookupText(name).includes(normalizedToken)) {
-      score += /^[가-힣]+구$/.test(token) ? 18 : 42;
-    } else if (normalizedHaystack.includes(normalizedToken)) {
-      score += /^[가-힣]+구$/.test(token) ? 26 : 20;
-    }
-  }
-
-  if (/폴리텍/.test(rawLandmark) && /폴리텍/.test(name)) score += 55;
-  if (/대학/.test(rawLandmark) && /대학/.test(name)) score += 18;
-  if (/캠퍼스/.test(name)) score += 5;
-
-  return score;
-}
-
-async function waitForKakaoServices(timeoutMs = 5000) {
-  const started = Date.now();
-
-  while (Date.now() - started < timeoutMs) {
-    const services = window.kakao?.maps?.services;
-    if (services?.Places && services?.Status) return services;
-    await new Promise((resolve) => window.setTimeout(resolve, 100));
-  }
-
-  return null;
-}
-
-async function kakaoKeywordSearch(services: any, query: string) {
-  return await new Promise<any[]>((resolve) => {
-    const placesService = new services.Places();
-
-    placesService.keywordSearch(
-      query,
-      (result: any[], status: string) => {
-        resolve(
-          status === services.Status.OK && Array.isArray(result)
-            ? result
-            : [],
-        );
-      },
-      { size: 15 },
-    );
-  });
-}
-
-async function resolveNearbyLandmark(message: string) {
-  const rawLandmark = extractNearbyLandmark(message);
-  if (!rawLandmark) return null;
-
-  const services = await waitForKakaoServices();
-  if (!services) return null;
-
-  const candidates: any[] = [];
-  const seen = new Set<string>();
-
-  for (const query of buildLandmarkQueries(rawLandmark)) {
-    const results = await kakaoKeywordSearch(services, query);
-
-    for (const item of results) {
-      const key = `${item?.id || ''}|${item?.x || ''}|${item?.y || ''}|${item?.place_name || ''}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      candidates.push(item);
-    }
-  }
-
-  const ranked = candidates
-    .map((item) => ({
-      item,
-      score: landmarkCandidateScore(rawLandmark, item),
-    }))
-    .filter((entry) => Number.isFinite(entry.score))
-    .sort((a, b) => b.score - a.score);
-
-  const best = ranked[0];
-  if (!best || best.score < 35) return null;
-
-  const lat = Number(best.item?.y);
-  const lng = Number(best.item?.x);
-
-  return {
-    name: String(best.item?.place_name || rawLandmark).trim() || rawLandmark,
-    lat,
-    lng,
-    rawLandmark,
-  };
-}
+type PendingNearbyRequest = {
+  originalRequest: string;
+  failedLandmark: string;
+};
 
 function formatAiDistance(distanceMeters?: number | null) {
   if (distanceMeters == null || !Number.isFinite(distanceMeters)) return '';
@@ -278,6 +113,7 @@ export default function PlugParkAiChat({
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
+  const [pendingNearby, setPendingNearby] = useState<PendingNearbyRequest | null>(null);
   const endRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -317,6 +153,7 @@ export default function PlugParkAiChat({
     const previousSessionId = sessionIdRef.current;
     sessionIdRef.current = createSessionId();
     setMessages([]);
+    setPendingNearby(null);
 
     if (status !== 'online') return;
 
@@ -348,15 +185,44 @@ export default function PlugParkAiChat({
     setSending(true);
 
     try {
-      const nearbyLandmark = extractNearbyLandmark(message);
-      const targetLocation = await resolveNearbyLandmark(message);
+      const messageHasNearbyLandmark = Boolean(extractNearbyLandmark(message));
+      const effectiveMessage =
+        pendingNearby && !messageHasNearbyLandmark
+          ? replaceNearbyLandmark(pendingNearby.originalRequest, message)
+          : message;
+
+      const nearbyLandmark = extractNearbyLandmark(effectiveMessage);
+      const appKey = import.meta.env.VITE_KAKAO_MAP_JS_KEY?.trim() || '';
+      const locationResult = nearbyLandmark
+        ? await resolveNearbyLandmark(appKey, effectiveMessage)
+        : null;
+
+      const targetLocation =
+        locationResult && locationResult.ok
+          ? locationResult
+          : null;
+
+      const resolveFailed = Boolean(
+        nearbyLandmark &&
+        locationResult &&
+        !locationResult.ok,
+      );
+
+      if (resolveFailed) {
+        setPendingNearby({
+          originalRequest: effectiveMessage,
+          failedLandmark: nearbyLandmark,
+        });
+      } else if (nearbyLandmark) {
+        setPendingNearby(null);
+      }
 
       const response = await fetch(`${bridgeUrl}/api/chat`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           sessionId: sessionIdRef.current,
-          message,
+          message: effectiveMessage,
           context: {
             userLat: userLocation?.lat ?? null,
             userLng: userLocation?.lng ?? null,
@@ -365,7 +231,17 @@ export default function PlugParkAiChat({
             targetLng: targetLocation?.lng ?? null,
             targetName: targetLocation?.name ?? null,
             targetQuery: nearbyLandmark || null,
-            targetResolveFailed: Boolean(nearbyLandmark && !targetLocation),
+            targetResolveFailed: resolveFailed,
+            targetResolveReason:
+              locationResult && !locationResult.ok
+                ? locationResult.reason
+                : null,
+            targetResolveQueries: locationResult?.queries ?? [],
+            targetCandidateCount: locationResult?.candidateCount ?? 0,
+            targetScore:
+              locationResult && locationResult.ok
+                ? locationResult.score
+                : (locationResult?.bestScore ?? null),
           },
         }),
       });
