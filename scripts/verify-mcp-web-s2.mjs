@@ -14,6 +14,7 @@ const chat = read('src/components/PlugParkAiChat.tsx');
 const bridge = read('tools/mcp-web-s1/bridge.ts');
 const styles = read('src/styles.css');
 const launcher = read('scripts/start-ai-stack.mjs');
+const nearbyTool = read('tools/mcp-web-s1/nearby-tool.ts');
 
 assert(
   bridge.includes('type AiPlaceReference'),
@@ -44,7 +45,7 @@ assert(
   'Bridge 응답에 구조화 장소 목록이 없습니다.',
 );
 assert(
-  bridge.includes("const BRIDGE_API_VERSION = 'MCP_WEB_S2_V3'"),
+  bridge.includes("const BRIDGE_API_VERSION = 'MCP_WEB_S2_V4'"),
   'S2 Bridge API 버전이 없습니다.',
 );
 assert(
@@ -107,7 +108,7 @@ assert(
   '통합 런처가 최신 Bridge 코드를 자동 반영하지 않습니다.',
 );
 assert(
-  launcher.includes("REQUIRED_BRIDGE_API_VERSION = 'MCP_WEB_S2_V3'"),
+  launcher.includes("REQUIRED_BRIDGE_API_VERSION = 'MCP_WEB_S2_V4'"),
   '통합 런처가 실행 중인 Bridge 버전을 검증하지 않습니다.',
 );
 assert(
@@ -145,6 +146,34 @@ assert(
 assert(
   bridge.includes('progressiveLandmarkRecommendation'),
   '기준 장소 주변 반경을 점진적으로 확장하지 않습니다.',
+);
+assert(
+  bridge.includes("name: 'nearby_places'"),
+  '점진 검색이 exact nearby MCP Tool을 호출하지 않습니다.',
+);
+assert(
+  bridge.includes("collectToolPlaces('nearby_places'"),
+  'nearby_places 결과가 구조화 장소 카드로 연결되지 않습니다.',
+);
+assert(
+  nearbyTool.includes("registerTool(\n    'nearby_places'"),
+  'exact nearby MCP Tool이 없습니다.',
+);
+assert(
+  nearbyTool.includes('.sort((a, b) =>'),
+  'nearby_places가 거리순 정렬을 수행하지 않습니다.',
+);
+assert(
+  nearbyTool.includes('distanceMeters - b.distanceMeters'),
+  'nearby_places의 거리 오름차순 보장이 없습니다.',
+);
+assert(
+  launcher.includes('syncNearbyMcpTool'),
+  '통합 런처가 nearby MCP Tool을 자동 설치하지 않습니다.',
+);
+assert(
+  launcher.includes('PLUGPARK_MCP_WEB_NEARBY_TOOL'),
+  '통합 런처가 MCP server.ts에 nearby Tool 등록을 패치하지 않습니다.',
 );
 assert(
   bridge.includes('[1, 3, 5, 10, 20]'),
@@ -198,6 +227,7 @@ console.log({
   landmarkQueryNormalization: 'PASS',
   kakaoLandmarkResolution: 'PASS',
   progressiveRadiusSearch: 'PASS',
+  exactNearbyMcpTool: 'PASS',
   distanceOrderedCards: 'PASS',
   distanceDisplay: 'PASS',
 });
