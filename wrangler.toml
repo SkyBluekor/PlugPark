@@ -16,4 +16,6 @@ database_name = "plugpark-db"
 database_id = "4c75a008-14a4-4ff7-9f94-c601a686f0aa"
 
 # Live data refresh is demand-driven from /api/places.
-# No Cron trigger is configured, so an idle PlugPark deployment does not write to D1.
+# Explicitly deploy an empty cron list so Wrangler removes any previously attached Cron Trigger.
+[triggers]
+crons = []
