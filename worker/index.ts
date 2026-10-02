@@ -210,6 +210,13 @@ const PARKING_REALTIME_CHUNK_SIZE = 100;
 const DEFAULT_PARKING_STALE_MINUTES = 60;
 const DEFAULT_STATUS_STALE_MINUTES = 20;
 const PLACES_CACHE_SECONDS = 5;
+const USER_READ_REFRESH_GATE_SECONDS = 60;
+const BUSAN_BOUNDS = {
+  minLat: 34.8,
+  maxLat: 35.45,
+  minLng: 128.7,
+  maxLng: 129.4,
+} as const;
 const FAST_CHARGER_SQL =
   "(CASE WHEN c.output_kw >= 50 THEN 1 WHEN c.output_kw IS NULL AND c.charger_type IN ('01','03','04','05','06','07','09','10') THEN 1 ELSE 0 END) = 1";
 const SLOW_CHARGER_SQL =
@@ -497,8 +504,7 @@ export default {
 
     if (url.pathname === '/api/admin/d1/prepare-read-models') {
       if (request.method !== 'POST') {
-        return json({ ok: false, error: 'POST 요청만 허용됩니다.' }, 405);
-      }
+        return json({ ok: false, error: 'POST 요청만 허용됩니다.' }, 405);      }
       if (!env.DB) return d1ConfigError();
       const authError = validateIngestAdmin(request, env);
       if (authError) return authError;
@@ -675,37 +681,17 @@ export default {
     return env.ASSETS.fetch(request);
   },
 
-  async scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
-    if (!liveSyncEnabled(env) || !env.DB) return;
-
-    ctx.waitUntil((async () => {
-      await ensureLiveSchema(env.DB!);
-
-      // Parking runs every 5 minutes, but only a quota-safe batch of facility codes is polled.
-      // EV status remains limited to every 10 minutes.
-      const scheduledAt = new Date(controller.scheduledTime);
-      try {
-        if (isLocalFixtureMode(env) || env.BUSAN_REALTIME_PARKING_API_URL) {
-          await syncParkingRealtime(env);
-        }
-      } catch (error) {
-        await markLiveSyncError(env.DB!, 'parking_realtime', error);
-      }
-
-      if (scheduledAt.getUTCMinutes() % 10 === 0) {
-        try {
-          const reconcile = await shouldAttemptFullReconcile(env.DB!, env);
-          await syncEvStatus(env, reconcile ? 'full' : 'incremental');
-        } catch (error) {
-          await markLiveSyncError(env.DB!, 'ev_status', error);
-        }
-      }
-    })());
+  async scheduled(): Promise<void> {
+    // Deliberately disabled. Production live refresh is demand-driven from /api/places.
+    // Keeping this as a no-op also prevents D1 writes if an old Cloudflare cron trigger
+    // remains attached briefly during deployment propagation.
   },
 };
 
-async function handlePlaces(env: Env, _ctx: ExecutionContext) {
+async function handlePlaces(env: Env, ctx: ExecutionContext) {
   if (!env.DB) return d1ConfigError();
+
+  await scheduleLiveRefreshOnUserRead(env, ctx);
 
   const cache = getDefaultCache();
   const cacheRequest = new Request(`https://plugpark.internal/${CACHE_VERSION}/places-d1`);
@@ -828,6 +814,63 @@ async function handlePlaces(env: Env, _ctx: ExecutionContext) {
 /* -------------------------------------------------------------------------- */
 /* v0.7.0 live data sync                                                       */
 /* -------------------------------------------------------------------------- */
+
+async function scheduleLiveRefreshOnUserRead(env: Env, ctx: ExecutionContext) {
+  if (!env.DB || !liveSyncEnabled(env) || isLocalFixtureMode(env)) return;
+
+  const rows = await env.DB.prepare(
+    `SELECT job_name, last_success_at
+       FROM sync_state
+      WHERE job_name IN ('ev_status','parking_realtime')`,
+  ).all<{ job_name: string; last_success_at: string | null }>();
+
+  const byName = new Map(rows.results.map((row) => [row.job_name, row.last_success_at]));
+  const needsEv =
+    Boolean(env.EV_CHARGER_API_KEY) &&
+    !isFreshIso(
+      byName.get('ev_status'),
+      staleMinutes(env.LIVE_STATUS_STALE_MINUTES, DEFAULT_STATUS_STALE_MINUTES),
+    );
+  const needsParking =
+    Boolean(env.BUSAN_PARKING_API_KEY && env.BUSAN_REALTIME_PARKING_API_URL) &&
+    !isFreshIso(
+      byName.get('parking_realtime'),
+      staleMinutes(env.LIVE_PARKING_STALE_MINUTES, DEFAULT_PARKING_STALE_MINUTES),
+    );
+
+  if (!needsEv && !needsParking) return;
+
+  const cache = getDefaultCache();
+  const gateRequest = new Request('https://plugpark.internal/live-refresh/user-read-gate');
+  if (cache) {
+    const activeGate = await cache.match(gateRequest);
+    if (activeGate) return;
+    await cache.put(
+      gateRequest,
+      new Response('1', {
+        headers: { 'cache-control': `public, max-age=${USER_READ_REFRESH_GATE_SECONDS}` },
+      }),
+    );
+  }
+
+  ctx.waitUntil((async () => {
+    if (needsParking) {
+      try {
+        await syncParkingRealtime(env);
+      } catch (error) {
+        await markLiveSyncError(env.DB!, 'parking_realtime', error);
+      }
+    }
+
+    if (needsEv) {
+      try {
+        await syncEvStatus(env, 'incremental');
+      } catch (error) {
+        await markLiveSyncError(env.DB!, 'ev_status', error);
+      }
+    }
+  })());
+}
 
 type LiveSyncKind = 'all' | 'ev' | 'parking';
 type LiveSyncMode = 'incremental' | 'full';
@@ -997,8 +1040,7 @@ async function fetchEvStatusPages(env: Env, mode: LiveSyncMode) {
   if (isLocalFixtureMode(env)) {
     return { items: localEvStatusFixture(), apiCalls: 0, totalCount: 3, pages: 1 };
   }
-  if (!env.EV_CHARGER_API_KEY) throw new Error('EV_CHARGER_API_KEY가 설정되지 않았습니다.');
-  if (!env.DB) throw new Error('D1 binding DB가 없습니다.');
+  if (!env.EV_CHARGER_API_KEY) throw new Error('EV_CHARGER_API_KEY가 설정되지 않았습니다.');  if (!env.DB) throw new Error('D1 binding DB가 없습니다.');
 
   await assertApiSafetyBudget(env.DB, 'ev_status', EV_STATUS_DAILY_SAFETY_BUDGET);
 
@@ -1497,8 +1539,7 @@ async function upsertParkingRealtimeLinks(
       json_extract(j.value, '$.realtime_name'),
       json_extract(j.value, '$.parking_id'),
       json_extract(j.value, '$.match_method'),
-      json_extract(j.value, '$.match_score'),
-      json_extract(j.value, '$.updated_at')
+      json_extract(j.value, '$.match_score'),      json_extract(j.value, '$.updated_at')
     FROM json_each(?1) j
     WHERE true
     ON CONFLICT(parking_code) DO UPDATE SET
@@ -1997,8 +2038,7 @@ async function rebuildEvStations(db: D1Database) {
        MAX(c.normalized_station_name),
        MAX(COALESCE(c.address, '')),
        AVG(c.lat),
-       AVG(c.lng),
-       COUNT(*),
+       AVG(c.lng),       COUNT(*),
        SUM(CASE WHEN COALESCE(s.status, c.info_status) = '2' THEN 1 ELSE 0 END),
        SUM(CASE WHEN COALESCE(s.status, c.info_status) = '2' AND ${FAST_CHARGER_SQL} THEN 1 ELSE 0 END),
        SUM(CASE WHEN COALESCE(s.status, c.info_status) = '2' AND ${SLOW_CHARGER_SQL} THEN 1 ELSE 0 END),
@@ -2279,13 +2319,19 @@ async function getReadModelState(db: D1Database) {
 }
 function readRowToPlace(row: ParkingReadRow) {
   const score = row.best_match_score == null ? null : Number(row.best_match_score);
+  const rawLat = row.lat == null ? null : Number(row.lat);
+  const rawLng = row.lng == null ? null : Number(row.lng);
+  const validBusanCoordinates =
+    rawLat != null &&
+    rawLng != null &&
+    isBusanCoordinates(rawLat, rawLng);
   return {
     id: row.parking_id,
     name: row.name,
     address: row.address || '주소 정보 없음',
     agency: row.agency || '',
-    lat: row.lat == null ? null : Number(row.lat),
-    lng: row.lng == null ? null : Number(row.lng),
+    lat: validBusanCoordinates ? rawLat : null,
+    lng: validBusanCoordinates ? rawLng : null,
     capacity: row.capacity == null ? null : Number(row.capacity),
     availableParking: row.available_parking == null ? null : Number(row.available_parking),
     occupiedParking: row.occupied_parking == null ? null : Number(row.occupied_parking),
@@ -2497,8 +2543,7 @@ async function ensureParkingFacilityCatalog(
   endpoint: string,
 ) {
   const state = await db.prepare(
-    `SELECT COUNT(*) AS n, MAX(refreshed_at) AS refreshed_at
-       FROM parking_facility_catalog`,
+    `SELECT COUNT(*) AS n, MAX(refreshed_at) AS refreshed_at       FROM parking_facility_catalog`,
   ).first<{ n: number; refreshed_at: string | null }>();
 
   const count = Number(state?.n || 0);
@@ -2997,8 +3042,7 @@ function parkingRowQuality(item: ParkingBase) {
 }
 
 function dedupeParkingById(items: ParkingBase[]) {
-  const byId = new Map<string, ParkingBase>();
-  let duplicateCount = 0;
+  const byId = new Map<string, ParkingBase>();  let duplicateCount = 0;
 
   for (const item of items) {
     const id = String(item.id || '').trim();
@@ -3497,8 +3541,7 @@ async function fetchEvInfoPageForD1(
   }
 
   const rawItems = extractKnownItems(payload);
-  const parsed = parseEvInfoItems(rawItems);
-  if (parsed.invalid.length > 0) {
+  const parsed = parseEvInfoItems(rawItems);  if (parsed.invalid.length > 0) {
     const sample = parsed.invalid.slice(0, 3).map((item) => ({
       index: item.index,
       missing: item.schema.missing,
@@ -3985,20 +4028,34 @@ function numberField(value: string) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+function isBusanCoordinates(lat: number, lng: number) {
+  return (
+    Number.isFinite(lat) &&
+    Number.isFinite(lng) &&
+    lat >= BUSAN_BOUNDS.minLat &&
+    lat <= BUSAN_BOUNDS.maxLat &&
+    lng >= BUSAN_BOUNDS.minLng &&
+    lng <= BUSAN_BOUNDS.maxLng
+  );
+}
+
 function latitudeField(value: string) {
   const parsed = numberField(value);
-  return parsed != null && parsed >= 34 && parsed <= 36 ? parsed : null;
+  return parsed != null && parsed >= BUSAN_BOUNDS.minLat && parsed <= BUSAN_BOUNDS.maxLat
+    ? parsed
+    : null;
 }
 
 function longitudeField(value: string) {
   const parsed = numberField(value);
-  return parsed != null && parsed >= 128 && parsed <= 130 ? parsed : null;
+  return parsed != null && parsed >= BUSAN_BOUNDS.minLng && parsed <= BUSAN_BOUNDS.maxLng
+    ? parsed
+    : null;
 }
 
 function normalizeParkingName(value: string) {
   return value
-    .toLowerCase()
-    .replace(/부산광역시|부산시/g, '')
+    .toLowerCase()    .replace(/부산광역시|부산시/g, '')
     .replace(/공영주차장|노외공영주차장|노상공영주차장|공영|주차장/g, '')
     .replace(/[\s,\.·ㆍ()\[\]{}\-_\/]/g, '')
     .trim();
