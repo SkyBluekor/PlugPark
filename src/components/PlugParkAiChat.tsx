@@ -77,71 +77,156 @@ function extractNearbyLandmark(message: string) {
   const match = compact.match(/^(.+?)\s*(?:근처|주변|인근)(?:\s|$)/);
   if (!match?.[1]) return '';
 
-  let landmark = match[1]
-    .replace(/^(?:부산(?:광역시|시)?\s*)?/u, '')
-    .replace(/^(?:내|현재\s*위치)\s*$/u, '')
+  const raw = match[1]
+    .replace(/^(?:부산광역시|부산시|부산)\s*/u, '')
     .trim();
 
-  if (!landmark || /^(?:내|현재\s*위치)$/u.test(landmark)) return '';
+  if (!raw || /^(?:내|현재\s*위치)$/u.test(raw)) return '';
 
-  if (!/^부산/u.test(match[1].trim())) {
-    landmark = `부산 ${landmark}`;
-  } else {
-    landmark = match[1].trim();
-  }
-
-  return landmark;
+  return raw;
 }
 
-async function waitForKakaoServices(timeoutMs = 2500) {
+function normalizePlaceLookupText(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/부산광역시|부산시/g, '부산')
+    .replace(/[\s,\.·ㆍ()\[\]{}\-_\/]/g, '')
+    .trim();
+}
+
+function buildLandmarkQueries(rawLandmark: string) {
+  const clean = rawLandmark.replace(/\s+/g, ' ').trim();
+  const tokens = clean.split(' ').filter(Boolean);
+  const district = tokens.find((token) => /^[가-힣]+구$/.test(token)) || '';
+  const rest = tokens.filter((token) => token !== district);
+  const restText = rest.join(' ').trim();
+
+  const queries = [
+    `부산 ${clean}`,
+    district && restText ? `부산 ${district} ${restText}` : '',
+    district && restText ? `부산 ${restText} ${district}` : '',
+    clean,
+  ];
+
+  if (/폴리텍/.test(restText || clean) && !/대학/.test(restText || clean)) {
+    const expanded = (restText || clean).replace(/폴리텍/g, '폴리텍대학');
+    queries.push(
+      district ? `부산 ${district} ${expanded}` : `부산 ${expanded}`,
+      district ? `부산 ${expanded} ${district}` : '',
+      '한국폴리텍대학 부산캠퍼스',
+    );
+  }
+
+  return [...new Set(queries.map((query) => query.trim()).filter(Boolean))];
+}
+
+function landmarkCandidateScore(rawLandmark: string, item: any) {
+  const lat = Number(item?.y);
+  const lng = Number(item?.x);
+  if (!isBusanCoordinates(lat, lng)) return Number.NEGATIVE_INFINITY;
+
+  const rawTokens = rawLandmark
+    .replace(/^(?:부산광역시|부산시|부산)\s*/u, '')
+    .split(/\s+/)
+    .map((token) => token.trim())
+    .filter((token) => token.length >= 2);
+
+  const name = String(item?.place_name || '');
+  const address = `${String(item?.road_address_name || '')} ${String(item?.address_name || '')}`;
+  const haystack = `${name} ${address}`;
+  const normalizedHaystack = normalizePlaceLookupText(haystack);
+
+  let score = 0;
+
+  for (const token of rawTokens) {
+    const normalizedToken = normalizePlaceLookupText(token);
+    if (!normalizedToken) continue;
+
+    if (normalizePlaceLookupText(name).includes(normalizedToken)) {
+      score += /^[가-힣]+구$/.test(token) ? 18 : 42;
+    } else if (normalizedHaystack.includes(normalizedToken)) {
+      score += /^[가-힣]+구$/.test(token) ? 26 : 20;
+    }
+  }
+
+  if (/폴리텍/.test(rawLandmark) && /폴리텍/.test(name)) score += 55;
+  if (/대학/.test(rawLandmark) && /대학/.test(name)) score += 18;
+  if (/캠퍼스/.test(name)) score += 5;
+
+  return score;
+}
+
+async function waitForKakaoServices(timeoutMs = 5000) {
   const started = Date.now();
 
   while (Date.now() - started < timeoutMs) {
     const services = window.kakao?.maps?.services;
     if (services?.Places && services?.Status) return services;
-    await new Promise((resolve) => window.setTimeout(resolve, 80));
+    await new Promise((resolve) => window.setTimeout(resolve, 100));
   }
 
   return null;
 }
 
-async function resolveNearbyLandmark(message: string) {
-  const query = extractNearbyLandmark(message);
-  if (!query) return null;
-
-  const services = await waitForKakaoServices();
-  if (!services) return null;
-
-  return await new Promise<{ name: string; lat: number; lng: number } | null>((resolve) => {
+async function kakaoKeywordSearch(services: any, query: string) {
+  return await new Promise<any[]>((resolve) => {
     const placesService = new services.Places();
 
     placesService.keywordSearch(
       query,
       (result: any[], status: string) => {
-        if (status !== services.Status.OK || !Array.isArray(result)) {
-          resolve(null);
-          return;
-        }
-
-        for (const item of result) {
-          const lat = Number(item?.y);
-          const lng = Number(item?.x);
-
-          if (!isBusanCoordinates(lat, lng)) continue;
-
-          resolve({
-            name: String(item?.place_name || query).trim() || query,
-            lat,
-            lng,
-          });
-          return;
-        }
-
-        resolve(null);
+        resolve(
+          status === services.Status.OK && Array.isArray(result)
+            ? result
+            : [],
+        );
       },
-      { size: 10 },
+      { size: 15 },
     );
   });
+}
+
+async function resolveNearbyLandmark(message: string) {
+  const rawLandmark = extractNearbyLandmark(message);
+  if (!rawLandmark) return null;
+
+  const services = await waitForKakaoServices();
+  if (!services) return null;
+
+  const candidates: any[] = [];
+  const seen = new Set<string>();
+
+  for (const query of buildLandmarkQueries(rawLandmark)) {
+    const results = await kakaoKeywordSearch(services, query);
+
+    for (const item of results) {
+      const key = `${item?.id || ''}|${item?.x || ''}|${item?.y || ''}|${item?.place_name || ''}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      candidates.push(item);
+    }
+  }
+
+  const ranked = candidates
+    .map((item) => ({
+      item,
+      score: landmarkCandidateScore(rawLandmark, item),
+    }))
+    .filter((entry) => Number.isFinite(entry.score))
+    .sort((a, b) => b.score - a.score);
+
+  const best = ranked[0];
+  if (!best || best.score < 35) return null;
+
+  const lat = Number(best.item?.y);
+  const lng = Number(best.item?.x);
+
+  return {
+    name: String(best.item?.place_name || rawLandmark).trim() || rawLandmark,
+    lat,
+    lng,
+    rawLandmark,
+  };
 }
 
 function formatAiDistance(distanceMeters?: number | null) {
@@ -263,6 +348,7 @@ export default function PlugParkAiChat({
     setSending(true);
 
     try {
+      const nearbyLandmark = extractNearbyLandmark(message);
       const targetLocation = await resolveNearbyLandmark(message);
 
       const response = await fetch(`${bridgeUrl}/api/chat`, {
@@ -278,6 +364,8 @@ export default function PlugParkAiChat({
             targetLat: targetLocation?.lat ?? null,
             targetLng: targetLocation?.lng ?? null,
             targetName: targetLocation?.name ?? null,
+            targetQuery: nearbyLandmark || null,
+            targetResolveFailed: Boolean(nearbyLandmark && !targetLocation),
           },
         }),
       });
