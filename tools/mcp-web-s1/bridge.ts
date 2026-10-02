@@ -10,7 +10,7 @@ const MODEL = process.env.OLLAMA_MODEL?.trim() || 'qwen3.5:9b';
 const PORT = Number(process.env.AI_BRIDGE_PORT || 3000);
 const HOST = process.env.AI_BRIDGE_HOST?.trim() || '127.0.0.1';
 const SYNC_ON_START = process.env.PLUGPARK_SYNC_ON_START !== '0';
-const BRIDGE_API_VERSION = 'MCP_WEB_S2_V2';
+const BRIDGE_API_VERSION = 'MCP_WEB_S2_V3';
 const TSX_CLI = resolve(process.cwd(), 'node_modules', 'tsx', 'dist', 'cli.mjs');
 
 if (!existsSync(TSX_CLI)) {
@@ -50,6 +50,8 @@ type AiPlaceReference = {
   id: string;
   name: string;
   address?: string | null;
+  distanceMeters?: number | null;
+  rank?: number | null;
   parking: {
     capacity: number | null;
     available: number | null;
@@ -293,7 +295,7 @@ async function progressiveLandmarkRecommendation(
         radiusKm,
         mode,
         chargerPreference,
-        limit: requestedCount,
+        limit: 5,
       },
     });
 
@@ -309,16 +311,38 @@ async function progressiveLandmarkRecommendation(
       parsed = null;
     }
 
-    lastToolText = toolText;
-    lastParsed = parsed;
+    const recommendations = Array.isArray(parsed?.recommendations)
+      ? [...parsed.recommendations]
+          .sort(
+            (a: any, b: any) =>
+              Number(a?.distanceMeters ?? Number.POSITIVE_INFINITY) -
+              Number(b?.distanceMeters ?? Number.POSITIVE_INFINITY),
+          )
+          .slice(0, requestedCount)
+          .map((item: any, index: number) => ({
+            ...item,
+            rank: index + 1,
+          }))
+      : [];
+
+    const normalizedParsed = parsed
+      ? {
+          ...parsed,
+          count: recommendations.length,
+          recommendations,
+        }
+      : parsed;
+
+    lastParsed = normalizedParsed;
+    lastToolText = normalizedParsed ? JSON.stringify(normalizedParsed, null, 2) : toolText;
     radiusUsedKm = radiusKm;
 
-    const count = Number(parsed?.count ?? 0);
+    const rawCount = Number(parsed?.count ?? 0);
     console.log(
-      `[MCP] recommend_places progressive radius=${radiusKm}km count=${count} target=${requestedCount}`,
+      `[MCP] recommend_places progressive radius=${radiusKm}km count=${rawCount} target=${requestedCount}`,
     );
 
-    if (count >= requestedCount) break;
+    if (rawCount >= requestedCount) break;
   }
 
   return {
@@ -431,7 +455,10 @@ function asRecord(value: unknown): Record<string, any> | null {
   return value && typeof value === 'object' ? value as Record<string, any> : null;
 }
 
-function normalizeAiPlace(value: unknown): AiPlaceReference | null {
+function normalizeAiPlace(
+  value: unknown,
+  meta?: { distanceMeters?: unknown; rank?: unknown },
+): AiPlaceReference | null {
   const source = asRecord(value);
   if (!source) return null;
 
@@ -446,6 +473,8 @@ function normalizeAiPlace(value: unknown): AiPlaceReference | null {
     id,
     name,
     address: typeof source.address === 'string' ? source.address : null,
+    distanceMeters: numberOrNull(meta?.distanceMeters),
+    rank: numberOrNull(meta?.rank),
     parking: {
       capacity: numberOrNull(parking.capacity),
       available: numberOrNull(parking.available),
@@ -473,19 +502,28 @@ function collectToolPlaces(
     return;
   }
 
-  const candidates: unknown[] = [];
+  const candidates: Array<{
+    value: unknown;
+    distanceMeters?: unknown;
+    rank?: unknown;
+  }> = [];
 
   if (toolName === 'search_places' && Array.isArray(parsed.places)) {
-    candidates.push(...parsed.places);
+    for (const place of parsed.places) candidates.push({ value: place });
   } else if (toolName === 'get_place_detail' && parsed.found === true && parsed.place) {
-    candidates.push(parsed.place);
+    candidates.push({ value: parsed.place });
   } else if (toolName === 'recommend_places' && Array.isArray(parsed.recommendations)) {
     for (const item of parsed.recommendations) {
       const record = asRecord(item);
-      if (record?.place) candidates.push(record.place);
+      if (!record?.place) continue;
+      candidates.push({
+        value: record.place,
+        distanceMeters: record.distanceMeters,
+        rank: record.rank,
+      });
     }
   } else if (toolName === 'compare_places' && Array.isArray(parsed.places)) {
-    candidates.push(...parsed.places);
+    for (const place of parsed.places) candidates.push({ value: place });
   }
 
   if (
@@ -498,7 +536,7 @@ function collectToolPlaces(
   }
 
   for (const candidate of candidates) {
-    const place = normalizeAiPlace(candidate);
+    const place = normalizeAiPlace(candidate.value, candidate);
     if (!place || target.has(place.id)) continue;
     target.set(place.id, place);
     if (target.size >= 5) break;
@@ -554,14 +592,23 @@ async function runAgent(
         `${progressive.toolText || '결과 없음'}`,
     });
 
-    const answer = await finalizeWithoutTools(
-      messages,
-      '방금 제공된 PlugPark 위치 기반 결과만 사용하세요. 기준 장소에서 반경을 점차 넓혀 찾은 최종 결과입니다. 다른 장소명이나 지역을 새로 추측하지 마세요. 몇 km 반경에서 몇 곳을 찾았는지 짧게 밝히고, 실제 결과가 있으면 가까운 순서대로 설명하세요. 결과가 3곳 미만이면 실제 찾은 수만 그대로 말하세요.',
-    );
+    const orderedPlaces = [...relatedPlaces.values()]
+      .sort(
+        (a, b) =>
+          Number(a.distanceMeters ?? Number.POSITIVE_INFINITY) -
+          Number(b.distanceMeters ?? Number.POSITIVE_INFINITY),
+      )
+      .slice(0, progressive.requestedCount);
+
+    const count = orderedPlaces.length;
+    const answer =
+      count > 0
+        ? `${progressive.targetName} 기준 ${progressive.radiusUsedKm}km 안에서 조건에 맞는 ${count}곳을 가까운 순으로 찾았습니다.`
+        : `${progressive.targetName} 기준 ${progressive.radiusUsedKm}km까지 확인했지만 조건에 맞는 장소를 찾지 못했습니다.`;
 
     return {
       answer,
-      places: [...relatedPlaces.values()],
+      places: orderedPlaces,
     };
   }
 
