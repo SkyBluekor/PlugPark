@@ -4,12 +4,21 @@ import { StdioClientTransport } from '@modelcontextprotocol/client/stdio';
 import { createServer as createHttpServer } from 'node:http';
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
+import { resolve } from 'node:path';
 
 const MODEL = process.env.OLLAMA_MODEL?.trim() || 'qwen3.5:9b';
 const PORT = Number(process.env.AI_BRIDGE_PORT || 3000);
 const HOST = process.env.AI_BRIDGE_HOST?.trim() || '127.0.0.1';
 const SYNC_ON_START = process.env.PLUGPARK_SYNC_ON_START !== '0';
 const BRIDGE_API_VERSION = 'MCP_WEB_S2_V1';
+const TSX_CLI = resolve(process.cwd(), 'node_modules', 'tsx', 'dist', 'cli.mjs');
+
+if (!existsSync(TSX_CLI)) {
+  throw new Error(
+    `PlugPark-MCP의 tsx 실행 파일을 찾지 못했습니다: ${TSX_CLI}\n` +
+    'PlugPark-MCP에서 npm install을 한 번 실행해주세요.',
+  );
+}
 
 const allowedOrigins = new Set(
   (
@@ -109,12 +118,14 @@ async function syncPlacesSnapshot() {
 
   await new Promise<void>((resolve, reject) => {
     const child = spawn(
-      process.platform === 'win32' ? 'npx.cmd' : 'npx',
-      ['tsx', syncScript],
+      process.execPath,
+      [TSX_CLI, syncScript],
       {
         cwd: process.cwd(),
         env: process.env,
         stdio: 'inherit',
+        windowsHide: true,
+        shell: false,
       },
     );
 
@@ -144,8 +155,8 @@ const client = new Client({
 });
 
 const transport = new StdioClientTransport({
-  command: process.platform === 'win32' ? 'npx.cmd' : 'npx',
-  args: ['tsx', 'src/server.ts'],
+  command: process.execPath,
+  args: [TSX_CLI, 'src/server.ts'],
   cwd: process.cwd(),
 });
 
