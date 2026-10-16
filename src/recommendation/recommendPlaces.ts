@@ -176,6 +176,7 @@ function scoreCharging(
   );
 }
 
+// 주차 추천은 정보 신뢰도 등급 → 잔여 면수 → 거리 → 충전 가능 수 순으로 결정합니다.
 function compareParking(a: PlaceRecommendation, b: PlaceRecommendation) {
   if (a.rankGroup !== b.rankGroup) return a.rankGroup - b.rankGroup;
 
@@ -192,6 +193,7 @@ function compareParking(a: PlaceRecommendation, b: PlaceRecommendation) {
   return a.place.name.localeCompare(b.place.name, 'ko');
 }
 
+// 충전 추천은 충전 등급 → 주차 등급 → 거리를 먼저 비교하고, 동률일 때 가용 수량을 비교합니다.
 function compareCharging(
   a: PlaceRecommendation,
   b: PlaceRecommendation,
@@ -236,7 +238,7 @@ export function recommendPlaces(
     );
     if (maxMeters != null && distanceMeters > maxMeters) continue;
 
-    // Fresh realtime full parking should not be recommended in either mode.
+    // 최신 실시간 정보에서 만차로 확인된 주차장은 충전 목적에서도 추천 대상에서 제외합니다.
     if (
       place.parkingRealtime &&
       place.parkingRealtimeFresh === true &&
@@ -248,11 +250,11 @@ export function recommendPlaces(
     if (options.mode === 'charging' && chargerInstalled(place, options.chargerPreference) <= 0) {
       continue;
     }
-
-    const rankGroup =
     if (options.mode === 'distance' && options.chargerPreference !== 'any' && chargerInstalled(place, options.chargerPreference) <= 0) {
       continue;
     }
+
+    const rankGroup =
       options.mode === 'parking'
         ? parkingRank(place)
         : chargingRank(place, options.chargerPreference);
@@ -286,6 +288,7 @@ export function recommendPlaces(
     });
   }
 
+  // 실제 추천 순서는 score가 아닌 비교 함수로 결정하므로, 정렬 정책 변경 시 비교 함수를 수정합니다.
   const sorted = [...candidates].sort((a, b) =>
     options.mode === 'distance'
       ? a.distanceMeters - b.distanceMeters || a.place.name.localeCompare(b.place.name, 'ko')

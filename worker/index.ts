@@ -828,6 +828,8 @@ async function handlePlaces(env: Env, ctx: ExecutionContext) {
 /* v0.7.0 live data sync                                                       */
 /* -------------------------------------------------------------------------- */
 
+// 사용자 조회 시 오래된 데이터만 백그라운드로 갱신해, 조회 응답이 외부 API 갱신을 기다리지 않게 합니다.
+// 캐시 게이트는 짧은 시간에 반복되는 갱신 요청을 억제하기 위한 장치입니다.
 async function scheduleLiveRefreshOnUserRead(env: Env, ctx: ExecutionContext) {
   if (!env.DB || !liveSyncEnabled(env) || isLocalFixtureMode(env)) return;
 
@@ -2854,6 +2856,8 @@ function normalizeRealtimeNumbers(item: BusanRealtimeParkingApiItem) {
   };
 }
 
+// 코드 기반 매칭 규칙을 먼저 적용하고, 이름 완전 일치 → 포함 관계 → 유사도 순으로 후보를 확인합니다.
+// 이름 후보가 여럿이거나 유사도 상위 후보 간 차이가 작으면, 오연결을 피하도록 모호한 상태로 남깁니다.
 function joinRealtimeParkingByName(
   baseItems: ParkingBase[],
   realtimeItems: BusanRealtimeParkingApiItem[],

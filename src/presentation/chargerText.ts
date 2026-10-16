@@ -13,6 +13,8 @@ export function hasRestrictedChargerAccess(charger: ChargerSummary) {
   return charger.stations.some((station) => RESTRICTED_ACCESS_PATTERN.test(station));
 }
 
+// 가용 수량은 statusFresh가 true일 때만 현재 상태로 표시합니다.
+// false는 갱신 지연, null·undefined는 신선도 미확정으로 구분하며 전체 충전 표시에도 같은 기준을 적용합니다.
 export function chargerAvailabilityText(charger: ChargerSummary, kind: ChargerKind) {
   const label = kind === 'fast' ? '급속' : '완속';
   const installed = safeCount(kind === 'fast' ? charger.fast : charger.slow) ?? 0;
