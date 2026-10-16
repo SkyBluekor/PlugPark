@@ -49,23 +49,29 @@ export function loadKakaoMapSdk(appKey: string) {
   if (sdkPromise) return sdkPromise;
 
   sdkPromise = new Promise((resolve, reject) => {
+    const fail = (reason: string) => {
+      window.clearTimeout(timeout);
+      sdkPromise = null;
+      document.querySelector('script[data-plugpark-kakao-map]')?.remove();
+      reject(new Error(reason));
+    };
+    const timeout = window.setTimeout(() => fail('KAKAO_SDK_LOAD_TIMEOUT'), 12000);
     const existing = document.querySelector<HTMLScriptElement>(
       'script[data-plugpark-kakao-map]',
     );
 
     const finish = () => {
       if (!window.kakao?.maps) {
-        sdkPromise = null;
-        reject(new Error('KAKAO_SDK_OBJECT_MISSING'));
+        fail('KAKAO_SDK_OBJECT_MISSING');
         return;
       }
 
       window.kakao.maps.load(() => {
         if (!window.kakao?.maps?.services) {
-          sdkPromise = null;
-          reject(new Error('KAKAO_SERVICES_UNAVAILABLE'));
+          fail('KAKAO_SERVICES_UNAVAILABLE');
           return;
         }
+        window.clearTimeout(timeout);
         resolve(window.kakao);
       });
     };
@@ -80,8 +86,7 @@ export function loadKakaoMapSdk(appKey: string) {
       existing.addEventListener(
         'error',
         () => {
-          sdkPromise = null;
-          reject(new Error('KAKAO_SDK_LOAD_FAILED'));
+          fail('KAKAO_SDK_LOAD_FAILED');
         },
         { once: true },
       );
@@ -96,8 +101,7 @@ export function loadKakaoMapSdk(appKey: string) {
       `?appkey=${encodeURIComponent(key)}&autoload=false&libraries=services`;
     script.onload = finish;
     script.onerror = () => {
-      sdkPromise = null;
-      reject(new Error('KAKAO_SDK_LOAD_FAILED'));
+      fail('KAKAO_SDK_LOAD_FAILED');
     };
     document.head.appendChild(script);
   });

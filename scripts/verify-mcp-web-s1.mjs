@@ -40,7 +40,7 @@ assert(bridge.includes('PLUGPARK_SYNC_ON_START'), 'snapshot 동기화 비활성�
 assert(bridge.includes('sessions = new Map'), '대화 세션 분리가 없습니다.');
 
 assert(installer.includes('PlugPark-MCP'), 'PlugPark-MCP 적용 스크립트가 없습니다.');
-assert(installer.includes('src\\bridge.ts'), 'Bridge 설치 대상이 올바르지 않습니다.');
+assert(installer.includes('Join-Path $McpProject "src"') && installer.includes('Join-Path $targetSrc "bridge.ts"'), 'Bridge 설치 대상이 올바르지 않습니다.');
 
 assert(launcher.includes('ollama'), '통합 런처가 Ollama를 시작하지 않습니다.');
 assert(launcher.includes('src/bridge.ts'), '통합 런처가 AI Bridge를 시작하지 않습니다.');

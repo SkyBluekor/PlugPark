@@ -214,6 +214,18 @@ const resolver = loadTypeScriptModule(
   },
 );
 
+for (const [query, kind, name] of [
+  ['폴리텍 대학', 'poi', '한국폴리텍대학 부산캠퍼스'],
+  ['부산역', 'poi', '부산역'],
+  ['화명동', 'administrative', '화명동'],
+  ['부산 북구 금곡대로 166', 'address', '금곡대로 166'],
+]) {
+  const result = await resolver.resolveLocation('fake-key', query);
+  assert(result.ok === true, `일반 검색 위치 해석 실패: ${query}`);
+  assert(result.kind === kind, `일반 검색 위치 유형 오류: ${query}`);
+  assert(result.canonicalName.includes(name), `일반 검색 기준 장소 오류: ${query}`);
+}
+
 resetCalls();
 const adminResult = await resolver.resolveNearbyLandmark(
   'fake-key',
@@ -255,6 +267,18 @@ assert(
 );
 assert(calls.keyword.length > 0, '폴리텍에서 keywordSearch를 호출하지 않음');
 assert(calls.address.length === 0, '폴리텍이 Geocoder로 잘못 전달됨');
+
+for (const message of [
+  '부산 폴리텍 부근급속 충전소 찾아줘',
+  '부산 폴리텍 부근 급속 충전소 찾아줘',
+]) {
+  resetCalls();
+  const result = await resolver.resolveNearbyLandmark('fake-key', message);
+  assert(result.ok === true, `부근 표현의 POI 해석 실패: ${message}`);
+  assert(result.rawLandmark === '부산 폴리텍', '충전 조건이 장소명에 섞임');
+  assert(result.canonicalName === '한국폴리텍대학 부산캠퍼스', '부근 검색 기준 장소 오류');
+  assert(calls.keyword.length > 0, '부근 요청이 지도 검색을 건너뜀');
+}
 
 resetCalls();
 const stationResult = await resolver.resolveNearbyLandmark(

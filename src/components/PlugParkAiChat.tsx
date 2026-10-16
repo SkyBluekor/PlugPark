@@ -13,6 +13,7 @@ type BridgeStatus = 'idle' | 'checking' | 'online' | 'offline';
 
 type Props = {
   userLocation: UserLocation;
+  searchTarget?: { lat: number; lng: number; name: string } | null;
   radiusKm: RadiusKm;
   places: PlugParkPlace[];
   onFocusMap: (place: PlugParkPlace) => void;
@@ -98,6 +99,7 @@ function compactPlaceStatus(place: AiPlaceReference) {
 
 export default function PlugParkAiChat({
   userLocation,
+  searchTarget = null,
   radiusKm,
   places,
   onFocusMap,
@@ -110,7 +112,6 @@ export default function PlugParkAiChat({
   const sessionIdRef = useRef(createSessionId());
   const [open, setOpen] = useState(false);
   const [status, setStatus] = useState<BridgeStatus>('idle');
-  const [model, setModel] = useState('');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
@@ -118,14 +119,15 @@ export default function PlugParkAiChat({
   const endRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    if (open && status === 'idle') {
+    if (status === 'idle') {
       void checkHealth();
     }
   }, [open, status]);
 
   useEffect(() => {
     if (!open) return;
-    endRef.current?.scrollIntoView({ block: 'end', behavior: 'smooth' });
+    const body = endRef.current?.parentElement;
+    if (body) body.scrollTop = body.scrollHeight;
   }, [messages, sending, open]);
 
   async function checkHealth() {
@@ -143,7 +145,6 @@ export default function PlugParkAiChat({
         throw new Error(data.reason || 'offline');
       }
 
-      setModel(data.model || '');
       setStatus('online');
     } catch {
       setStatus('offline');
@@ -174,6 +175,7 @@ export default function PlugParkAiChat({
 
     const message = input.trim();
     if (!message || sending || status !== 'online') return;
+    setOpen(true);
 
     const userMessage: ChatMessage = {
       id: createSessionId(),
@@ -187,6 +189,7 @@ export default function PlugParkAiChat({
 
     try {
       const inputIntent = parseLocationIntent(message);
+      // 위치 확인을 기다리던 중 장소명만 답하면, 이전 요청의 장소를 교체해 검색 목적을 이어갑니다.
       const useClarification =
         Boolean(pendingNearby) &&
         !inputIntent.isNearbyRequest &&
@@ -207,10 +210,13 @@ export default function PlugParkAiChat({
           ? await resolveNearbyLandmark(appKey, effectiveMessage)
           : null;
 
+      const selectedTarget = !nearbyLandmark && effectiveIntent.source !== 'current-location'
+        ? searchTarget
+        : null;
       const targetLocation =
         locationResult && locationResult.ok
           ? locationResult
-          : null;
+          : selectedTarget;
 
       const resolveFailed = Boolean(
         nearbyLandmark &&
@@ -220,7 +226,7 @@ export default function PlugParkAiChat({
       const unresolvedNearbyLocation =
         effectiveIntent.isNearbyRequest &&
         effectiveIntent.source === 'none' &&
-        !nearbyLandmark;
+        !nearbyLandmark && !selectedTarget;
 
       if (resolveFailed || unresolvedNearbyLocation) {
         setPendingNearby({
@@ -247,7 +253,7 @@ export default function PlugParkAiChat({
             targetLat: targetLocation?.lat ?? null,
             targetLng: targetLocation?.lng ?? null,
             targetName: targetLocation?.name ?? null,
-            targetQuery: nearbyLandmark || null,
+            targetQuery: nearbyLandmark || selectedTarget?.name || null,
             targetResolveFailed: resolveFailed,
             targetResolveReason:
               locationResult && !locationResult.ok
@@ -270,8 +276,8 @@ export default function PlugParkAiChat({
                 ? locationResult.confidence
                 : null,
             locationIntentInput: message,
-            locationIntentSource: effectiveIntent.source,
-            locationIntentText: effectiveIntent.locationText,
+            locationIntentSource: selectedTarget && effectiveIntent.isNearbyRequest ? 'explicit' : effectiveIntent.source,
+            locationIntentText: effectiveIntent.locationText || selectedTarget?.name || null,
             locationIntentNearby: effectiveIntent.isNearbyRequest,
           },
         }),
@@ -312,34 +318,23 @@ export default function PlugParkAiChat({
   }
 
   return (
-    <>
-      <button
-        className={`ai-chat-launcher ${status === 'online' ? 'online' : ''}`}
-        type="button"
-        onClick={() => setOpen((value) => !value)}
-        aria-expanded={open}
-        aria-controls="plugpark-ai-panel"
-      >
-        <span className="ai-chat-dot" aria-hidden="true" />
-        <span>AI</span>
-      </button>
-
+    <section className="journey-ai" aria-label="AI 여행 도우미">
+      <div className="journey-ai-label">
+        <label htmlFor="journey-ai-input"><span aria-hidden="true">✧</span> AI 여행 도우미</label>
+        <button type="button" onClick={() => { setOpen((value) => !value); if (status === 'offline') void checkHealth(); }} aria-expanded={open} aria-controls="plugpark-ai-panel">
+          {status === 'online' ? '연결됨' : status === 'checking' ? '연결 확인 중' : '연결 확인'}{messages.length > 0 ? ' · 대화 보기' : ''}
+        </button>
+      </div>
+      <form className="journey-ai-form" onSubmit={(event) => void sendMessage(event)}>
+        <input id="journey-ai-input" value={input} onChange={(event) => setInput(event.target.value)} placeholder="이번엔 어디로 떠나볼까요?" disabled={sending} autoComplete="off" />
+        <button type="submit" disabled={status !== 'online' || sending || !input.trim()} aria-label="AI에게 질문 보내기">{sending ? '…' : '→'}</button>
+      </form>
       {open && (
         <aside className="ai-chat-panel" id="plugpark-ai-panel" aria-label="PlugPark AI">
           <header className="ai-chat-header">
-            <div>
-              <strong>PlugPark AI</strong>
-              <span>
-                {status === 'online'
-                  ? `로컬 AI 연결됨${model ? ` · ${model}` : ''}`
-                  : status === 'checking'
-                    ? '로컬 AI 확인 중…'
-                    : '주차·충전 정보를 자연어로 물어보세요'}
-              </span>
-            </div>
-            <button type="button" onClick={() => setOpen(false)} aria-label="AI 채팅 닫기">×</button>
+            <div><strong>함께 찾는 다음 목적지</strong><span>{status === 'online' ? '주차·충전 도우미' : 'AI 연결을 확인해주세요'}</span></div>
+            <button type="button" onClick={() => setOpen(false)} aria-label="AI 대화 접기">×</button>
           </header>
-
           <div className="ai-chat-body">
             {status === 'checking' && (
               <div className="ai-chat-state">
@@ -351,8 +346,7 @@ export default function PlugParkAiChat({
             {status === 'offline' && (
               <div className="ai-chat-state offline">
                 <strong>로컬 AI가 연결되어 있지 않습니다.</strong>
-                <span>PC에서 Ollama와 PlugPark AI Bridge를 실행하면 이 채팅을 사용할 수 있습니다.</span>
-                <small>브라우저가 로컬 네트워크 또는 이 기기의 로컬 서비스 접근 권한을 묻는 경우 허용해주세요.</small>
+                <span>AI 도우미에 연결하면 주차·충전 정보를 자연어로 물어볼 수 있어요. 일반 장소 검색은 바로 사용할 수 있습니다.</span>
                 <button type="button" onClick={() => void checkHealth()}>다시 연결</button>
               </div>
             )}
@@ -443,30 +437,12 @@ export default function PlugParkAiChat({
 
           <footer className="ai-chat-footer">
             <div className="ai-chat-footer-actions">
-              <span>{status === 'online' ? 'MCP 연결 사용' : 'AI 기능은 선택 사항입니다.'}</span>
-              <button type="button" onClick={() => void resetConversation()}>대화 초기화</button>
+              <span>이어서 물어볼 때는 위 입력창을 이용하세요.</span>
+              <button type="button" onClick={() => void resetConversation()}>새 대화</button>
             </div>
-            <form onSubmit={(event) => void sendMessage(event)}>
-              <textarea
-                value={input}
-                onChange={(event) => setInput(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter' && !event.shiftKey) {
-                    event.preventDefault();
-                    event.currentTarget.form?.requestSubmit();
-                  }
-                }}
-                placeholder={status === 'online' ? 'PlugPark에 물어보기…' : '로컬 AI 연결 후 사용할 수 있습니다.'}
-                rows={2}
-                disabled={status !== 'online' || sending}
-              />
-              <button type="submit" disabled={status !== 'online' || sending || !input.trim()}>
-                전송
-              </button>
-            </form>
           </footer>
         </aside>
       )}
-    </>
+    </section>
   );
 }

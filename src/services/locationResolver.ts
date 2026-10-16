@@ -65,7 +65,7 @@ function normalizedQueryList(values: string[]) {
 
 function stripBusanPrefix(value: string) {
   return value
-    .replace(/^(?:부산광역시|부산시|부산)\s*/u, '')
+    .replace(/^(?:부산광역시|부산시|부산)(?:\s+|$)/u, '')
     .trim();
 }
 
@@ -128,6 +128,7 @@ function isBusanRegion(regions: any[]) {
   return /부산(?:광역시)?/u.test(haystack);
 }
 
+// 좌표 범위만으로는 입력한 지역인지 확정할 수 없어, 역지오코딩 결과의 부산 여부와 구·동 등도 검증합니다.
 function regionMatchesInput(raw: string, regions: any[]) {
   if (!isBusanRegion(regions)) return false;
 
@@ -205,7 +206,7 @@ export function landmarkCandidateScore(rawLandmark: string, item: any) {
   if (!isBusanCoordinates(lat, lng)) return Number.NEGATIVE_INFINITY;
 
   const rawTokens = rawLandmark
-    .replace(/^(?:부산광역시|부산시|부산)\s*/u, '')
+    .replace(/^(?:부산광역시|부산시|부산)(?:\s+|$)/u, '')
     .split(/\s+/)
     .map((token) => token.trim())
     .filter((token) => token.length >= 2);
@@ -218,6 +219,11 @@ export function landmarkCandidateScore(rawLandmark: string, item: any) {
   const normalizedHaystack = `${normalizedName}${normalizedAddress}`;
 
   let score = 0;
+
+  // Exact POI names should clear the confidence threshold even with one token.
+  if (normalizePlaceLookupText(stripBusanPrefix(rawLandmark)) === normalizedName) {
+    score += 70;
+  }
 
   for (const token of rawTokens) {
     const normalizedToken = normalizePlaceLookupText(token);
@@ -509,6 +515,16 @@ export async function resolveNearbyLandmark(
       method: null,
     };
   }
+
+  return resolveLocation(appKey, rawLandmark);
+}
+
+/** Resolve a destination independently of conversational nearby expressions. */
+export async function resolveLocation(
+  appKey: string,
+  locationText: string,
+): Promise<LandmarkResolveResult> {
+  const rawLandmark = locationText.replace(/\s+/g, ' ').trim();
 
   const kind = classifyLocationText(rawLandmark);
 

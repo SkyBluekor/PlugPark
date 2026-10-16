@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { resolveLocation } from './services/locationResolver';
 import KakaoMap from './components/KakaoMap';
 import PwaActions from './components/PwaActions';
 import LocationIcon from './components/LocationIcon';
@@ -84,12 +85,17 @@ export default function App() {
   const [notice, setNotice] = useState('');
   const [noticeTone, setNoticeTone] = useState<NoticeTone>('info');
   const [query, setQuery] = useState('');
+  const [appliedQuery, setAppliedQuery] = useState('');
+  const [searchTarget, setSearchTarget] = useState<{ lat: number; lng: number; name: string } | null>(null);
+  const [searching, setSearching] = useState(false);
+  const searchSequence = useRef(0);
   const [filter, setFilter] = useState<ChargerFilter>('all');
   const [sort, setSort] = useState<SortKey>('charger');
   const [selected, setSelected] = useState<PlugParkPlace | null>(null);
   const [mapFocus, setMapFocus] = useState<PlugParkPlace | null>(null);
   const [userLocation, setUserLocation] = useState<UserLocation>(null);
   const [radiusKm, setRadiusKm] = useState<RadiusKm>(null);
+  const explorationCenter = searchTarget ?? userLocation;
   const [displayCount, setDisplayCount] = useState(PAGE_SIZE);
   const [recommendationMode, setRecommendationMode] = useState<RecommendationMode>('charging');
   const [chargerPreference, setChargerPreference] = useState<ChargerPreference>('any');
@@ -178,7 +184,7 @@ export default function App() {
 
   useEffect(() => {
     setDisplayCount(PAGE_SIZE);
-  }, [query, filter, sort, userLocation, radiusKm]);
+  }, [appliedQuery, searchTarget, filter, sort, userLocation, radiusKm]);
 
   useEffect(() => {
     if (!selected) return;
@@ -197,7 +203,7 @@ export default function App() {
   }, [selected]);
 
   const filteredPlaces = useMemo(() => {
-    const q = query.trim().toLowerCase();
+    const q = appliedQuery.trim().toLowerCase();
     let result = places.filter((p) => {
       if (q && !`${p.name} ${p.address} ${p.agency || ''} ${p.charger.stations.join(' ')}`.toLowerCase().includes(q)) return false;
       if (filter === 'parking' && !(p.parkingRealtime && p.availableParking != null)) return false;
@@ -207,23 +213,23 @@ export default function App() {
       return true;
     });
 
-    if (userLocation && radiusKm) {
+    if (explorationCenter && radiusKm) {
       const maxMeters = radiusKm * 1000;
       result = result.filter((place) => {
         if (place.lat == null || place.lng == null) return false;
-        return haversineMeters(userLocation.lat, userLocation.lng, place.lat, place.lng) <= maxMeters;
+        return haversineMeters(explorationCenter.lat, explorationCenter.lng, place.lat, place.lng) <= maxMeters;
       });
     }
 
     result = [...result].sort((a, b) => {
-      if (sort === 'distance' && userLocation) {
+      if (sort === 'distance' && explorationCenter) {
         const aDistance =
           a.lat != null && a.lng != null
-            ? haversineMeters(userLocation.lat, userLocation.lng, a.lat, a.lng)
+            ? haversineMeters(explorationCenter.lat, explorationCenter.lng, a.lat, a.lng)
             : Number.POSITIVE_INFINITY;
         const bDistance =
           b.lat != null && b.lng != null
-            ? haversineMeters(userLocation.lat, userLocation.lng, b.lat, b.lng)
+            ? haversineMeters(explorationCenter.lat, explorationCenter.lng, b.lat, b.lng)
             : Number.POSITIVE_INFINITY;
         return aDistance - bDistance;
       }
@@ -232,19 +238,19 @@ export default function App() {
     });
 
     return result;
-  }, [places, query, filter, sort, userLocation, radiusKm]);
+  }, [places, appliedQuery, filter, sort, explorationCenter, radiusKm]);
 
   const recommendations = useMemo(() => {
-    if (!userLocation) return [];
+    if (!explorationCenter) return [];
     return recommendPlaces(places, {
       mode: recommendationMode,
       chargerPreference,
-      userLat: userLocation.lat,
-      userLng: userLocation.lng,
+      userLat: explorationCenter.lat,
+      userLng: explorationCenter.lng,
       radiusKm,
       limit: 3,
     });
-  }, [places, userLocation, radiusKm, recommendationMode, chargerPreference]);
+  }, [places, explorationCenter, radiusKm, recommendationMode, chargerPreference]);
 
   const mapPlaces = useMemo(() => {
     if (!mapFocus || filteredPlaces.some((place) => place.id === mapFocus.id)) {
@@ -279,6 +285,11 @@ export default function App() {
     }
     navigator.geolocation.getCurrentPosition(
       (pos) => {
+        searchSequence.current += 1;
+        setSearching(false);
+        setSearchTarget(null);
+        setAppliedQuery('');
+        setQuery('');
         setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
         setRadiusKm(3);
         setSort('distance');
@@ -297,11 +308,69 @@ export default function App() {
     );
   }
 
+  function clearSearch() {
+    searchSequence.current += 1;
+    setSearching(false);
+    setSearchTarget(null);
+    setQuery('');
+    setAppliedQuery('');
+    setMapFocus(null);
+    setSelected(null);
+    setRadiusKm(userLocation ? 3 : null);
+    setSort(userLocation ? 'distance' : 'charger');
+    updateNotice('');
+  }
+
+  async function searchDestination(event: React.FormEvent) {
+    event.preventDefault();
+    const destination = query.trim();
+    if (!destination) { clearSearch(); return; }
+    const sequence = ++searchSequence.current;
+    setSearching(true);
+    updateNotice(`“${destination}”의 위치를 찾고 있어요.`);
+    try {
+      const result = await resolveLocation(import.meta.env.VITE_KAKAO_MAP_JS_KEY?.trim() || '', destination);
+      if (sequence !== searchSequence.current) return;
+      if (!result.ok) {
+        // Keep the existing map until a new destination is confirmed.
+        const localMatches = places.some((place) => `${place.name} ${place.address}`.includes(destination));
+        if (localMatches) {
+          setSearchTarget(null);
+          setAppliedQuery(destination);
+          setRadiusKm(null);
+          setMapFocus(null);
+          setSelected(null);
+          updateNotice('지도에서 목적지를 확인하지 못해 이름·주소가 일치하는 주차장을 표시합니다.', 'warning');
+        } else {
+          updateNotice(result.reason === 'SDK_UNAVAILABLE'
+            ? '지도 검색에 연결하지 못했어요. 잠시 후 다시 시도해주세요.'
+            : '부산 안에서 목적지를 확인하지 못했어요. 구·동 또는 주소를 함께 입력해주세요.', 'warning');
+        }
+        return;
+      }
+      setSearchTarget({ lat: result.lat, lng: result.lng, name: result.canonicalName });
+      setAppliedQuery('');
+      setRadiusKm(3);
+      setSort('distance');
+      setMapFocus(null);
+      setSelected(null);
+      updateNotice(`${result.canonicalName}에 핀을 표시했어요. 주변 3km의 주차장·충전정보를 가까운 순서로 확인하세요.`);
+      window.requestAnimationFrame(() => {
+        const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+        document.getElementById('finder')?.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'start' });
+      });
+    } catch {
+      if (sequence === searchSequence.current) updateNotice('장소 검색 중 연결이 끊겼어요. 다시 시도해주세요.', 'error');
+    } finally {
+      if (sequence === searchSequence.current) setSearching(false);
+    }
+  }
+
   return (
     <div className="app-shell">
       <header className="topbar">
         <a className="brand" href="#top" aria-label="PlugPark 홈">
-          <span className="brand-mark">P</span><span>PlugPark</span>
+          <span className="brand-mark" aria-hidden="true">↗</span><span>Plug<span className="brand-park">Park</span></span><small>부산 주차 · 충전</small>
         </a>
         <div className="top-actions">
           <button className={`top-location ${userLocation ? 'active' : ''}`} onClick={locate} aria-label={userLocation ? '내 위치 다시 찾기' : '내 위치 찾기'}>
@@ -318,23 +387,51 @@ export default function App() {
       </header>
 
       <main id="top">
-        <section className="hero">
-          <div className="hero-copy">
-            <p className="eyebrow">BUSAN EV PARKING + CHARGING</p>
-            <h1>주차와 충전을<br/><em>한 번에 찾으세요.</em></h1>
-            <p className="hero-desc">부산 공영주차장과 EV 충전기 정보를 한 화면에서 확인합니다.</p>
-            <a className="primary" href="#finder">지금 찾기</a>
+        <section className="hero journey-hero" aria-labelledby="journey-title">
+          <div className="journey-scenery" aria-hidden="true" />
+          <div className="journey-breeze" aria-hidden="true"><span>〜</span><span>〜</span></div>
+          <div className="journey-paper">
+            <p className="journey-kicker"><span>BUSAN</span> 바닷바람을 따라, 오늘의 출발선</p>
+            <h1 id="journey-title">좋아,<br/><em>출발해볼까?</em></h1>
+            <p className="hero-desc">주차하고, 충전하고, 조금 더 멀리.<br/>부산의 새로운 풍경을 만나러 가요.</p>
+            <PlugParkAiChat
+              userLocation={userLocation}
+              searchTarget={searchTarget}
+              radiusKm={radiusKm}
+              places={places}
+              onFocusMap={focusPlaceOnMap}
+              onOpenDetail={openPlaceDetail}
+            />
+            <form className="destination-search" onSubmit={(event) => void searchDestination(event)}>
+              <label htmlFor="destination-input">장소·주소로 주변 찾기</label>
+              <div className="destination-input-row">
+                <span aria-hidden="true">⌕</span>
+                <input id="destination-input" value={query} onChange={(event) => {
+                  setQuery(event.target.value);
+                  searchSequence.current += 1;
+                  setSearching(false);
+                  if (!event.target.value.trim()) clearSearch();
+                }} placeholder="폴리텍 대학, 부산역, 주소 검색" autoComplete="off" />
+                {query && <button type="button" className="destination-clear" onClick={clearSearch} aria-label="검색과 목적지 지우기">×</button>}
+                <button className="destination-submit" type="submit" disabled={searching || !query.trim()} aria-label="목적지 주변 검색">{searching ? '…' : '→'}</button>
+              </div>
+              <p className="destination-hint">장소를 입력하면 지도에 핀을 꽂고 주변을 찾아요.</p>
+            </form>
+            <div className="filters" aria-label="주차·충전 필터">
+              {([['all','전체'],['parking','실시간 잔여'],['available','충전 가능'],['fast','급속'],['slow','완속']] as const).map(([key,label]) => (
+                <button key={key} className={filter === key ? 'active' : ''} onClick={() => setFilter(key)} aria-pressed={filter === key}>{label}</button>
+              ))}
+            </div>
           </div>
-          <div className="hero-visual">
-            <img src="/plugpark-hero-v2.jpg" alt="부산 도심의 전기차 충전 주차 공간" />
-          </div>
+          <p className="journey-postcard" aria-hidden="true">달리는 만큼,<br/>더 넓은 부산이 기다리고 있어.</p>
+          <a className="journey-map-link" href="#finder">오늘의 목적지 둘러보기 <span>↓</span></a>
         </section>
 
         <section className="finder" id="finder">
           <div className="finder-toolbar">
             <div>
-              <p className="eyebrow">LIVE MATCHING</p>
-              <h2>부산 공영주차장 찾기</h2>
+              <p className="eyebrow">YOUR NEXT STOP</p>
+              <h2>다음 풍경으로 가는 길</h2>
             </div>
             <button className="refresh" onClick={() => void load()} disabled={loading}>{loading ? '불러오는 중…' : '새로고침'}</button>
           </div>
@@ -357,27 +454,10 @@ export default function App() {
             </div>
           )}
 
-          <div className="search-tools">
-            <label className="search-box"><span>⌕</span><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="주차장명·주소 검색" /></label>
-            <button className={`location-button ${userLocation ? 'active' : ''}`} onClick={locate}>
-              <LocationIcon className="location-icon" />{userLocation ? '내 위치 다시 찾기' : '내 위치 기준'}
-            </button>
-            <select value={sort} onChange={(e) => setSort(e.target.value as SortKey)} aria-label="정렬">
-              <option value="charger">충전 가능순</option>
-              <option value="parking">주차 여유순</option>
-              <option value="distance" disabled={!userLocation}>거리순</option>
-            </select>
-          </div>
 
-          <div className="filters">
-            {([['all','전체'],['parking','실시간 잔여'],['available','충전 가능'],['fast','급속'],['slow','완속']] as const).map(([key,label]) => (
-              <button key={key} className={filter === key ? 'active' : ''} onClick={() => setFilter(key)}>{label}</button>
-            ))}
-          </div>
-
-          {userLocation && (
+          {explorationCenter && (
             <div className="nearby-tools">
-              <span className="nearby-title">내 주변</span>
+              <span className="nearby-title">{searchTarget ? `${searchTarget.name} 주변` : '내 주변'}</span>
               {([1, 3, 5] as const).map((km) => (
                 <button
                   key={km}
@@ -401,6 +481,7 @@ export default function App() {
               <button
                 className="clear-location"
                 onClick={() => {
+                  clearSearch();
                   setUserLocation(null);
                   setRadiusKm(null);
                   setSelected(null);
@@ -409,7 +490,7 @@ export default function App() {
                   updateNotice('', 'info');
                 }}
               >
-                위치 해제
+                기준 위치 해제
               </button>
             </div>
           )}
@@ -422,7 +503,7 @@ export default function App() {
             recommendations={recommendations}
             mode={recommendationMode}
             chargerPreference={chargerPreference}
-            hasLocation={Boolean(userLocation)}
+            hasLocation={Boolean(explorationCenter)}
             onModeChange={setRecommendationMode}
             onChargerPreferenceChange={setChargerPreference}
             onLocate={locate}
@@ -432,6 +513,13 @@ export default function App() {
             getDirectionsUrl={kakaoDirectionsUrl}
           />
 
+          <div className="journey-results-toolbar">
+            <span>{searchTarget ? '목적지에 핀을 꽂았어요. 가까운 곳부터 둘러보세요.' : '오늘의 주차와 충전, 여기서 찾아보세요.'}</span>
+            <label>정렬 <select value={sort} onChange={(event) => setSort(event.target.value as SortKey)} aria-label="정렬">
+              <option value="charger">충전 가능순</option><option value="parking">주차 여유순</option>
+              <option value="distance" disabled={!explorationCenter}>거리순</option>
+            </select></label>
+          </div>
           <div className="finder-grid">
             <section className="result-pane" aria-label="검색 결과">
               <div className="result-meta">
@@ -446,8 +534,8 @@ export default function App() {
                 {displayedPlaces.map((place) => {
                   const tone = parkingTone(place);
                   const distance =
-                    userLocation && place.lat != null && place.lng != null
-                      ? haversineMeters(userLocation.lat, userLocation.lng, place.lat, place.lng)
+                    explorationCenter && place.lat != null && place.lng != null
+                      ? haversineMeters(explorationCenter.lat, explorationCenter.lng, place.lat, place.lng)
                       : null;
                   return (
                     <button
@@ -503,7 +591,7 @@ export default function App() {
                   );
                 })}
 
-                {!loading && filteredPlaces.length === 0 && <div className="empty">조건에 맞는 장소가 없습니다.</div>}
+                {!loading && filteredPlaces.length === 0 && <div className="empty">주변에 조건에 맞는 장소가 없어요. 반경을 넓히거나 필터를 바꿔보세요.</div>}
                 {displayCount < filteredPlaces.length && (
                   <button className="load-more" onClick={() => setDisplayCount((count) => count + PAGE_SIZE)}>
                     {Math.min(PAGE_SIZE, filteredPlaces.length - displayCount)}곳 더 보기
@@ -515,6 +603,8 @@ export default function App() {
             <KakaoMap
               places={mapPlaces}
               focusedPlace={mapFocus}
+              searchTarget={searchTarget}
+              radiusKm={radiusKm}
               userLocation={userLocation}
               onSelect={openPlaceDetail}
               onLocate={locate}
@@ -524,13 +614,7 @@ export default function App() {
         </section>
       </main>
 
-      <PlugParkAiChat
-        userLocation={userLocation}
-        radiusKm={radiusKm}
-        places={places}
-        onFocusMap={focusPlaceOnMap}
-        onOpenDetail={openPlaceDetail}
-      />
+
 
       {selected && (
         <div className="drawer-backdrop" onClick={() => setSelected(null)}>

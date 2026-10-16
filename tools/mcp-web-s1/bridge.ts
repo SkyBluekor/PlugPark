@@ -90,7 +90,7 @@ PlugPark는 부산 공영주차장과 전기차 충전 정보를 제공한다.
 [데이터 규칙]
 - 주차장이나 충전 정보가 필요하면 제공된 Tool을 사용한다.
 - Tool 결과에 없는 정보는 만들어내지 않는다.
-- 데이터가 없으면 없다고 말한다.
+- 검색 결과가 없으면 현재 검색 조건에서 찾지 못했다고 말한다. 결과가 없다는 이유만으로 미등록 또는 충전소가 없다고 단정하지 않는다.
 - 주차 잔여면을 임의로 "충분하다", "여유롭다"고 평가하지 않는다.
 - 실제 숫자를 그대로 설명한다.
 - totalInstalled는 전체 충전기 설치 수다.
@@ -281,7 +281,7 @@ function extractLandmarkSearchTerm(userText: string, fallback: unknown) {
   const compact = userText.replace(/\s+/g, ' ').trim();
 
   const nearbyMatch = compact.match(
-    /^(?:부산(?:광역시|시)?\s+)?(?:[가-힣]+구\s+)?(.+?)\s*(?:근처|주변|인근)(?:\s|$)/,
+    /^(?:부산(?:광역시|시)?\s+)?(?:[가-힣]+구\s+)?(.+?)\s*(?:근처|주변|인근|부근)(?=\s|$|급속|완속|충전|전기차|주차)/,
   );
 
   if (nearbyMatch?.[1]) {
@@ -324,7 +324,7 @@ function isNearbyLandmarkRequest(userText: string, context: WebContext) {
   return (
     context.targetLat != null &&
     context.targetLng != null &&
-    /근처|주변|인근|가장\s*가까운|가까운|가까이/.test(userText)
+    /근처|주변|인근|부근|가장\s*가까운|가까운|가까이/.test(userText)
   );
 }
 
@@ -430,10 +430,10 @@ function normalizeToolArguments(
       args.mode = 'charging';
     }
 
-    const nearbyRequest = /내\s*(?:근처|주변)|가까운|근처|주변|인근|추천/.test(compact);
+    const nearbyRequest = /내\s*(?:근처|주변)|가까운|근처|주변|인근|부근|추천/.test(compact);
 
     if (
-      /근처|주변|인근/.test(compact) &&
+      /근처|주변|인근|부근/.test(compact) &&
       context.targetLat != null &&
       context.targetLng != null
     ) {

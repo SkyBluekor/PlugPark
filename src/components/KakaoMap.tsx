@@ -7,6 +7,8 @@ type Props = {
   places: PlugParkPlace[];
   focusedPlace: PlugParkPlace | null;
   userLocation: { lat: number; lng: number } | null;
+  searchTarget?: { lat: number; lng: number; name: string } | null;
+  radiusKm?: number | null;
   onSelect: (place: PlugParkPlace) => void;
   onLocate: () => void;
   onCoordinateCorrection: (placeId: string, coords: { lat: number; lng: number }) => void;
@@ -194,6 +196,8 @@ export default function KakaoMap({
   places,
   focusedPlace,
   userLocation,
+  searchTarget = null,
+  radiusKm = null,
   onSelect,
   onLocate,
   onCoordinateCorrection,
@@ -203,6 +207,8 @@ export default function KakaoMap({
   const kakaoRef = useRef<any>(null);
   const overlaysRef = useRef<any[]>([]);
   const userOverlayRef = useRef<any>(null);
+  const targetOverlayRef = useRef<any>(null);
+  const targetCircleRef = useRef<any>(null);
   const resolvedPositionsRef = useRef<Map<string, { lat: number; lng: number }>>(new Map());
   const verifiedPositionKeysRef = useRef<Set<string>>(new Set());
   const [resolvedVersion, setResolvedVersion] = useState(0);
@@ -357,7 +363,7 @@ export default function KakaoMap({
 
     setRenderedMarkerCount(markerCount);
 
-    if (!focusedPlace && markerCount > 0) {
+    if (!focusedPlace && !searchTarget && markerCount > 0) {
       map.setBounds(bounds, 42, 42, 42, 42);
     }
 
@@ -365,7 +371,7 @@ export default function KakaoMap({
       overlaysRef.current.forEach((overlay) => overlay.setMap(null));
       overlaysRef.current = [];
     };
-  }, [places, status, onSelect, resolvedVersion, focusedPlace]);
+  }, [places, status, onSelect, resolvedVersion, focusedPlace, searchTarget]);
 
   useEffect(() => {
     if (!focusedPlace || status !== 'ready' || !mapRef.current || !kakaoRef.current) return;
@@ -400,11 +406,59 @@ export default function KakaoMap({
       zIndex: 5,
     });
 
-    mapRef.current.panTo(position);
-    if (mapRef.current.getLevel() > 5) mapRef.current.setLevel(5);
+    if (!searchTarget && !focusedPlace) {
+      mapRef.current.panTo(position);
+      if (mapRef.current.getLevel() > 5) mapRef.current.setLevel(5);
+    }
 
     return () => userOverlayRef.current?.setMap(null);
-  }, [userLocation, status]);
+  }, [userLocation, status, searchTarget, focusedPlace]);
+
+  useEffect(() => {
+    targetOverlayRef.current?.setMap(null);
+    targetCircleRef.current?.setMap(null);
+    targetOverlayRef.current = null;
+    targetCircleRef.current = null;
+    if (!searchTarget || status !== 'ready' || !mapRef.current || !kakaoRef.current) return;
+    const kakao = kakaoRef.current;
+    const position = new kakao.maps.LatLng(searchTarget.lat, searchTarget.lng);
+    const node = document.createElement('div');
+    node.className = 'kakao-destination-marker';
+    node.setAttribute('aria-label', `검색한 목적지: ${searchTarget.name}`);
+    const label = document.createElement('span');
+    label.textContent = searchTarget.name;
+    const pin = document.createElement('b');
+    pin.textContent = '⚑';
+    node.append(label, pin);
+    targetOverlayRef.current = new kakao.maps.CustomOverlay({
+      map: mapRef.current, position, content: node, xAnchor: 0.5, yAnchor: 1, zIndex: 7,
+    });
+    if (radiusKm) {
+      targetCircleRef.current = new kakao.maps.Circle({
+        map: mapRef.current, center: position, radius: radiusKm * 1000,
+        strokeWeight: 2, strokeColor: '#ec751f', strokeOpacity: 0.6, strokeStyle: 'dash',
+        fillColor: '#ffb85b', fillOpacity: 0.08,
+      });
+    }
+    if (!focusedPlace) {
+      if (radiusKm) {
+        const latDelta = radiusKm / 111;
+        const lngDelta = radiusKm / (111 * Math.cos(searchTarget.lat * Math.PI / 180));
+        const bounds = new kakao.maps.LatLngBounds(
+          new kakao.maps.LatLng(searchTarget.lat - latDelta, searchTarget.lng - lngDelta),
+          new kakao.maps.LatLng(searchTarget.lat + latDelta, searchTarget.lng + lngDelta),
+        );
+        mapRef.current.setBounds(bounds, 48, 36, 48, 36);
+      } else {
+        mapRef.current.setLevel(5);
+        mapRef.current.panTo(position);
+      }
+    }
+    return () => {
+      targetOverlayRef.current?.setMap(null);
+      targetCircleRef.current?.setMap(null);
+    };
+  }, [searchTarget, radiusKm, status, focusedPlace]);
 
   return (
     <div className="map-shell" id="plugpark-map">
@@ -419,7 +473,7 @@ export default function KakaoMap({
       )}
       {status === 'ready' && (
         <>
-          {renderedMarkerCount === 0 && (
+          {renderedMarkerCount === 0 && !searchTarget && (
             <div className="map-state map-empty">
               <strong>표시할 지도 위치가 없습니다.</strong>
               <span>검색 조건이나 반경을 바꿔보세요.</span>

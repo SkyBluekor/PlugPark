@@ -50,6 +50,10 @@ const {
 } = loadTypeScriptModule('src/services/locationIntent.ts');
 
 const cases = [
+  ['부산 폴리텍 부근급속 충전소 찾아줘', '부산 폴리텍', 'explicit'],
+  ['부산 폴리텍 부근 급속 충전소 찾아줘', '부산 폴리텍', 'explicit'],
+  ['부산역 근처충전소 찾아줘', '부산역', 'explicit'],
+  ['화명동 주변에급속 충전소 찾아줘', '화명동', 'explicit'],
   ['화명동 주변 주차장 찾아줘', '화명동', 'explicit'],
   ['화명동 근처 급속 충전소 있어?', '화명동', 'explicit'],
   ['부산 북구 화명동에서 가까운 주차장 3개', '부산 북구 화명동', 'explicit'],
@@ -72,6 +76,8 @@ for (const [input, location, source] of cases) {
 
 for (const input of [
   '내 근처 급속 충전소 알려줘',
+  '내 부근급속 충전소 알려줘',
+  '현재 위치 부근충전소 찾아줘',
   '현재 위치 근처 충전소',
   '지금 내 위치에서 가까운 곳',
   '여기 주변 주차장 찾아줘',
@@ -132,7 +138,7 @@ assert(
   '후속 위치 보충 판별이 없습니다.',
 );
 assert(
-  chat.includes('locationIntentSource: effectiveIntent.source'),
+  chat.includes("locationIntentSource: selectedTarget && effectiveIntent.isNearbyRequest ? 'explicit' : effectiveIntent.source"),
   '위치 파싱 source를 Bridge에 전달하지 않습니다.',
 );
 assert(
@@ -159,7 +165,7 @@ assert(
 console.log('MCP-WEB-S2.1-B LOCATION INTENT VERIFY PASS');
 console.log({
   naturalLanguageLocationCases: cases.length,
-  currentLocationCases: 4,
+  currentLocationCases: 6,
   unknownHomeGuard: 'PASS',
   clarificationRecovery: 'PASS',
   searchFallbackGuard: 'PASS',

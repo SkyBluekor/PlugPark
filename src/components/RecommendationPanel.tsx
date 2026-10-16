@@ -42,7 +42,7 @@ export default function RecommendationPanel({
     <section className="recommendation-panel" aria-labelledby="recommendation-title">
       <div className="recommendation-heading">
         <div>
-          <p className="recommendation-kicker">NEARBY DECISION</p>
+          <p className="recommendation-kicker">A LITTLE FURTHER</p>
           <h3 id="recommendation-title">지금 갈 만한 곳</h3>
         </div>
         {hasLocation && (
@@ -55,8 +55,8 @@ export default function RecommendationPanel({
       {!hasLocation ? (
         <div className="recommendation-location-empty">
           <div>
-            <strong>내 위치를 기준으로 바로 비교해보세요.</strong>
-            <p>주차 여유와 충전 상태, 거리를 함께 보고 갈 만한 곳을 추립니다.</p>
+            <strong>목적지 주변의 주차와 충전을 찾아보세요.</strong>
+            <p>위에서 장소를 검색하거나 내 위치를 연결하면 가까운 곳을 추천해요.</p>
           </div>
           <button type="button" onClick={onLocate}>내 위치로 추천받기</button>
         </div>

@@ -93,8 +93,8 @@ function cleanLocationCandidate(value: string) {
 
 function isCurrentLocationExpression(value: string) {
   return [
-    /^(?:내|내\s*현재\s*위치)\s*(?:근처|주변|인근)(?:에|에서|으로)?(?:\s|$)/u,
-    /(?:현재\s*위치|지금\s*내\s*위치|여기)\s*(?:에서\s*)?(?:근처|주변|인근|가장\s*가까운|가까운|가까이)(?:에|에서|으로)?(?:\s|$)/u,
+    /^(?:내|내\s*현재\s*위치)\s*(?:근처|주변|인근|부근)(?:에|에서|으로)?(?=\s|$|급속|완속|충전|전기차|주차)/u,
+    /(?:현재\s*위치|지금\s*내\s*위치|여기)\s*(?:에서\s*)?(?:근처|주변|인근|부근|가장\s*가까운|가까운|가까이)(?:에|에서|으로)?(?=\s|$|급속|완속|충전|전기차|주차)/u,
   ].some((pattern) => pattern.test(value));
 }
 
@@ -107,7 +107,7 @@ function hasResidenceContext(value: string) {
 export function parseLocationIntent(message: string): LocationIntent {
   const compact = compactText(message);
   const isNearbyRequest =
-    /(?:근처|주변|인근|가장\s*가까운|가까운|가까이)/u.test(compact);
+    /(?:근처|주변|인근|부근|가장\s*가까운|가까운|가까이)/u.test(compact);
 
   if (!isNearbyRequest) {
     return {
@@ -126,8 +126,8 @@ export function parseLocationIntent(message: string): LocationIntent {
   }
 
   const patterns = [
-    /^(.*?)(?:에서\s*)?(?:가장\s*)?(?:가까운|가까이)(?:\s|$)/u,
-    /^(.*?)\s*(?:근처|주변|인근)(?:에|에서|으로|의)?(?:\s|$)/u,
+    /^(.*?)(?:에서\s*)?(?:가장\s*)?(?:가까운|가까이)(?=\s|$|급속|완속|충전|전기차|주차)/u,
+    /^(.*?)\s*(?:근처|주변|인근|부근)(?:에|에서|으로|의)?(?=\s|$|급속|완속|충전|전기차|주차)/u,
   ];
 
   let rawCandidate = '';
@@ -199,7 +199,7 @@ export function replaceNearbyLandmark(
   }
 
   return originalRequest.replace(
-    /^(.*?)(\s*(?:근처|주변|인근)(?:에|에서|으로|의)?(?:\s|$))/u,
+    /^(.*?)(\s*(?:근처|주변|인근|부근)(?:에|에서|으로|의)?(?=\s|$|급속|완속|충전|전기차|주차))/u,
     `${replacement}$2`,
   );
 }
