@@ -104,7 +104,10 @@ const fakeKakao = { maps: {
 const MapComponent = compile('src/components/KakaoMap.tsx', {
   react: mapHooks.react, 'react/jsx-runtime': jsx, './LocationIcon': component('LocationIcon'),
   '../services/kakaoSdk': { isBusanCoordinates: () => true, kakaoKeywordSearch: async () => [], loadKakaoMapSdk: async () => fakeKakao },
-}, { document: { createElement: () => ({ setAttribute() {}, append() {}, addEventListener() {} }) } }).default;
+}, {
+  document: { createElement: () => ({ setAttribute() {}, append() {}, addEventListener() {} }) },
+  window: { setTimeout: (callback) => setTimeout(callback, 0) },
+}).default;
 const mapProps = { places: [], focusedPlace: null, userLocation: null,
   searchTarget: { lat: 35.21795, lng: 129.01923, name: '<목적지>' }, radiusKm: 3,
   onSelect() {}, onLocate() {}, onCoordinateCorrection() {} };
@@ -120,4 +123,27 @@ assert.equal(overlays[0].options.content.className, 'kakao-destination-marker');
 assert.equal(circles[0].options.radius, 3000);
 assert.equal(moves.length, 1, 'Destination should establish the map viewport');
 assert(!nodes(mapTree).some((n) => n.props?.className === 'map-state map-empty'), 'Empty result overlay must not obscure destination');
+
+function renderMap(props) {
+  mapHooks.reset(); MapComponent(props);
+  for (const effect of mapHooks.effects) effect();
+}
+renderMap({ ...mapProps, onSelect() {} });
+assert.equal(moves.length, 1, 'Page rerenders must not reset a manually panned destination view');
+const focusedPlace = makePlace('near', 35.219, 129.02);
+renderMap({ ...mapProps, focusedPlace, focusRequestId: 1 });
+assert.equal(moves.length, 2, 'Explicit place focus should move the map');
+mapHooks.slots[9] += 1;
+renderMap({ ...mapProps, focusedPlace: { ...focusedPlace }, focusRequestId: 1 });
+assert.equal(moves.length, 2, 'Coordinate updates must not recenter the focused view');
+renderMap(mapProps);
+assert.equal(moves.length, 2, 'Closing a detail panel must not return to the destination');
+renderMap({ ...mapProps, radiusKm: 5 });
+assert.equal(moves.length, 3, 'An explicit radius change should adjust the viewport');
+renderMap({ ...mapProps, searchTarget: null, places: [focusedPlace] });
+renderMap({ ...mapProps, searchTarget: null, places: [{ ...focusedPlace }], onSelect() {} });
+assert.equal(moves.length, 3, 'Place and marker updates must preserve the map camera');
+renderMap({ ...mapProps, searchTarget: null, focusedPlace, focusRequestId: 2 });
+assert.equal(moves.length, 4, 'Repeated explicit focus on the same place must still work');
+console.log('Map camera: preserve pan on rerender, data updates and detail close; move only for explicit destination/radius/place requests ... PASS');
 console.log('Journey search: destination resolution, coordinate radius, independent geolocation, failure preservation, stale-request cancellation, empty-results pin and radius ... PASS');

@@ -250,6 +250,9 @@ export function recommendPlaces(
     }
 
     const rankGroup =
+    if (options.mode === 'distance' && options.chargerPreference !== 'any' && chargerInstalled(place, options.chargerPreference) <= 0) {
+      continue;
+    }
       options.mode === 'parking'
         ? parkingRank(place)
         : chargingRank(place, options.chargerPreference);
@@ -284,7 +287,9 @@ export function recommendPlaces(
   }
 
   const sorted = [...candidates].sort((a, b) =>
-    options.mode === 'parking'
+    options.mode === 'distance'
+      ? a.distanceMeters - b.distanceMeters || a.place.name.localeCompare(b.place.name, 'ko')
+      : options.mode === 'parking'
       ? compareParking(a, b)
       : compareCharging(a, b, options.chargerPreference),
   );

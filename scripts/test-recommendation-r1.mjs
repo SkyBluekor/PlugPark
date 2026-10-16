@@ -227,6 +227,21 @@ await test('24 제한 충전소는 충전 우선 추천에서 보수적으로 �
   assert.equal(recommendPlaces([restricted,publicPlace],opts())[0].place.id,'public');
 });
 
+await test('25 거리 우선은 129m 갱신 지연 장소를 2.4km 최신 장소보다 먼저 표시', () => {
+  const near=basePlace({id:'near-stale',lat:northMeters(129),charger:{statusFresh:false}});
+  const far=basePlace({id:'far-fresh',lat:northMeters(2400),charger:{statusFresh:true}});
+  assert.equal(recommendPlaces([far,near],opts({mode:'charging'}))[0].place.id,'far-fresh');
+  assert.equal(recommendPlaces([far,near],opts({mode:'distance'}))[0].place.id,'near-stale');
+  assert.ok(recommendPlaces([near],opts({mode:'distance'}))[0].warnings.includes('충전기 상태 갱신 지연'));
+});
+
+await test('26 거리 우선에서도 급속 조건과 최신 만차 제외를 유지', () => {
+  const full=basePlace({id:'full',lat:northMeters(50),parkingRealtime:true,parkingRealtimeFresh:true,availableParking:0});
+  const slow=basePlace({id:'slow',lat:northMeters(100),charger:{fast:0,slow:1}});
+  const fast=basePlace({id:'fast',lat:northMeters(200),charger:{fast:1}});
+  assert.deepEqual(recommendPlaces([full,slow,fast],opts({mode:'distance',chargerPreference:'fast'})).map(r=>r.place.id),['fast']);
+});
+
 globalThis.fetch = originalFetch;
 
 console.log(`\n✅ R1 RECOMMENDATION TEST: PASS · ${passed} cases`);

@@ -93,6 +93,7 @@ export default function App() {
   const [sort, setSort] = useState<SortKey>('charger');
   const [selected, setSelected] = useState<PlugParkPlace | null>(null);
   const [mapFocus, setMapFocus] = useState<PlugParkPlace | null>(null);
+  const [mapFocusRequest, setMapFocusRequest] = useState(0);
   const [userLocation, setUserLocation] = useState<UserLocation>(null);
   const [radiusKm, setRadiusKm] = useState<RadiusKm>(null);
   const explorationCenter = searchTarget ?? userLocation;
@@ -264,11 +265,13 @@ export default function App() {
   function openPlaceDetail(place: PlugParkPlace) {
     setSelected(place);
     setMapFocus(place);
+    setMapFocusRequest((value) => value + 1);
   }
 
   function focusPlaceOnMap(place: PlugParkPlace) {
     setMapFocus(place);
     setSelected(null);
+    setMapFocusRequest((value) => value + 1);
     window.requestAnimationFrame(() => {
       const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
       document.getElementById('plugpark-map')?.scrollIntoView({
@@ -603,6 +606,7 @@ export default function App() {
             <KakaoMap
               places={mapPlaces}
               focusedPlace={mapFocus}
+              focusRequestId={mapFocusRequest}
               searchTarget={searchTarget}
               radiusKm={radiusKm}
               userLocation={userLocation}

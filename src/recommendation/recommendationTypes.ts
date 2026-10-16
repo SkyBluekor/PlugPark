@@ -1,6 +1,6 @@
 import type { PlugParkPlace } from '../types';
 
-export type RecommendationMode = 'parking' | 'charging';
+export type RecommendationMode = 'parking' | 'charging' | 'distance';
 
 export type ChargerPreference = 'any' | 'fast' | 'slow';
 

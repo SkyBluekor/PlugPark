@@ -6,6 +6,7 @@ import { isBusanCoordinates, kakaoKeywordSearch, loadKakaoMapSdk } from '../serv
 type Props = {
   places: PlugParkPlace[];
   focusedPlace: PlugParkPlace | null;
+  focusRequestId?: number;
   userLocation: { lat: number; lng: number } | null;
   searchTarget?: { lat: number; lng: number; name: string } | null;
   radiusKm?: number | null;
@@ -195,6 +196,7 @@ async function geocodePlace(
 export default function KakaoMap({
   places,
   focusedPlace,
+  focusRequestId = 0,
   userLocation,
   searchTarget = null,
   radiusKm = null,
@@ -215,6 +217,10 @@ export default function KakaoMap({
   const [renderedMarkerCount, setRenderedMarkerCount] = useState(0);
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
   const [errorText, setErrorText] = useState('');
+  const cameraInitializedRef = useRef(false);
+  const lastFocusRequestRef = useRef('');
+  const lastUserLocationRef = useRef<Props['userLocation']>(null);
+  const lastTargetViewRef = useRef<{ target: Props['searchTarget']; radius: Props['radiusKm'] } | null>(null);
 
   const appKey = import.meta.env.VITE_KAKAO_MAP_JS_KEY?.trim() || '';
 
@@ -358,18 +364,21 @@ export default function KakaoMap({
 
     setRenderedMarkerCount(markerCount);
 
-    if (!focusedPlace && !searchTarget && markerCount > 0) {
+    if (!cameraInitializedRef.current && !focusedPlace && !searchTarget && !userLocation && markerCount > 0) {
       map.setBounds(bounds, 42, 42, 42, 42);
+      cameraInitializedRef.current = true;
     }
 
     return () => {
       overlaysRef.current.forEach((overlay) => overlay.setMap(null));
       overlaysRef.current = [];
     };
-  }, [places, status, onSelect, resolvedVersion, focusedPlace, searchTarget]);
+  }, [places, status, onSelect, resolvedVersion, focusedPlace, searchTarget, userLocation]);
 
   useEffect(() => {
     if (!focusedPlace || status !== 'ready' || !mapRef.current || !kakaoRef.current) return;
+    const requestKey = `${focusedPlace.id}:${focusRequestId}`;
+    if (lastFocusRequestRef.current === requestKey) return;
     const coords =
       resolvedPositionsRef.current.get(focusedPlace.id) ??
       (hasValidCoordinates(focusedPlace)
@@ -379,7 +388,9 @@ export default function KakaoMap({
     const position = new kakaoRef.current.maps.LatLng(coords.lat, coords.lng);
     mapRef.current.panTo(position);
     if (mapRef.current.getLevel() > 5) mapRef.current.setLevel(5);
-  }, [focusedPlace, status, resolvedVersion]);
+    lastFocusRequestRef.current = requestKey;
+    cameraInitializedRef.current = true;
+  }, [focusedPlace, focusRequestId, status, resolvedVersion]);
 
   useEffect(() => {
     if (status !== 'ready' || !mapRef.current || !kakaoRef.current) return;
@@ -401,9 +412,12 @@ export default function KakaoMap({
       zIndex: 5,
     });
 
-    if (!searchTarget && !focusedPlace) {
+    const newUserLocation = lastUserLocationRef.current !== userLocation;
+    lastUserLocationRef.current = userLocation;
+    if (newUserLocation && !searchTarget && !focusedPlace) {
       mapRef.current.panTo(position);
       if (mapRef.current.getLevel() > 5) mapRef.current.setLevel(5);
+      cameraInitializedRef.current = true;
     }
 
     return () => userOverlayRef.current?.setMap(null);
@@ -435,7 +449,10 @@ export default function KakaoMap({
         fillColor: '#ffb85b', fillOpacity: 0.08,
       });
     }
-    if (!focusedPlace) {
+    const lastTargetView = lastTargetViewRef.current;
+    const newTargetView = lastTargetView?.target !== searchTarget || lastTargetView?.radius !== radiusKm;
+    lastTargetViewRef.current = { target: searchTarget, radius: radiusKm };
+    if (newTargetView && !focusedPlace) {
       if (radiusKm) {
         const latDelta = radiusKm / 111;
         const lngDelta = radiusKm / (111 * Math.cos(searchTarget.lat * Math.PI / 180));
@@ -448,6 +465,7 @@ export default function KakaoMap({
         mapRef.current.setLevel(5);
         mapRef.current.panTo(position);
       }
+      cameraInitializedRef.current = true;
     }
     return () => {
       targetOverlayRef.current?.setMap(null);

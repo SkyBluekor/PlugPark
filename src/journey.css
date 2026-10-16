@@ -76,6 +76,7 @@ main{max-width:1600px;background:var(--journey-paper);box-shadow:none}
 .recommendation-panel{border-color:#dfd8c6;margin-bottom:22px}
 .recommendation-heading h3{color:var(--journey-ink);font-size:21px}
 .recommendation-kicker{color:#b27440}
+.recommendation-order-note{margin:0 0 16px;padding:9px 12px;background:#f4efdf;border-left:2px solid #ed761e;color:#586d76;font-size:11px;line-height:1.75}
 .recommendation-location-empty{background:#f2f4e9;border-color:#dfe5cf;border-radius:4px}
 .recommendation-location-empty button{background:#226d73;border-radius:4px}
 .journey-results-toolbar{display:flex;justify-content:space-between;align-items:center;gap:15px;margin:0 0 12px;color:#5e7a86;font-size:12px}

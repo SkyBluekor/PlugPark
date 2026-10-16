@@ -68,6 +68,14 @@ export default function RecommendationPanel({
               <div className="recommendation-toggle">
                 <button
                   type="button"
+                  aria-pressed={mode === 'distance'}
+                  className={mode === 'distance' ? 'active' : ''}
+                  onClick={() => onModeChange('distance')}
+                >
+                  거리 우선
+                </button>
+                <button
+                  type="button"
                   aria-pressed={mode === 'parking'}
                   className={mode === 'parking' ? 'active' : ''}
                   onClick={() => onModeChange('parking')}
@@ -85,7 +93,7 @@ export default function RecommendationPanel({
               </div>
             </fieldset>
 
-            {mode === 'charging' && (
+            {mode !== 'parking' && (
               <fieldset>
                 <legend>충전 방식</legend>
                 <div className="recommendation-toggle">
@@ -108,6 +116,14 @@ export default function RecommendationPanel({
               </fieldset>
             )}
           </div>
+
+          <p className="recommendation-order-note" role="status">
+            {mode === 'distance'
+              ? '기준 위치에서 가까운 순서예요. 충전 상태 갱신이 지연된 곳은 이용 전 확인이 필요해요.'
+              : mode === 'charging'
+                ? '충전 상태가 확인된 곳을 먼저 추천하고, 주차 정보와 거리를 함께 봐요. 가까운 순서는 ‘거리 우선’을 선택하세요.'
+                : '주차 정보의 최신 여부와 잔여 면수를 먼저 보고, 같은 조건에서는 가까운 곳을 추천해요.'}
+          </p>
 
           {recommendations.length > 0 ? (
             <ol className="recommendation-list">
@@ -137,7 +153,7 @@ export default function RecommendationPanel({
                             {recommendation.place.name}
                           </button>
                         </h4>
-                        <span>{formatDistance(recommendation.distanceMeters)}</span>
+                        <span title="기준 위치에서의 직선거리">직선 {formatDistance(recommendation.distanceMeters)}</span>
                       </div>
 
                       <div className="recommendation-reasons">
