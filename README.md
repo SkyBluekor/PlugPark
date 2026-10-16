@@ -209,7 +209,7 @@ Copy-Item .dev.vars.example .dev.vars
 
 | 파일 | 변수 | 용도 |
 | --- | --- | --- |
-| `.env` | `VITE_KAKAO_MAP_JS_KEY` | Kakao Map JavaScript 키 |
+| `.env` 또는 Cloudflare Worker Variables & Secrets | `VITE_KAKAO_MAP_JS_KEY` | Kakao Map JavaScript 키. 빌드에 없으면 서버 설정을 조회 |
 | `.dev.vars` | `BUSAN_PARKING_API_KEY` | 부산 공영주차장·시설공단 API 인증키 |
 | `.dev.vars` | `EV_CHARGER_API_KEY` | 한국환경공단 EV API 인증키 |
 | `.dev.vars` | `INGEST_ADMIN_TOKEN` | 실제 수집·관리 API 인증 토큰; 실제 연동 시 추가 |

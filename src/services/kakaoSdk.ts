@@ -1,4 +1,24 @@
 let sdkPromise: Promise<any> | null = null;
+let runtimeKeyPromise: Promise<string> | null = null;
+
+function getRuntimeMapKey(): Promise<string> {
+  if (!runtimeKeyPromise) {
+    runtimeKeyPromise = fetch('/api/client-config', {
+      cache: 'no-store',
+      signal: AbortSignal.timeout(8000),
+    }).then(async (response) => {
+      if (!response.ok) throw new Error('KAKAO_APP_KEY_MISSING');
+      const config = await response.json() as { ok?: boolean; kakaoMapJsKey?: unknown };
+      const key = typeof config.kakaoMapJsKey === 'string' ? config.kakaoMapJsKey.trim() : '';
+      if (!config.ok || !key) throw new Error('KAKAO_APP_KEY_MISSING');
+      return key;
+    }).catch((error) => {
+      runtimeKeyPromise = null;
+      throw error;
+    });
+  }
+  return runtimeKeyPromise;
+}
 
 declare global {
   interface Window {
@@ -24,10 +44,12 @@ export function isBusanCoordinates(lat: number, lng: number) {
   );
 }
 
-export function loadKakaoMapSdk(appKey: string) {
+export function loadKakaoMapSdk(appKey: string): Promise<any> {
   const key = appKey.trim();
   if (!key) {
-    return Promise.reject(new Error('KAKAO_APP_KEY_MISSING'));
+    // Cloudflare runtime secrets are independent of the Vite build environment.
+    // Fetch only the public JavaScript SDK key when it was not baked into the bundle.
+    return getRuntimeMapKey().then((runtimeKey) => loadKakaoMapSdk(runtimeKey));
   }
 
   if (window.kakao?.maps) {

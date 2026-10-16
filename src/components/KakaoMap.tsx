@@ -216,14 +216,9 @@ export default function KakaoMap({
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
   const [errorText, setErrorText] = useState('');
 
-  const appKey = import.meta.env.VITE_KAKAO_MAP_JS_KEY?.trim();
+  const appKey = import.meta.env.VITE_KAKAO_MAP_JS_KEY?.trim() || '';
 
   useEffect(() => {
-    if (!appKey) {
-      setStatus('error');
-      setErrorText('VITE_KAKAO_MAP_JS_KEY가 없습니다. .env에 JavaScript 키를 입력하세요.');
-      return;
-    }
     let cancelled = false;
 
     loadKakaoMapSdk(appKey)

@@ -1,4 +1,5 @@
 interface Env {
+  VITE_KAKAO_MAP_JS_KEY?: string;
   BUSAN_PARKING_API_KEY?: string;
   EV_CHARGER_API_KEY?: string;
   BUSAN_REALTIME_PARKING_API_URL?: string;
@@ -249,6 +250,17 @@ const EV_STATUS_REQUIRED_FIELDS = ['statId', 'chgerId', 'stat', 'statUpdDt'] as 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
+
+    if (url.pathname === '/api/client-config') {
+      if (request.method !== 'GET') return new Response(null, { status: 405, headers: { Allow: 'GET' } });
+      // This SDK key is public by design and already appears in browser script URLs.
+      // Explicitly select it; never return the environment object or REST/admin keys.
+      const key = env.VITE_KAKAO_MAP_JS_KEY?.trim() || '';
+      return new Response(JSON.stringify({ ok: Boolean(key), kakaoMapJsKey: key || null }), {
+        status: key ? 200 : 503,
+        headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' },
+      });
+    }
 
     if (url.pathname === '/api/health') {
       return json({
